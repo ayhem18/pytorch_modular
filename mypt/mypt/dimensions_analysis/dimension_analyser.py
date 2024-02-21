@@ -7,8 +7,8 @@ import torch
 from torch import nn
 from typing import Union, Tuple
 from torch.utils.data import DataLoader
-from code_utilities.pytorch_utilities import get_module_device
-from CBM.code.dimensions_analysis import layer_specific as lc
+from ..utilities.pytorch_utilities import get_module_device
+from ..dimensions_analysis import layer_specific as lc
 
 _FORWARD = 'forward_pass'
 _STATIC = 'static'

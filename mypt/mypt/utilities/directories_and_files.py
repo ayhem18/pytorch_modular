@@ -155,7 +155,7 @@ def unzip_data_file(data_zip_path: Union[Path, str],
 
 def dataset_portion(directory_with_classes: Union[str, Path], 
                     destination_directory: Union[str, Path] = None,
-                    portion: Union[int, float] = 0.1, 
+                    portion: float = 0.1, 
                     copy: bool = False, 
                     seed: int = 69) -> Union[str, Path]:
     
@@ -262,3 +262,4 @@ def clear_directory(directory: Union[str, Path],
             p = os.path.join(r, f)
             if condition(p):
                 os.remove(p)
+
