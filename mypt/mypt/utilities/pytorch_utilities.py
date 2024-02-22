@@ -83,7 +83,7 @@ def load_model(base_model: nn.Module,
 
 # let's define functionalities for reproducibility
 
-def set_everything(seed: int = 69):
+def seed_everything(seed: int = 69):
     # let's set reproducility
     random.seed(seed)
     np.random.seed(seed)

@@ -86,7 +86,7 @@ class DimensionsAnalyser:
 
     def __init__(self,
                  net: nn.Module = None,
-                 method: str = _FORWARD):
+                 method: str = _STATIC):
         """
         The constructor sets the forward pass as the default method as it is more reliable.
         The module's architecture can be different from the forward pass logic. The latter governs
