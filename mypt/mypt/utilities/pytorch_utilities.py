@@ -11,7 +11,11 @@ from torch.utils.data import DataLoader
 from pathlib import Path
 import os
 from datetime import datetime as d
-from code_utilities.directories_and_files import process_path
+from .directories_and_files import process_path
+
+import random
+import numpy as np
+
 
 HOME = os.getcwd()
 
@@ -75,3 +79,20 @@ def load_model(base_model: nn.Module,
     base_model.load_state_dict(torch.load(path))
 
     return base_model
+
+
+# let's define functionalities for reproducibility
+
+def set_everything(seed: int = 69):
+    # let's set reproducility
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.use_deterministic_algorithms(True)
+    torch.manual_seed(seed=seed)
+    torch.backends.cudnn.benchmark = False    
+    
+def set_worker_seed(_, seed: int = 69):
+    np.random.seed(seed=seed)
+    random.seed(seed)
+
+

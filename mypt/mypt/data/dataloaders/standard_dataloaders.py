@@ -1,0 +1,97 @@
+"""
+This script contain functionalities related to data loading shared among different tasks
+"""
+import torch
+
+from functools import partial
+from warnings import warn
+
+from torch.utils.data import Dataset, DataLoader
+from ...utilities.pytorch_utilities import set_worker_seed
+
+
+def initialize_train_dataloader(dataset_object: Dataset, 
+                        seed: int,
+                        batch_size: int,
+                        num_workers: int,
+                        drop_last: bool = True,
+                        ) -> DataLoader:
+    """This function initializes a dataloader making sure the data loading is reproducible across runs. 
+
+    Args:
+        dataset_object (Dataset): The dataset to load / train on
+        seed (int): The seed to assume reproducibility
+        batch_size (int): 
+        num_workers (int): the number of sub-processes 
+        drop_last (bool, optional): whether to drop the last batch. Defaults to True.
+
+    Returns:
+        DataLoader: A dataloader assumed to load training data for a model
+    """
+
+    if not drop_last:
+        warn(f"The parameter 'drop_last' is set to False. Depending on the size of the dataset and the batch size." 
+             f"this might lead to reported metrisc lower than the actual ones.")
+
+    dl_train_gen = torch.Generator()
+    dl_train_gen.manual_seed(seed)
+
+    if num_workers != 0:
+        dl_train = DataLoader(dataset=dataset_object, 
+                            shuffle=True, # the train dataloader must be shuffled not to hurt performance
+                            drop_last=drop_last, 
+                            batch_size=batch_size, 
+                            num_workers=num_workers, 
+                            worker_init_fn=partial(set_worker_seed, seed=seed), # this function is used to ensure reproducibility between runs in multi-process setting 
+                            generator=dl_train_gen)
+        return dl_train
+
+    # if the number of workers is set to '0', then the parameter 'pin_memory' will be set to True to improve performance
+    # make sure to warn the user
+    warn(message=f"the 'num_workers' argument is 0. We will set the 'pin_memory' argument to True to improve performance")
+
+    dl_train = DataLoader(dataset=dataset_object, 
+                        shuffle=True, # the train dataloader must be shuffled not to hurt performance
+                        drop_last=drop_last, 
+                        batch_size=batch_size, 
+                        num_workers=0, 
+                        generator=dl_train_gen,
+                        pin_memory=True)
+    
+    return dl_train
+
+
+
+def initialize_val_dataloader(dataset_object: Dataset, 
+                        seed: int,
+                        batch_size: int,
+                        num_workers: int,
+                        ) -> DataLoader:
+
+    dl_gen = torch.Generator()
+    dl_gen.manual_seed(seed)
+
+    if num_workers != 0:
+        dl = DataLoader(dataset=dataset_object, 
+                            shuffle=False, # generally there is no point of shuffing the validation data
+                            batch_size=batch_size,
+                            drop_last=False, 
+                            num_workers=num_workers, 
+                            worker_init_fn=partial(set_worker_seed, seed=seed), # this function is used to ensure reproducibility between runs in multi-process setting 
+                            generator=dl_gen)
+        return dl
+
+    # if the number of workers is set to '0', then the parameter 'pin_memory' will be set to True to improve performance
+    # make sure to warn the user
+    warn(message=f"the 'num_workers' argument is 0. We will set the 'pin_memory' argument to True to improve performance")
+
+    dl = DataLoader(dataset=dataset_object, 
+                        shuffle=False,
+                        drop_last=False, 
+                        batch_size=batch_size, 
+                        num_workers=0,   
+                        pin_memory=True) # this dataloader will be run by the main process.
+    
+    return dl
+
+
