@@ -12,7 +12,7 @@ from pathlib import Path
 from datetime import datetime
 from sklearn.model_selection import train_test_split
 
-HOME = os.getcwd()
+HOME = os.path.dirname(os.path.realpath(__file__))
 
 
 def abs_path(path: Union[str, Path]) -> Path:
@@ -28,13 +28,12 @@ def process_path(save_path: Union[str, Path, None],
                       condition: callable = None,
                       error_message: str = DEFAULT_ERROR_MESSAGE) -> Union[str, Path, None]:
     if save_path is not None:
+        if not os.path.isfile(save_path) and dir_ok and not os.path.exists(save_path):
+            os.makedirs(save_path)
+            
         # first make the save_path absolute
         save_path = abs_path(save_path)
-
-        # create the directory if needed
-        if not os.path.isfile(save_path):
-            os.makedirs(save_path, exist_ok=True)
-
+        
         assert not \
             ((not file_ok and os.path.isfile(save_path)) or
              (not dir_ok and os.path.isdir(save_path))), \

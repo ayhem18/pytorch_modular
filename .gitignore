@@ -2,4 +2,6 @@ env
 *.png
 *.zip
 wandb
-
+*.pyc
+*__pycache__/
+*.pt

@@ -18,7 +18,7 @@ from pathlib import Path
 
 from mypt.backbones.resnetFeatureExtractor import ResNetFeatureExtractor
 from mypt.classification.classification_head import ExponentialClassifier
-from mypt.utilities.pytorch_utilities import set_everything, get_default_device, get_module_device
+from mypt.utilities.pytorch_utilities import seed_everything, get_default_device, get_module_device
 from mypt.data.dataloaders.standard_dataloaders import initialize_train_dataloader, initialize_val_dataloader
 from mypt.schedulers.annealing_lr import AnnealingLR
 from mypt.dimensions_analysis.dimension_analyser import DimensionsAnalyser
@@ -116,10 +116,16 @@ def train_per_epoch(model: nn.Sequential,
     if lr_before <= lr_after: 
         raise ValueError(f"The learning rate is not descreasing. lr before: {lr_before}, lr after: {lr_after}")
 
+    # make sure to average the metric
+    epoch_train_loss = epoch_train_loss / len(dataloader)
+    epoch_train_accuracy = epoch_train_accuracy / len(dataloader)
+
     # log the metrics
     wandb.log({"epoch": epoch_index, 
                "train_loss": epoch_train_loss, 
                "train_accuracy": epoch_train_accuracy})
+
+    return epoch_train_loss, epoch_train_accuracy
 
 def validation_per_batch(model: nn.Module, 
                      batch_x: torch.Tensor,
@@ -180,7 +186,7 @@ def log_model(
     model_path = dirf.process_path(model_path, 
                                    dir_ok=False, 
                                    file_ok=True, 
-                                   condition=os.path.basename(model_path).endswith('.pt'), 
+                                   condition=lambda p: os.path.basename(p).endswith('.pt'), 
                                    error_message=f'the checkpoint file must end with a .pt extension. Found: {os.path.basename(model_path)}')
     
     if not isinstance(metrics, Dict):
@@ -194,18 +200,18 @@ def log_model(
     torch.save(checkpoint_dict, model_path)
 
 
-def train_function(
+def model_train(
                    model: nn.Sequential, 
                    image_transform: tr, 
                    num_epochs: int, 
                    dir_train: Union[str, Path],
                    dir_val: Union[str, Path],
-                   val_every_epoch: int, #  
+                   val_every_epoch: int, 
                    log_every_epoch: int, 
                    log_dir: Union[str, Path],
                    seed: int
                    ):
-    set_everything(seed=seed)
+    seed_everything(seed=seed)
     device = get_default_device() 
     
     dir_train = dirf.process_path(dir_train, 
@@ -312,7 +318,7 @@ def set_model(num_classification_layers: int,
                                 architecture=50)
 
     # analyze the model
-    _, in_features = DimensionsAnalyser(fe).analyse_dimensions((5, ) + (3, 224, 224))
+    _, in_features =  DimensionsAnalyser(nn.Sequential(fe, nn.Flatten())).analyse_dimensions((5, ) + (3, 224, 224))
 
     ch = ExponentialClassifier(num_classes=num_classes, 
                                in_features=in_features,
