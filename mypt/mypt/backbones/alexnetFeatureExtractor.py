@@ -336,10 +336,23 @@ class AlexNetFeatureExtractor(nn.Module):
         return self.model.named_children()
 
 if __name__ == '__main__':
-    m = AlexNetFeatureExtractor(model_blocks='all', frozen_model_blocks=['conv5', 'fc1', 'fc3'])
-    for n, b in m.named_children():
-        print(n)
-        for b in b.parameters():
-            print(b.requires_grad)
-        print("#" * 100)
+    # m = AlexNetFeatureExtractor(model_blocks='all', frozen_model_blocks=['conv5', 'fc1', 'fc3'])
+    # for n, b in m.named_children():
+    #     print(n)
+    #     for b in b.parameters():
+    #         print(b.requires_grad)
+    #     print("#" * 100)
     
+    # for i in range(1, 6):
+    #     eval(f'm.model.conv{i}')
+
+    # def f():
+    #     a = [1, 2, 3]
+    #     for n in a:
+    #         yield n
+
+    it = iter([1, 2, 3])
+    a = next(it, None)
+    while a is not None:
+        print(a)
+        a = next(it, None)       
