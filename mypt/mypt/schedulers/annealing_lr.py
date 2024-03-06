@@ -12,7 +12,6 @@ class AnnealingLR(LambdaLR):
                  num_epochs: int, 
                  alpha: Union[float, int],
                  beta: Union[float, int], 
-                 verbose:bool=False
                  ):
         # let's make some checks on the passes arguments
         if num_epochs <= 0:
@@ -33,8 +32,7 @@ class AnnealingLR(LambdaLR):
             return lr
 
         self.scheduler = LambdaLR(optimizer=optimizer, 
-                                  lr_lambda=[_formula for _ in optimizer.param_groups], # this is done internally in the scheduler class 
-                                  verbose=verbose)
+                                  lr_lambda=[_formula for _ in optimizer.param_groups])# this is done internally in the scheduler class )
 
     # the main idea is to override the LambdaLR function by calling those of the self.scheduler field
     def state_dict(self):

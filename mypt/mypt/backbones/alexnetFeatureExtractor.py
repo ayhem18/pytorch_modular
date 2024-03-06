@@ -290,6 +290,8 @@ class AlexNetFeatureExtractor(nn.Module):
         super().__init__(*args, **kwargs)
         # make sure to initialize the Alexnet as a field
         self.__net = alexnet(weights=AlexNet_Weights.DEFAULT)
+        self.transform = AlexNet_Weights.DEFAULT.transforms()
+        
         self.block_indices = {}
         self.__set_blocks()
         

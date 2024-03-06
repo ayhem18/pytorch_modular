@@ -42,8 +42,9 @@ def initialize_train_dataloader(dataset_object: Dataset,
                             drop_last=drop_last, 
                             batch_size=batch_size, 
                             num_workers=num_workers, 
-                            worker_init_fn=partial(set_worker_seed, seed=seed), # this function is used to ensure reproducibility between runs in multi-process setting 
-                            generator=dl_train_gen)
+                            worker_init_fn=partial(set_worker_seed, seed=seed), # this function ensures reproducibility between runs in multi-process setting 
+                            generator=dl_train_gen, 
+                            persistent_workers=True)
         return dl_train
 
     # if the number of workers is set to '0', then the parameter 'pin_memory' will be set to True to improve performance

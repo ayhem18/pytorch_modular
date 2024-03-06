@@ -28,10 +28,11 @@ class TransferAlexNet(nn.Module):
 
         self.fe = AlexNetFeatureExtractor(model_blocks=alexnet_blocks, 
                                           frozen_model_blocks=alexnet_frozen_blocks)
+        self.image_transformation = self.fe.transform
         self.flatten_layer = nn.Flatten()
 
         # to calculate the size of features passed to the classification head, we will make use of the dimension_analysis package
-        _, in_features = DimensionsAnalyser(net=nn.Sequential(self.fe, self.flatten_layer)).analyse_dimensions(input_shape=self.input_shape)
+        _, in_features = DimensionsAnalyser(net=nn.Sequential(self.fe, self.flatten_layer)).analyse_dimensions(input_shape=(10, ) + self.input_shape)
 
         if not isinstance(in_features, int):
             raise ValueError(f"Make sure the output of the feature extractor is 2 dimensional so it can be passed to the fully connected block")
@@ -48,15 +49,15 @@ class TransferAlexNet(nn.Module):
                                                 ))
         
     def forward(self, x: torch.Tensor) -> List[torch.Tensor]:
-        x_temp = x[0] if x.ndim == 4 else deepcopy()
+        x_temp = x[0] if x.ndim == 4 else deepcopy(x)
         if x_temp.shape != self.input_shape:
             raise ValueError(f"Please make sure the input to the model is expected. Expected: {self.input_shape}, Found: {x_temp.shape}")
 
         # first pass the model through the feature extractor
         x_embedding = self.flatten_layer.forward(self.fe.forward(x))
         output = [x_embedding]
-        
-        x = deepcopy(x_embedding)
+
+        x = x_embedding        
         for fc_name, fc_block in self.ch.named_children():
             if re.match(r'fc_\d{1,2}', fc_name) is None:
                 raise ValueError(f"Please make sure we are saving the outputs of each fully connected block and not inner layers. Found the ouput of a layer named: {fc_name}")
