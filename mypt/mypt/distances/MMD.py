@@ -6,9 +6,13 @@ equation '2' in the paper: "Unsupervised Domain Adaptation with Residual Transfe
 import torch
 from torch import nn
 from typing import Union
-
+from tqdm import tqdm
+from ..utilities import pytorch_utilities as pu
 # let's implement this function as a Pytorch Loss
 
+def _zero_diagonals(x: torch.Tensor) -> torch.Tensor: 
+    # the main idea here is to set the diagonals to zero
+    return x * (torch.ones(x.shape) - torch.eye(*x.shape)).to(pu.get_module_device(x))
 
 class GaussianMMD(nn.Module):
     def __init__(
@@ -31,29 +35,19 @@ class GaussianMMD(nn.Module):
         if x.shape[1] != y.shape[1]:
             raise ValueError(f"x and y must be of the same dimensions !!. Found: x: {x.shape}, y: {y.shape}")
 
-
+        # use torch.linalg.vector_norm as its behavior is much more expectable 
         x_norm_squared = torch.broadcast_to(input=torch.linalg.vector_norm(x, dim=1, keepdim=True) ** 2, size=(x.shape[0], x.shape[0]))
         y_norm_squared = torch.broadcast_to(input=torch.linalg.vector_norm(y, dim=1, keepdim=True) ** 2, size=(y.shape[0], y.shape[0]))
 
-        # the first term to calculate is: 
-        # sum_{i=1, ns} sum_{j=1, ns} (k(xi, xj)) / ns^2 where k(xi, xj) = exp(- ||xi - xj || ^ 2 / sigma ) where |xi - xj| ^ 2 = |xi|^2 + |xj|^2 - 2 <xi, xj> 
-        # x_norm = torch.broadcast_to(input=torch.linalg.norm(x, ord=2, dim=1, keepdim=True) ** 2, size=(x.shape[0], x.shape[0])) 
-        # y_norm = torch.broadcast_to(input=torch.linalg.norm(y, ord=2, dim=1, keepdim=True) ** 2, size=(y.shape[0], y.shape[0]))
-
-        if torch.any(torch.isnan(x_norm_squared)):
-            raise ValueError(f"'nan' detected in x_norm")
-
-        if torch.any(torch.isnan(y_norm_squared)):
-            raise ValueError(f"'nan' detected in y_norm")
-        
-        xx, xy, yy = x @ x.T, x @ y.T, y @ y.T 
-
-        kxx = torch.exp(- (x_norm_squared + x_norm_squared.T - 2 * xx) / self.sigma)
+        xx, xy, yy = x @ x.T, x @ y.T, y @ y.T
+        # we know that the diagonals of the expression x_norm_squared + x_norm_squared.T - 2 * xx are zeros
+        # thus to avoid producing the 'torch.inf' value we can set them manually to zero
+        kxx = torch.exp(- _zero_diagonals(x_norm_squared + x_norm_squared.T - 2 * xx) / self.sigma)
         if torch.any(torch.logical_or(torch.isinf(kxx), torch.isnan(kxx))):
             raise ValueError(f"inf or nan detected in kxx")
         first_term = kxx.mean()
         
-        kyy = torch.exp(- (y_norm_squared + y_norm_squared.T - 2 * yy) / self.sigma)
+        kyy = torch.exp(- _zero_diagonals(y_norm_squared + y_norm_squared.T - 2 * yy) / self.sigma)
         if torch.any(torch.logical_or(torch.isinf(kyy), torch.isnan(kyy))):
             raise ValueError(f"inf or nan detected in kyy")
         second_term = kyy.mean()
@@ -72,11 +66,10 @@ class GaussianMMD(nn.Module):
             kxy = torch.exp(- (x_norm_y + y_norm_x.T - 2 * xy) / self.sigma)
             if torch.any(torch.logical_or(torch.isinf(kxy), torch.isnan(kxy))):
                 raise ValueError(f"inf or nan detected in kxy")
-            third_term = kyy.mean()
+            third_term = kxy.mean()
         
-        return first_term.item(), second_term.item(), third_term.item()
+        return (first_term + second_term - 2 * third_term)
 
-# let's make sure things are going as expected
 
 def naive_implementation(x: torch.Tensor, y: torch.Tensor, sigma: float):
     x, y = x.to(torch.float32), y.to(torch.float32)
@@ -105,21 +98,20 @@ def naive_implementation(x: torch.Tensor, y: torch.Tensor, sigma: float):
             third_term += torch.exp(- (torch.linalg.vector_norm(xi - yi) ** 2) / sigma).item()
     third_term = third_term / (nx * ny)
 
-    return first_term, second_term, third_term
+    return first_term + second_term - 2 * third_term
 
 import random
 import numpy as np
 
 if __name__ == '__main__':
-    for _ in range(100):
-        x = torch.round(torch.randn(size=(4, 10)), decimals=2)
-        y = torch.round(torch.randn(size=(4, 10)), decimals=2)
-        sigma = round(0.5 + random.random() * 2, 2)
+    for _ in tqdm(range(1000)):
+        n1, n2, dim = random.randint(2, 20), random.randint(2, 20), random.randint(10, 50)
+        x = torch.round(torch.randn(size=(n1, dim)), decimals=5)
+        y = torch.round(torch.randn(size=(n2, dim)), decimals=5)
+        sigma = round(0.5 + random.random() * 2, 3)
 
         mmd = GaussianMMD(sigma=sigma).forward(x, y)
         naive_mmd = naive_implementation(x, y, sigma=sigma) 
         
-        # check every term individually
-        for i, (v1, v2) in enumerate(zip(mmd, naive_mmd)):
-            if not np.isclose(v1, v2, atol=10 ** -9):
-                raise ValueError(f"Please make sure the code is written correctly. naive: {v2}, vectorized: {v1}")
+        if not np.isclose(mmd.item(), naive_mmd, rtol=10 ** -5, atol=10**-9): 
+            raise ValueError(f"please make sure the implementation is correct. Vectorized: {mmd.item()}, naive: {naive_mmd}")

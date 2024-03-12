@@ -10,6 +10,7 @@ from torch.utils.data import DataLoader
 from copy import deepcopy
 from pathlib import Path
 from torch.optim.sgd import SGD
+from torch.optim.adam import Adam
 from tqdm import tqdm
 
 from transferable_alexnet import TransferAlexNet
@@ -71,7 +72,8 @@ def train_epoch(
                 device: str, 
                 seed: int, 
                 epoch_index: int,
-                batch_size: int) -> List:
+                batch_size: int, 
+                sigma: float) -> List:
 
     # make sure to set the model to the 'train' mode
     model = model.to(device)
@@ -123,20 +125,21 @@ def train_epoch(
         xt, _ = target_batch
         xt = xt.to(device)
         model_output_target = model.forward(xt)
-        target_features, _ = model_output_target[:-1], model_output_target[-1]
-
+        target_features = model_output_target[:-1]
+        
         # the loss consists of
         final_loss, cls_loss, feature_losses = calculate_loss(source_logits=logits,
-                                                              source_labels=ys, 
-                                                              source_features=source_features,
-                                                              target_features=target_features,
-                                                              loss_coefficient=loss_coefficient, 
-                                                              )
+                                    source_labels=ys, 
+                                    source_features=source_features,
+                                    target_features=target_features,
+                                    loss_coefficient=loss_coefficient, 
+                                    sigma=sigma,
+                                    )
 
         epoch_loss += final_loss.item()
         epoch_cls_loss += cls_loss.item()
         # compute accuracy
-        epoch_acc += torch.mean((torch.argmax(logits, dim=1) == ys).to(torch.float32))
+        epoch_acc += torch.mean((torch.argmax(logits, dim=1) == ys).to(torch.float32)).item()
         
         # update each current loss with its corresponding loss in the new batch
         if len(epoch_feats_losses) == 0:
@@ -216,13 +219,13 @@ def standard_validation_epoch(
             model_logits = model_output[-1]
 
             # let's see how it goes
-            loss_obj = loss_function.forward(input=model_logits, y=y)    
+            loss_obj = loss_function.forward(input=model_logits, target=y)    
 
             # calculate the loss
             val_cls_loss += loss_obj.item()
-            val_acc += torch.mean((torch.argmax(model_logits, dim=1) == y).to(torch.float32))
+            val_acc += torch.mean((torch.argmax(model_logits, dim=1) == y).to(torch.float32)).item()
 
-    return val_cls_loss / len(val_dataloader)
+    return val_cls_loss / len(val_dataloader), val_acc / len(val_dataloader)
         
 def train_model(source_train_dir: Union[str, Path],
                 source_val_dir: Union[str, Path],
@@ -253,10 +256,13 @@ def train_model(source_train_dir: Union[str, Path],
     
     # set the optimizer: the initial learning rate for the feature extractor will be 0.001 and the fully connected layers
     # will be assigned a 0.01 learning rate
-    optimizer = SGD(params=[{"params": model.fe.parameters(), "lr": 10 * -3}, 
-                            {"params": model.ch.parameters(), "lr": 10 * -2}], 
-                    momentum=0.9)
-    
+    # optimizer = SGD(params=[{"params": model.fe.parameters(), "lr": 10 * -3}, 
+    #                         {"params": model.ch.parameters(), "lr": 10 * -2}], 
+    #                 momentum=0.9)
+
+    optimizer = Adam(params=[{"params": model.fe.parameters(), "lr": 10  ** -3}, 
+                             {"params": model.ch.parameters(), "lr": 10 ** -2}])
+
     lr_scheduler = AnnealingLR(optimizer=optimizer, num_epochs=num_epochs, alpha=10, beta=0.75)
 
     train_losses, train_cls_losses, train_accs, train_feats_losses = [], [], [], []
@@ -274,16 +280,18 @@ def train_model(source_train_dir: Union[str, Path],
                                                                device=device, 
                                                                seed=seed,
                                                                epoch_index=epoch_index,
-                                                               batch_size=batch_size
+                                                               batch_size=batch_size,
+                                                               sigma=0.25
                                                                )
 
-        logging_dict = {"train_loss": train, 
+        train_logging_dict = {"train_loss": train, 
                         "train_cls_loss": train_cls, 
                         "train_accuracy": train_acc}
         
         for i, f in enumerate(train_feats, start=1):
-            logging_dict[f'domain_confusion_loss_{i}': f]
+            train_logging_dict[f'domain_confusion_loss_{i}']= f
         
+        print(train_logging_dict)
         # logging: 
         # wandb.log(logging_dict)
 
@@ -296,9 +304,11 @@ def train_model(source_train_dir: Union[str, Path],
                                                  val_dir=source_val_dir)
 
         # logging: 
-        logging_dict = {"val_cls_loss": val, 
+        val_logging_dict = {"val_cls_loss": val, 
                         "val_acc": val_acc}
         
+        print("#" * 10)
+        print(val_logging_dict)
         # wandb.log(logging_dict)
 
     # make sure the wandb agent exits after the training
