@@ -1,12 +1,12 @@
 
 import torchvision.transforms as tr
-import mypt.utilities.directories_and_files as dirf
+import src.utilities.directories_and_files as dirf
 
 from torch.utils.data import DataLoader
 from pathlib import Path
 from torchvision.datasets import ImageFolder
 from typing import Union
-from mypt.data.dataloaders.standard_dataloaders import initialize_train_dataloader
+from src.data.dataloaders.standard_dataloaders import initialize_train_dataloader
 
 def get_dataloader(root: Union[str, Path],
                    image_transform:tr, 

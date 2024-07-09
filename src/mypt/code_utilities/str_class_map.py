@@ -1,8 +1,8 @@
 import torch
 from typing import Optional
-from CBM.code.annealing_lr import AnnealingLR
-from CBM.code.loss import CBMLoss, BinaryCBMLoss
 
+from ..schedulers.annealing_lr import AnnealingLR
+from ..CBM.model.loss import CBMLoss, BinaryCBMLoss
 
 def optimizer_str_to_cls(optimizer_str: Optional[str]) -> callable:
     if optimizer_str is None:

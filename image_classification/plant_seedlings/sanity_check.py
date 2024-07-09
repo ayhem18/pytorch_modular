@@ -2,7 +2,7 @@ import wandb, os, shutil
 
 # we are assuming the file is in the same directory as the 'train.py' script
 import train
-import mypt.utilities.directories_and_files as dirf
+import src.utilities.directories_and_files as dirf
 
 from pathlib import Path
 from typing import Union
@@ -11,9 +11,9 @@ from torch import nn
 from torch.optim.sgd import SGD
 from torchvision.datasets import ImageFolder
 
-from mypt.utilities.pytorch_utilities import seed_everything, get_default_device
-from mypt.data.dataloaders.standard_dataloaders import initialize_train_dataloader
-from mypt.schedulers.annealing_lr import AnnealingLR
+from src.utilities.pytorch_utilities import seed_everything, get_default_device
+from src.data.dataloaders.standard_dataloaders import initialize_train_dataloader
+from src.schedulers.annealing_lr import AnnealingLR
 
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))

@@ -290,8 +290,8 @@ class AlexNetFeatureExtractor(nn.Module):
         super().__init__(*args, **kwargs)
         # make sure to initialize the Alexnet as a field
         self.__net = alexnet(weights=AlexNet_Weights.DEFAULT)
+        # save the default transform that comes with the AlexNet architecture
         self.transform = AlexNet_Weights.DEFAULT.transforms()
-        
         self.block_indices = {}
         self.__set_blocks()
         
@@ -308,10 +308,10 @@ class AlexNetFeatureExtractor(nn.Module):
         # build the model
         self.model = self._build_model(model_blocks)
 
+        # delete the __net field and block_indices fields to reduce the size of the class
         del(self.__net)
         del(self.block_indices)
 
-        # there is no point in saving the self.__net and self.block_indices after initialization
 
     def forward(self, x: torch.Tensor):
         # the forward function in the ResNet class simply calls the forward function
@@ -347,11 +347,6 @@ if __name__ == '__main__':
     
     # for i in range(1, 6):
     #     eval(f'm.model.conv{i}')
-
-    # def f():
-    #     a = [1, 2, 3]
-    #     for n in a:
-    #         yield n
 
     it = iter([1, 2, 3])
     a = next(it, None)

@@ -2,9 +2,12 @@
 This script contains the implementation of the annealing learning rate scheduling strategy according to the ReverseGrad paper    
 """
 
+
 import torch
 from typing import Union
 from torch.optim.lr_scheduler import LambdaLR
+
+from copy import deepcopy
 
 class AnnealingLR(LambdaLR):    
     def __init__(self, 
@@ -12,6 +15,7 @@ class AnnealingLR(LambdaLR):
                  num_epochs: int, 
                  alpha: Union[float, int],
                  beta: Union[float, int], 
+                 verbose:bool=False
                  ):
         # let's make some checks on the passes arguments
         if num_epochs <= 0:
@@ -32,9 +36,10 @@ class AnnealingLR(LambdaLR):
             return lr
 
         self.scheduler = LambdaLR(optimizer=optimizer, 
-                                  lr_lambda=[_formula for _ in optimizer.param_groups])# this is done internally in the scheduler class )
+                                  lr_lambda=[_formula for _ in optimizer.param_groups], # this is done internally in the scheduler class 
+                                  verbose=verbose)
 
-    # the main idea is to override the LambdaLR function by calling those of the self.scheduler field
+    # the main idea is to overried the LambdaLR function by calling those of the self.scheduler field
     def state_dict(self):
         return self.scheduler.state_dict()
 
@@ -52,7 +57,7 @@ from torch import nn
 if __name__ == '__main__':
     m = nn.Linear(in_features=10, out_features=1)
     opt = torch.optim.SGD(m.parameters(), lr=10 ** -3)
-    s = AnnealingLR(optimizer=opt, num_epochs=20, beta=1, alpha=2)    
+    s = AnnealingLR(optimizer=opt, initial_lr=10 ** -3, num_epochs=20, beta=1, alpha=2)    
     print(opt.param_groups[0]['lr'])
     for _ in range(20):
         opt.step()

@@ -10,9 +10,9 @@ from torch import nn
 from collections import OrderedDict
 from copy import deepcopy
 
-from mypt.backbones.alexnetFeatureExtractor import AlexNetFeatureExtractor
-from mypt.dimensions_analysis.dimension_analyser import DimensionsAnalyser
-from mypt.linear_blocks.classification_head import ExponentialClassifier
+from src.backbones.alexnetFeatureExtractor import AlexNetFeatureExtractor
+from src.dimensions_analysis.dimension_analyser import DimensionsAnalyser
+from src.linear_blocks.classification_head import ExponentialClassifier
 
 class TransferAlexNet(nn.Module):
     def __init__(self,

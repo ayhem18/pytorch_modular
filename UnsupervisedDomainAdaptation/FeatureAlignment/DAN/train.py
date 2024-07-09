@@ -1,7 +1,7 @@
 import torch, wandb, os
 import torchvision.transforms as tr
 
-import mypt.utilities.pytorch_utilities as pu
+import src.utilities.pytorch_utilities as pu
 
 from pathlib import Path
 from torch import nn
@@ -14,10 +14,10 @@ from torch.optim.adam import Adam
 from tqdm import tqdm
 
 from transferable_alexnet import TransferAlexNet
-from mypt.distances.MMD import GaussianMMD
+from src.distances.MMD import GaussianMMD
 
-from mypt.schedulers.annealing_lr import AnnealingLR
-from mypt.distances.MMD import GaussianMMD
+from src.schedulers.annealing_lr import AnnealingLR
+from src.distances.MMD import GaussianMMD
 from data import get_dataloader
 from transferable_alexnet import TransferAlexNet
 

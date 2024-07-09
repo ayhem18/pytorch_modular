@@ -7,7 +7,7 @@ import torch
 from torch import nn
 from typing import Union
 from tqdm import tqdm
-from ..utilities import pytorch_utilities as pu
+from ..code_utilities import pytorch_utilities as pu
 # let's implement this function as a Pytorch Loss
 
 def _zero_diagonals(x: torch.Tensor) -> torch.Tensor: 

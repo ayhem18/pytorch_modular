@@ -7,7 +7,7 @@ from functools import partial
 from warnings import warn
 
 from torch.utils.data import Dataset, DataLoader
-from ...utilities.pytorch_utilities import set_worker_seed
+from ...code_utilities.pytorch_utilities import set_worker_seed
 
 
 def initialize_train_dataloader(dataset_object: Dataset, 
@@ -15,6 +15,7 @@ def initialize_train_dataloader(dataset_object: Dataset,
                         batch_size: int,
                         num_workers: int,
                         drop_last: bool = True,
+                        warning: bool = True
                         ) -> DataLoader:
     """This function initializes a dataloader making sure the data loading is reproducible across runs. 
 
@@ -29,7 +30,7 @@ def initialize_train_dataloader(dataset_object: Dataset,
         DataLoader: A dataloader assumed to load training data for a model
     """
 
-    if not drop_last:
+    if not drop_last and warning:
         warn(f"The parameter 'drop_last' is set to False. Depending on the size of the dataset and the batch size." 
              f"this might lead to reported metrisc lower than the actual ones.")
 
@@ -49,7 +50,8 @@ def initialize_train_dataloader(dataset_object: Dataset,
 
     # if the number of workers is set to '0', then the parameter 'pin_memory' will be set to True to improve performance
     # make sure to warn the user
-    warn(message=f"the 'num_workers' argument is 0. We will set the 'pin_memory' argument to True to improve performance")
+    if warning:
+        warn(message=f"the 'num_workers' argument is 0. We will set the 'pin_memory' argument to True to improve performance")
 
     dl_train = DataLoader(dataset=dataset_object, 
                         shuffle=True, # the train dataloader must be shuffled not to hurt performance

@@ -202,8 +202,7 @@ def adaptive_pool2d_output(input_shape: Union[four_int_tuple, three_int_tuple],
     new_h, new_w = pool_layer.output_size if isinstance(pool_layer.output_size, tuple) \
         else (pool_layer.output_size, pool_layer.output_size)
 
-    # make sure to return the values as the basic Python int type
-    result_shape += (channels, int(new_h), int(new_w))
+    result_shape += (channels, new_h, new_w)
     return result_shape
 
 
@@ -223,8 +222,7 @@ def flatten_output(input_shape: Tuple, flatten_layer: nn.Flatten) -> int:
 
     flattened = np.prod(input_shape[start: end + 1], dtype=np.intc)
     flattened = flattened.item() if isinstance(flattened, np.ndarray) else flattened
-    # make sure to convert it to the basic Python integer type
-    flattened = (int(flattened),)
+    flattened = (flattened,)
 
     after_flattened = input_shape[end + 1] if end + 1 < len(input_shape) else tuple()
 

@@ -7,12 +7,12 @@ import torch
 from torch import nn
 from typing import Union, Tuple
 from torch.utils.data import DataLoader
-from ..utilities.pytorch_utilities import get_module_device
+
+from ..code_utilities.pytorch_utilities import get_module_device
 from ..dimensions_analysis import layer_specific as lc
 
 _FORWARD = 'forward_pass'
 _STATIC = 'static'
-
 
 # this constant represents the types for which the
 _DEFAULT_TYPES = (nn.Conv2d,
@@ -86,7 +86,7 @@ class DimensionsAnalyser:
 
     def __init__(self,
                  net: nn.Module = None,
-                 method: str = _STATIC):
+                 method: str = _FORWARD):
         """
         The constructor sets the forward pass as the default method as it is more reliable.
         The module's architecture can be different from the forward pass logic. The latter governs

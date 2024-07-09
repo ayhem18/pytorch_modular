@@ -21,7 +21,7 @@ from torchvision.models.resnet import Bottleneck
 
 LAYER_BLOCK = 'layer'
 RESIDUAL_BLOCK = 'residual'
-
+DEFAUL_NUM_CLASSES = 1000
 
 # let's create a utility function real quick
 def contains_fc_layer(module: nn.Module) -> bool:
@@ -127,7 +127,7 @@ class ResNetFeatureExtractor(nn.Module):
         self.num_layers = num_layers
 
         constructor, weights = self.get_model(architecture=architecture)
-        self.__net = constructor(weights.DEFAULT) 
+        self.__net = constructor(weights=weights.DEFAULT) 
         self.transform = weights.DEFAULT.transforms()
 
         self.add_gb_avg = add_global_average
@@ -163,13 +163,3 @@ class ResNetFeatureExtractor(nn.Module):
     def named_children(self) -> Iterator[Tuple[str, Module]]:
         return self.feature_extractor.named_children()
 
-if __name__ == '__main__':
-    from torchinfo import summary
-    
-    r1 = ResNetFeatureExtractor(num_layers=-1, freeze=15, add_global_average=True, add_fc=True, freeze_layers=False)
-    for c in r1.children():
-        print(c)
-        for p in c.parameters():
-            print(p.requires_grad)
-    
-            

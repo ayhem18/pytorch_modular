@@ -3,28 +3,22 @@ Unlike helper_functionalities.py, this script contains, Pytorch code that is gen
 scripts and Deep Learning functionalities
 """
 
-import gc
-import torch
-from torch import nn
-from typing import Union
-from torch.utils.data import DataLoader
-from pathlib import Path
-import os
-from datetime import datetime as d
-from .directories_and_files import process_path
+import gc, torch, os, random
 
-import random
 import numpy as np
 
+from torch import nn
+from typing import Union, List
+from pathlib import Path
+from datetime import datetime as d
 
-HOME = os.getcwd()
-
+from .directories_and_files import process_path
+HOME = os.path.dirname(os.path.realpath(__file__))
 
 def cleanup():
     gc.collect()
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
-
 
 # set the default device
 def get_default_device():
@@ -87,8 +81,8 @@ def seed_everything(seed: int = 69):
     # let's set reproducility
     random.seed(seed)
     np.random.seed(seed)
-    torch.use_deterministic_algorithms(True, warn_only=True) # since some of the most common layers do not have deterministic implementatino, warn_only=True seems like the only option
     torch.manual_seed(seed=seed)
+    torch.use_deterministic_algorithms(True, warn_only=True) # certain layers have no deterministic implementation... well need to compromise on this one...
     torch.backends.cudnn.benchmark = False    
     
 def set_worker_seed(_, seed: int = 69):
@@ -96,3 +90,15 @@ def set_worker_seed(_, seed: int = 69):
     random.seed(seed)
 
 
+# let's define functionalities to iterate through models
+def iterate(module: nn.Module) -> List[nn.Module]:
+    children_nodes = []
+    # if the module has no children node
+    if len(list(module.children())) == 0:
+        return [module]
+
+    for c in module.children():
+        children_nodes.extend(iterate(c))        
+
+    return children_nodes
+    

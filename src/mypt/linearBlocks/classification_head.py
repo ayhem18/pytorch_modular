@@ -69,6 +69,8 @@ class LinearBlock(nn.Module):
     def named_children(self) -> Iterator[Module]:
         return self.block.children()
 
+    def modules(self) -> Iterator[Module]:
+        return self.block.modules()
 
 class ClassificationHead(ABC, nn.Module):
     # all classifiers should have the 'num_classes' and 'in_features' attributes
@@ -195,11 +197,4 @@ class ExponentialClassifier(ClassificationHead):
         blocks = OrderedDict([(f'fc_{i}', b) for i, b in enumerate(blocks, start=1)])
 
         self.classifier = nn.Sequential(blocks)
-
-# if __name__ == '__main__':
-#     for i in range(1, 5):
-#         c = ExponentialClassifier(num_classes=10, in_features=100, num_layers=i, dropout=(0.2 if i % 2 == 0 else None))
-#         c = c.to('cuda')
-#         c.forward(torch.randn((5, 100)).to('cuda'))
-#         print(list(c.classifier.parameters())[0].device) 
         

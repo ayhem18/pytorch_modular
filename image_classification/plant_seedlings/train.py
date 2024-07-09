@@ -4,7 +4,7 @@ This script mainly contains the code to train an initial model for the classific
 
 import os, torch, random, wandb
 import torchvision.transforms as tr
-import mypt.utilities.directories_and_files as dirf
+import src.utilities.directories_and_files as dirf
 
 from torch import nn
 from torch.optim.sgd import SGD
@@ -14,12 +14,12 @@ from tqdm import tqdm
 from typing import Tuple, Union, Dict, List
 from pathlib import Path
     
-from mypt.backbones.resnetFeatureExtractor import ResNetFeatureExtractor
-from mypt.classification.classification_head import ExponentialClassifier
-from mypt.utilities.pytorch_utilities import seed_everything, get_default_device, get_module_device
-from mypt.data.dataloaders.standard_dataloaders import initialize_train_dataloader, initialize_val_dataloader
-from mypt.schedulers.annealing_lr import AnnealingLR
-from mypt.dimensions_analysis.dimension_analyser import DimensionsAnalyser
+from src.backbones.resnetFeatureExtractor import ResNetFeatureExtractor
+from src.classification.classification_head import ExponentialClassifier
+from src.utilities.pytorch_utilities import seed_everything, get_default_device, get_module_device
+from src.data.dataloaders.standard_dataloaders import initialize_train_dataloader, initialize_val_dataloader
+from src.schedulers.annealing_lr import AnnealingLR
+from src.dimensions_analysis.dimension_analyser import DimensionsAnalyser
 
 # set the project name
 WANDB_PROJECT_NAME = 'PLANTS_CLASSIFICAITON'
