@@ -70,6 +70,3 @@ def test_vectorized_imp():
 
         if not torch.allclose(naive_res, vec_res):
             raise ValueError(f"Max difference: {torch.max(torch.abs(vec_res - naive_res)).item()}")
-
-if __name__ == '__main__':
-    test_vectorized_imp()

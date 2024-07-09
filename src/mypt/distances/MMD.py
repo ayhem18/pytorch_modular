@@ -99,19 +99,3 @@ def naive_implementation(x: torch.Tensor, y: torch.Tensor, sigma: float):
     third_term = third_term / (nx * ny)
 
     return first_term + second_term - 2 * third_term
-
-import random
-import numpy as np
-
-if __name__ == '__main__':
-    for _ in tqdm(range(1000)):
-        n1, n2, dim = random.randint(2, 20), random.randint(2, 20), random.randint(10, 50)
-        x = torch.round(torch.randn(size=(n1, dim)), decimals=5)
-        y = torch.round(torch.randn(size=(n2, dim)), decimals=5)
-        sigma = round(0.5 + random.random() * 2, 3)
-
-        mmd = GaussianMMD(sigma=sigma).forward(x, y)
-        naive_mmd = naive_implementation(x, y, sigma=sigma) 
-        
-        if not np.isclose(mmd.item(), naive_mmd, rtol=10 ** -5, atol=10**-9): 
-            raise ValueError(f"please make sure the implementation is correct. Vectorized: {mmd.item()}, naive: {naive_mmd}")
