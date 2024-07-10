@@ -18,7 +18,6 @@ class SimClrLoss(nn.Module):
     def _default_build_indices(cls, n:int) -> List[List[int]]:
         # this implementation assumes that x[i] and x[i + N] represent the same image (under differnet augmentations)
         return [i for i in range(2 * n)], [(i + n) % (2 * n) for i in range(2 * n)]
-        # return [[i, (i + n) % (2 * n)] for i in range(2 * n)]        
 
     def __init__(self,
                  temperature: float, 
@@ -70,6 +69,8 @@ class SimClrLoss(nn.Module):
 
 
 # let's write a naive implementation of the code: non-vectorized for loops implementations
+# this class is not meant to be used. It is written solely for testing purposes and to 
+# make sure the vectorized efficient implementation above is equivalent to the one introduced in the paper
 class _SimClrLossNaive(nn.Module):
     _sims = ['cos', 'dot']
 

@@ -5,7 +5,7 @@ This script contains an abstact class of a model trained with the SimClr algorit
 import torch
 
 from torch import nn
-from typing import Union, Tuple, Optional, Iterator
+from typing import Tuple, Iterator
 from torch import nn
 
 

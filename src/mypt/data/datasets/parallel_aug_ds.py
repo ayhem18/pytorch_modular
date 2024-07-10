@@ -1,0 +1,92 @@
+"""
+This script contains the implementation of a general dataset object designed for Constrastive Learning Parallel Augmentation approaches 
+(https://arxiv.org/pdf/2002.05709, https://arxiv.org/abs/2103.03230) for example
+"""
+import os, torch, shutil, random
+
+import torchvision.transforms as tr
+
+from torch.utils.data import Dataset
+from typing import Union, List, Dict, Tuple
+from pathlib import Path
+from PIL import Image
+from abc import ABC, abstractclassmethod
+
+from ...code_utilities import directories_and_files as dirf
+from ...code_utilities import pytorch_utilities as pu
+
+
+class ParallelAugDs(Dataset):
+    @classmethod
+    def load_sample(cls, sample_path: Union[str, Path]):
+        # make sure the path is absolute
+        if not os.path.isabs(sample_path):
+            raise ValueError(f"The loader is expecting the sample path to be absolute.\nFound:{sample_path}")
+
+        # this code is copied from the DatasetFolder python file
+        with open(sample_path, "rb") as f:
+            img = Image.open(f)
+            return img.convert("RGB")
+
+
+    def __init__(self, 
+                root: Union[str, Path],
+                img_shape: Tuple[int, int],
+                augs_per_sample: int,
+                data_augs:List[tr.Compose],
+                image_extensions:List[str]=None,
+                seed: int=0):
+
+        # reproducibiliy provides a much better idea about the performance
+        pu.seed(seed=seed)
+        if image_extensions is None:
+            image_extensions = dirf.IMAGE_EXTENSIONS
+        
+        self.im_exts = image_extensions
+
+        self.root = dirf.process_path(root,
+                                    file_ok=False,
+                                    dir_ok=True,
+                                    # the directory should contain only images files (no dirs)
+                                    condition=lambda x: all([os.path.isfile(os.path.join(x, p)) and os.path.splitext(os.path.join(x, p))[-1] in self.im_exts for p in os.listdir(x)]),
+                                    error_message=f'The root directory is expected to contains only image files and no directories')
+
+        # create a mapping between a numerical index and the associated sample path for O(1) access time (on average...)
+        self.idx2path = None
+        # count the number of samples once
+        self.data_count = len(os.listdir(root))
+
+        # make sure each transformation starts by resizing the image to the correct size
+        self.data_augs = []
+        for da in data_augs:
+            if isinstance(da, tr.Compose):
+                if not isinstance(da[0], tr.Resize):
+                    # add the resize transformation as the start transformation in the final transformation
+                    da = tr.Compose([tr.Resize(img_shape), da])
+
+                # save the final version of the data augmentation
+                self.data_augs.append(da)
+        
+        self.augs_per_sample = min(augs_per_sample, len(self.data_augs))
+
+
+
+    def _prepare_idx2path(self):
+        # make sure to sort files names (for cross-platform reproducibilty )
+        samples = sorted(os.listdir(self.root))
+        idx2path = [(index, os.path.join(self.root, fn)) for index, fn in enumerate(samples)] 
+        self.idx2path = dict(idx2path)        
+
+
+    def __getitem__(self, index: int):
+        # extract the path to the sample (using the map between the index and the sample path !!!)
+        sample_image = self.load_sample(self.idx2path[index])   
+        augs1, augs2 = random.sample(self.data_augs, self.augs_per_sample), random.sample(self.data_augs, self.augs_per_sample)
+        augs1, augs2 = tr.Compose(augs1), tr.Compose(augs2)
+        return augs1(sample_image), augs2(sample_image)
+
+
+    def __len__(self) -> int:
+        if self.data_count == 0:
+            raise ValueError(f"Please make sure to update the self.data_count field in the constructor to have the length of the dataset precomputed !!!!. Found: {self.data_count}")
+        return self.data_count

@@ -14,7 +14,7 @@ from mypt.dimensions_analysis import dimension_analyser as da
 
 from ..simClrModel import SimClrModel
 
-class ResnetModel(SimClrModel):
+class ResnetSimClr(SimClrModel):
     def __init__(self, 
                     input_shape: Tuple[int, int, int],
                     output_dim: int,
