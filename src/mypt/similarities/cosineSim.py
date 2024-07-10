@@ -21,11 +21,11 @@ class CosineSim(nn.Module):
         norm_y = torch.linalg.vector_norm(y, dim=1, keepdim=True)
         
         # normalize both vectors
-        x_norm = x // norm_x
-        y_norm = y // norm_y 
+        x_norm = x / norm_x
+        y_norm = y / norm_y 
 
         # cosine similarity is basically dot product of normalized vectors...
-        res = x_norm @ y_norm
+        res = x_norm @ y_norm.T
         # make sure the loss is of the
         assert res.shape == (x_samples, y_samples), f"Make sure the final result matches the expected shape. Expected: {(x_samples, y_samples)}. Found: {res.shape}"
         return res
