@@ -10,6 +10,8 @@ in pretrained network. I am applying the same framework on the resnet architectu
 import torch
 import warnings
 
+import torchvision.transforms as tr
+
 from typing import Iterator, Union, Tuple, Any, Optional
 from collections import OrderedDict
 
@@ -18,6 +20,13 @@ from torch.nn.modules.module import Module
 from torchvision.models import resnet18, resnet34, resnet50, resnet101, resnet152
 from torchvision.models import ResNet18_Weights, ResNet34_Weights, ResNet50_Weights, ResNet101_Weights, ResNet152_Weights  
 from torchvision.models.resnet import Bottleneck
+
+
+_DEFAULT_IMAGE_TRANSFORMS = [tr.CenterCrop(size=(232, 232)), 
+                             tr.Resize(size=(224, 224)), # using the default interpolation 
+                             tr.Normalize(mean=[0.485, 0.456, 0.406], 
+                                          std=[0.229, 0.224, 0.225])
+                            ]
 
 LAYER_BLOCK = 'layer'
 RESIDUAL_BLOCK = 'residual'
@@ -32,7 +41,10 @@ def contains_fc_layer(module: nn.Module) -> bool:
     sub_m = any([isinstance(m, nn.Linear) for m in module.modules()])
     return m and sub_m
 
-   
+
+# _Resnet_DEFAULT_AUGMENTATIONS = [tr.Resize(size=(224, 224)), tr.Normalize(), tr.ToTensor()]
+
+
 class ResNetFeatureExtractor(nn.Module):
     __archs__ = [18, 34, 50, 101, 152]
     

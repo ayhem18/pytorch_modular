@@ -2,15 +2,13 @@
 This script contains the implementation of a general dataset object designed for Constrastive Learning Parallel Augmentation approaches 
 (https://arxiv.org/pdf/2002.05709, https://arxiv.org/abs/2103.03230) for example
 """
-import os, torch, shutil, random
+import os, random
 
 import torchvision.transforms as tr
-
 from torch.utils.data import Dataset
 from typing import Union, List, Dict, Tuple
 from pathlib import Path
 from PIL import Image
-from abc import ABC, abstractclassmethod
 
 from ...code_utilities import directories_and_files as dirf
 from ...code_utilities import pytorch_utilities as pu
@@ -31,9 +29,10 @@ class ParallelAugDs(Dataset):
 
     def __init__(self, 
                 root: Union[str, Path],
-                img_shape: Tuple[int, int],
+                output_shape: Tuple[int, int],
                 augs_per_sample: int,
-                data_augs:List[tr.Compose],
+                sampled_data_augs:List,
+                uniform_data_augs: List,
                 image_extensions:List[str]=None,
                 seed: int=0):
 
@@ -56,18 +55,13 @@ class ParallelAugDs(Dataset):
         # count the number of samples once
         self.data_count = len(os.listdir(root))
 
-        # make sure each transformation starts by resizing the image to the correct size
-        self.data_augs = []
-        for da in data_augs:
-            if isinstance(da, tr.Compose):
-                if not isinstance(da[0], tr.Resize):
-                    # add the resize transformation as the start transformation in the final transformation
-                    da = tr.Compose([tr.Resize(img_shape), da])
+        # the output of the resulting data (After augmentation)
+        self.output_shape = output_shape
 
-                # save the final version of the data augmentation
-                self.data_augs.append(da)
-        
-        self.augs_per_sample = min(augs_per_sample, len(self.data_augs))
+        # make sure each transformation starts by resizing the image to the correct size
+        self.sampled_data_augs = sampled_data_augs
+        self.uniform_data_augs = uniform_data_augs
+        self.augs_per_sample = min(augs_per_sample, len(self.sampled_data_augs))
 
 
 
@@ -82,6 +76,26 @@ class ParallelAugDs(Dataset):
         # extract the path to the sample (using the map between the index and the sample path !!!)
         sample_image = self.load_sample(self.idx2path[index])   
         augs1, augs2 = random.sample(self.data_augs, self.augs_per_sample), random.sample(self.data_augs, self.augs_per_sample)
+        
+        # make sure to resize before and after the augmentations
+
+        # before:
+        augs1.insert(0, tr.Resize(size=self.output_shape))
+        augs2.insert(0, tr.Resize(size=self.output_shape))
+    
+        # add all the uniform augmentations: applied regardless of the model 
+        augs1.extend(self.uniform_data_augs)
+        augs2.extend(self.uniform_data_augs)
+
+        # resize after all transformations:
+        augs1.append(tr.Resize(size=self.output_shape))
+        augs2.append(tr.Resize(size=self.output_shape))
+
+        # convert to a tensor
+        augs1.append(tr.ToTensor())
+        augs2.append(tr.ToTensor())
+
+
         augs1, augs2 = tr.Compose(augs1), tr.Compose(augs2)
         return augs1(sample_image), augs2(sample_image)
 

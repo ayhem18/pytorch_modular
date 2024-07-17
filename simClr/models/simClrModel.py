@@ -18,7 +18,7 @@ class SimClrModel(nn.Module):
         self.flatten_layer = nn.Flatten()
         self.model = nn.Sequential(self.fe, self.flatten_layer, self.ph)
 
-    def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.tensor]:
+    def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         # the forward function returns both f(x_i) and g(f(x_i)), any loss object should work with gf(x_i)
         f_xi = self.fe(x)
         return f_xi, self.ph.forward(self.flatten_layer.forward(f_xi))
