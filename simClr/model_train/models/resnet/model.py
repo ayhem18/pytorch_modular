@@ -25,6 +25,7 @@ class ResnetSimClr(SimClrModel):
                     freeze: Union[int, bool]=False, # do not freeze any of the  layers of the pretrained model, 
                     freeze_layers: bool=True) -> None:
 
+        super().__init__()
 
         # the feature extractor or the encoder "f" as denoted in the paper.
         self.fe = rfe.ResNetFeatureExtractor(num_layers=fe_num_blocks, 

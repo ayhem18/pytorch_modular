@@ -14,6 +14,18 @@ from ...code_utilities import directories_and_files as dirf
 from ...code_utilities import pytorch_utilities as pu
 
 
+# for this class to work properly, it is important to know the expected input of each image augmentation
+# some of them accept only PIL images, some accept PIL and ndarrys
+# some of them accept only tensors..
+ 
+# 0: PIL image
+# 1: ndarray
+# 2: torch Tensor 
+_data_aug_input_type = {tr.ToTensor: [0], 
+                        tr.Resize: [0, 2]}
+
+
+
 class ParallelAugDs(Dataset):
     @classmethod
     def load_sample(cls, sample_path: Union[str, Path]):
@@ -37,7 +49,7 @@ class ParallelAugDs(Dataset):
                 seed: int=0):
 
         # reproducibiliy provides a much better idea about the performance
-        pu.seed(seed=seed)
+        pu.seed_everything(seed=seed)
         if image_extensions is None:
             image_extensions = dirf.IMAGE_EXTENSIONS
         
@@ -52,6 +64,9 @@ class ParallelAugDs(Dataset):
 
         # create a mapping between a numerical index and the associated sample path for O(1) access time (on average...)
         self.idx2path = None
+        # set the mapping from the index to the sample's path
+        self._prepare_idx2path()
+
         # count the number of samples once
         self.data_count = len(os.listdir(root))
 
@@ -68,20 +83,22 @@ class ParallelAugDs(Dataset):
     def _prepare_idx2path(self):
         # make sure to sort files names (for cross-platform reproducibilty )
         samples = sorted(os.listdir(self.root))
-        idx2path = [(index, os.path.join(self.root, fn)) for index, fn in enumerate(samples)] 
-        self.idx2path = dict(idx2path)        
+        self.idx2path = dict([(index, os.path.join(self.root, fn)) for index, fn in enumerate(samples)])
 
 
     def __getitem__(self, index: int):
         # extract the path to the sample (using the map between the index and the sample path !!!)
         sample_image = self.load_sample(self.idx2path[index])   
-        augs1, augs2 = random.sample(self.data_augs, self.augs_per_sample), random.sample(self.data_augs, self.augs_per_sample)
-        
-        # make sure to resize before and after the augmentations
 
-        # before:
-        augs1.insert(0, tr.Resize(size=self.output_shape))
-        augs2.insert(0, tr.Resize(size=self.output_shape))
+        augs1, augs2 = random.sample(self.sampled_data_augs, self.augs_per_sample), random.sample(self.sampled_data_augs, self.augs_per_sample)
+
+        # convert to a tensor
+        augs1.insert(0, tr.ToTensor())
+        augs2.insert(0, tr.ToTensor())
+
+        # resize before any specific transformations
+        augs1.insert(1, tr.Resize(size=self.output_shape))
+        augs2.insert(1, tr.Resize(size=self.output_shape))
     
         # add all the uniform augmentations: applied regardless of the model 
         augs1.extend(self.uniform_data_augs)
@@ -91,11 +108,7 @@ class ParallelAugDs(Dataset):
         augs1.append(tr.Resize(size=self.output_shape))
         augs2.append(tr.Resize(size=self.output_shape))
 
-        # convert to a tensor
-        augs1.append(tr.ToTensor())
-        augs2.append(tr.ToTensor())
-
-
+        # no need to convert to tensors,
         augs1, augs2 = tr.Compose(augs1), tr.Compose(augs2)
         return augs1(sample_image), augs2(sample_image)
 

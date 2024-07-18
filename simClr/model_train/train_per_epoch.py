@@ -5,16 +5,14 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 from typing import Tuple, Union
 
-from mypt.code_utilities import pytorch_utilities as pu, directories_and_files as dirf
-
-from ..models.simClrModel import SimClrModel
-from ..models.resnet.model import ResnetSimClr
+from .models.simClrModel import SimClrModel
+from mypt.code_utilities import pytorch_utilities as pu
 from mypt.losses.simClrLoss import SimClrLoss
 
 def train_per_batch(model: SimClrModel,
                     x1_batch: torch.Tensor,
                     x2_batch: torch.Tensor,
-                    loss_function: nn.Module,
+                    loss_function: SimClrLoss,
                     optimizer: torch.optim.Optimizer,
                     ) -> float:
     
@@ -61,11 +59,10 @@ def train_per_epoch(model: nn.Module,
     # define a function to save the average loss per epoch
     epoch_train_loss = 0
 
-    for batch_index, (x, y) in tqdm(enumerate(dataloader), desc=f'training batch at epoch {epoch_index }'): 
+    for batch_index, (x1, x2) in tqdm(enumerate(dataloader), desc=f'training batch at epoch {epoch_index }'): 
         batch_train_loss = train_per_batch(model=model, 
-                                                batch_x=x, 
-                                                batch_x=x, 
-                                                batch_y=y, 
+                                                x1_batch=x1, 
+                                                x2_batch=x2, 
                                                 loss_function=loss_function,
                                                 optimizer=optimizer)
         
@@ -75,8 +72,6 @@ def train_per_epoch(model: nn.Module,
 
 
         epoch_train_loss += epoch_train_loss
-
-    param_index = random.randint(0, len(optimizer.param_groups))
 
     # make sure to call the scheduler to update the learning rate
     scheduler.step()

@@ -12,6 +12,8 @@ from torch import nn
 class SimClrModel(nn.Module):
     def __init__(self) -> None:
         
+        super().__init__()
+        
         # the feature extractor or the encoder "f" as denoted in the paper.
         self.fe: nn.Module = None 
         self.ph: nn.Module = None
