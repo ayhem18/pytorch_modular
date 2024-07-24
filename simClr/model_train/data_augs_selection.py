@@ -22,12 +22,14 @@ DATA_FOLDER = os.path.join(current, 'data')
 
 _DEFAULT_DATA_AUGS = [tr.RandomVerticalFlip(p=1), 
                       tr.RandomHorizontalFlip(p=1), 
-                    #   tr.ColorJitter(brightness=0.05, contrast=0.05),
+                      tr.RandomRotation(degrees=45),
+					  tr.RandomErasing(p=1, scale=(0.05, 0.15)),
+					  tr.ColorJitter(brightness=0.05, contrast=0.05, hue=0.05),
                       tr.GaussianBlur(kernel_size=(5, 5)),
                       ]
 
-_UNIFORM_DATA_AUGS = [tr.Normalize(mean=[0.485, 0.456, 0.406], 
-                    std=[0.229, 0.224, 0.225])]
+_UNIFORM_DATA_AUGS = [#tr.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+                    ]
 
 
 def check_data_aug(data_folder,
