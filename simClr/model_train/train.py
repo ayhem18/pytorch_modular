@@ -1,4 +1,4 @@
-import wandb
+import wandb, torch
 
 import torchvision.transforms as tr
 
@@ -20,7 +20,7 @@ from .models.resnet.model import ResnetSimClr
 # the default data augmentations are selected as per the authors' recommendations
 _DEFAULT_DATA_AUGS = [tr.RandomVerticalFlip(p=1), 
                       tr.RandomHorizontalFlip(p=1), 
-                      tr.ColorJitter(brightness=0.1, hue=0.1, contrast=0.1),
+                    #   tr.ColorJitter(brightness=0.05, contrast=0.05),
                       tr.GaussianBlur(kernel_size=(5, 5)),
                       ]
 
@@ -96,27 +96,46 @@ def train(model: ResnetSimClr,
                             ])
 
     lr_scheduler = AnnealingLR(optimizer=optimizer, num_epochs=num_epochs,alpha=10,beta= 0.75)
+    try:
+        for epoch_index in tqdm(range(num_epochs), desc=f'training the model'):
+            epoch_train_loss = train_per_epoch(model=model, 
+                            dataloader=train_dl,
+                            loss_function=loss_obj,
+                            epoch_index=epoch_index,
+                            device=device, 
+                            log_per_batch=0.3, 
+                            optimizer=optimizer,
+                            scheduler=lr_scheduler)
+        
+            print(f"epoch {epoch_index}: train loss: {epoch_train_loss}")
 
-    for epoch_index in tqdm(range(num_epochs), desc=f'training the model'):
-        # call the traing per epoch method
-        epoch_train_loss = train_per_epoch(model=model, 
-                        dataloader=train_dl,
-                        loss_function=loss_obj,
-                        epoch_index=epoch_index, # keep the 0-index 
-                        device=device, 
-                        log_per_batch=0.3, 
-                        optimizer=optimizer,
-                        scheduler=lr_scheduler)
+            if val_dl is not None:
+                epoch_val_loss = validation_per_epoch(model=model, 
+                dataloader=val_dl,
+                epoch_index=epoch_index + 1, 
+                device=device,
+                log_per_batch=0.2)
+                print(f"epoch {epoch_index}: validation loss: {epoch_val_loss}")
+    
 
-        print(f"epoch {epoch_index}: train loss: {epoch_train_loss}")
+    # this piece of code is taken from the fairSeq (by the Facebook AI research team) as recommmended on the Pytorch forum
+    except RuntimeError as e:
+        
+        if 'out of memory' not in str(e):
+            raise e
+        
+        # at this point, the error is known to be an out of memory error
+        pu.cleanup()
+        # make sure to close the wandb log
+        wandb.finish()
+        batch_size = int(batch_size / 1.2)
+        train(model=model, 
+            train_data_folder=train_data_folder, 
+            val_data_folder=val_data_folder, 
+            num_epochs=num_epochs, 
+            batch_size=batch_size,
+            temperature=temperature,
+            seed=seed,
+            run_name=run_name)
 
-        if val_dl is not None:
-            epoch_val_loss = validation_per_epoch(model=model, 
-            dataloader=val_dl,
-            epoch_index=epoch_index + 1, 
-            device=device,
-            log_per_batch=0.2)
-            print(f"epoch {epoch_index}: validation loss: {epoch_val_loss}")
-
-    # make sure to close the wandb log
     wandb.finish()

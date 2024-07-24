@@ -30,8 +30,8 @@ def get_module_device(module: nn.Module) -> str:
     # https://stackoverflow.com/questions/58926054/how-to-get-the-device-type-of-a-pytorch-module-conveniently
     if hasattr(module, 'device'):
         return module.device
-    return next(module.parameters()).device
-
+    device = next(module.parameters()).device
+    return device
 
 def __verify_extension(p):
     return os.path.basename(p).endswith('.pt') or os.path.basename(p).endswith('.pth')

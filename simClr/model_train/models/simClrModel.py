@@ -6,7 +6,6 @@ import torch
 
 from torch import nn
 from typing import Tuple, Iterator
-from torch import nn
 
 
 class SimClrModel(nn.Module):
@@ -27,20 +26,24 @@ class SimClrModel(nn.Module):
 
 
     def __str__(self):
-        # the default __str__ function will display the self.__net module as well
-        # which might be confusing as .__net is definitely not part of the forward pass of the model
         return self.model.__str__()
     
     def __repr__(self):
         return self.model.__repr__() 
     
-    def children(self) -> Iterator['Module']:
+    def children(self) -> Iterator[nn.Module]:
         # not overloading this method will return to an iterator with 2 elements: self.__net and self.model
         return self.model.children()
 
     def modules(self) -> Iterator[nn.Module]:
         return self.model.modules()
     
-    def named_children(self) -> Iterator[Tuple[str, "Module"]]:
+    def named_children(self) -> Iterator[Tuple[str, nn.Module]]:
         return self.model.named_children()
 
+    def to(self, *args, **kwargs):
+        # self.model = self.model.to(*args, **kwargs)
+        self.fe = self.fe.to(*args, **kwargs)
+        self.flatten_layer = self.flatten_layer.to(*args, **kwargs)
+        self.ph = self.ph.to(*args, **kwargs)
+        return self 

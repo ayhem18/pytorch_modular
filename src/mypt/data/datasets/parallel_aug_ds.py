@@ -110,7 +110,13 @@ class ParallelAugDs(Dataset):
 
         # no need to convert to tensors,
         augs1, augs2 = tr.Compose(augs1), tr.Compose(augs2)
-        return augs1(sample_image), augs2(sample_image)
+        
+
+        s1, s2 = augs1(sample_image), augs2(sample_image) 
+        # these variables are created for debugging purposes
+        n1, n2 = s1.numpy(), s2.numpy()
+
+        return s1, s2
 
 
     def __len__(self) -> int:

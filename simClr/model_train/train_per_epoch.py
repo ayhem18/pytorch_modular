@@ -1,4 +1,4 @@
-import torch, random, wandb
+import torch, wandb
 
 from torch import nn
 from torch.utils.data import DataLoader
@@ -14,11 +14,12 @@ def train_per_batch(model: SimClrModel,
                     x2_batch: torch.Tensor,
                     loss_function: SimClrLoss,
                     optimizer: torch.optim.Optimizer,
+                    device: str,
                     ) -> float:
     
-    device = pu.get_module_device(model)
+    model.to(device=device)
     # make sure to stack the two batches into a single batch 
-    x = torch.cat([x1_batch, x2_batch]).to(device)
+    x = torch.cat([x1_batch, x2_batch]).to(device=device)
     # set the optimizer's gradients to zero
     optimizer.zero_grad()
     
@@ -32,12 +33,12 @@ def train_per_batch(model: SimClrModel,
     # perform the backpropagation
     batch_loss_obj.backward()
 
-    # perform update the weights
+    # update the weights
     optimizer.step()
 
     return batch_loss
 
-def train_per_epoch(model: nn.Module, 
+def train_per_epoch(model: SimClrModel, 
                 dataloader: DataLoader,
                 loss_function: nn.Module,
                 optimizer: torch.optim.Optimizer, 
@@ -52,22 +53,23 @@ def train_per_epoch(model: nn.Module,
         log_per_batch = int(num_batches * log_per_batch)
 
     # set the model to the train mode
-    model = model.to(device=device)
+    model.to(device=device)
     model.train()
 
 
     # define a function to save the average loss per epoch
     epoch_train_loss = 0
-
+    
     for batch_index, (x1, x2) in tqdm(enumerate(dataloader), desc=f'training batch at epoch {epoch_index }'): 
         batch_train_loss = train_per_batch(model=model, 
-                                                x1_batch=x1, 
-                                                x2_batch=x2, 
-                                                loss_function=loss_function,
-                                                optimizer=optimizer)
+                                            x1_batch=x1, 
+                                            x2_batch=x2, 
+                                            loss_function=loss_function,
+                                            optimizer=optimizer, 
+                                            device=device)
         
         # log the batch loss depending on the batch index
-        if batch_index % log_per_batch:
+        if batch_index % log_per_batch == 0:
             wandb.log({"epoch": epoch_index, "train_loss": batch_train_loss})
 
 
@@ -85,7 +87,7 @@ def train_per_epoch(model: nn.Module,
 
     return epoch_train_loss
 
-def validation_per_batch(model: nn.Module, 
+def validation_per_batch(model: SimClrModel, 
                         x1_batch: torch.Tensor,
                         x2_batch: torch.Tensor,
                         loss_function: nn.Module,
@@ -105,7 +107,7 @@ def validation_per_batch(model: nn.Module,
 
     return batch_loss
 
-def validation_per_epoch(model: nn.Module,
+def validation_per_epoch(model: SimClrModel,
                          dataloader: DataLoader,
                          epoch_index: int,
                          device: str, 
@@ -120,11 +122,11 @@ def validation_per_epoch(model: nn.Module,
 
     model = model.to(device=device)
     model.eval()
-    for batch_index, (x, y) in tqdm(enumerate(dataloader), desc=f'validation batch for epoch {epoch_index}'):
+    for batch_index, (x1, x2) in tqdm(enumerate(dataloader), desc=f'validation batch for epoch {epoch_index}'):
         batch_loss = validation_per_batch(model=model, 
-                                                          batch_x=x, 
-                                                          batch_y=y, 
-                                                          loss_function=loss_function)
+                                        x1_batch=x1, 
+                                        x2_batch=x2, 
+                                        loss_function=loss_function)
 
         if batch_index % log_per_batch == 0:
             wandb.log({"epoch": epoch_index, "val_loss": batch_loss})

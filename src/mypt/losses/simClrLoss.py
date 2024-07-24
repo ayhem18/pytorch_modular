@@ -8,8 +8,9 @@ import torch
 from torch import nn
 from typing import List
 
-from ..similarities.cosineSim import CosineSim
 
+from mypt.code_utilities import pytorch_utilities as pu
+from ..similarities.cosineSim import CosineSim
 
 class SimClrLoss(nn.Module):
     _sims = ['cos', 'dot']
@@ -61,7 +62,7 @@ class SimClrLoss(nn.Module):
 
 
         # the i-th entry contains sum(exp(sim(x_i, x_k))) for k in [1, 2N] k != i
-        exp_sims_sums = torch.sum(exp_sims, dim=1, keepdim=True) - torch.exp(torch.ones(size=(2 * N, 1)) / self.temp)
+        exp_sims_sums = torch.sum(exp_sims, dim=1, keepdim=True) - torch.exp(torch.ones(size=(2 * N, 1)) / self.temp).to(pu.get_module_device(exp_sims))
         
         loss = torch.mean(-torch.log(positive_pairs_exp_sims / exp_sims_sums))
 
