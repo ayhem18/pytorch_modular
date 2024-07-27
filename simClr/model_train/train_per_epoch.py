@@ -73,7 +73,7 @@ def train_per_epoch(model: SimClrModel,
             wandb.log({"epoch": epoch_index, "train_loss": batch_train_loss})
 
 
-        epoch_train_loss += epoch_train_loss
+        epoch_train_loss += batch_train_loss
 
     # make sure to call the scheduler to update the learning rate
     scheduler.step()

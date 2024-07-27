@@ -8,11 +8,13 @@ import gc, torch, os, random
 import numpy as np
 
 from torch import nn
-from typing import Union, List
+from typing import Union, List, Optional
 from pathlib import Path
 from datetime import datetime as d
+from torch.optim.optimizer import Optimizer
 
 from .directories_and_files import process_path
+
 HOME = os.path.dirname(os.path.realpath(__file__))
 
 def cleanup():
@@ -35,6 +37,28 @@ def get_module_device(module: nn.Module) -> str:
 
 def __verify_extension(p):
     return os.path.basename(p).endswith('.pt') or os.path.basename(p).endswith('.pth')
+
+
+
+def save_checkpoint(model: nn.Module, 
+                    optimizer: Optimizer, 
+                    lr_scheduler: Optional[torch.optim.lr_scheduler.LRScheduler],
+                    path: Union[str, Path], 
+                    **kwargs):
+
+    path = process_path(path, file_ok=True, dir_ok=False, condition=lambda p : os.path.splitext(p)[-1] in ['.pt', '.pnt'], error_message="Make sure the checkpoint has the correct extension")
+
+    ckpnt_dict = {"model_state_dict": model.state_dict(), 
+                  "optimizer_state_dict": optimizer.state_dict(), 
+                }   
+
+    if lr_scheduler is not None:
+        ckpnt_dict["lr_scheduler_state_dict"] = lr_scheduler.state_dict()
+
+    # add any extra keywords to be saved with the checkpoints
+    ckpnt_dict.update(kwargs)
+    torch.save(ckpnt_dict, path)
+
 
 
 def save_model(model: nn.Module, path: Union[str, Path] = None) -> None:
