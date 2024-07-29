@@ -158,7 +158,7 @@ def _run(
 
         if val_dl is None and min_train_loss > epoch_train_loss:
             min_train_loss = epoch_train_loss
-            ckpnt_file_name = f'ckpnt_train_loss-{round(min_train_loss, 4)}epoch-{epoch_index}.pt'
+            ckpnt_file_name = f'ckpnt_train_loss-{round(min_train_loss, 4)}_epoch-{epoch_index}.pt'
 
             if len(os.listdir(ckpnt_dir)) != 0:
                 # keep only one checkpoint             
