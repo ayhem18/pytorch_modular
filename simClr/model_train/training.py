@@ -21,15 +21,15 @@ from .models.resnet.model import ResnetSimClr
 
 _DEFAULT_DATA_AUGS = [tr.RandomVerticalFlip(p=1), 
                       tr.RandomHorizontalFlip(p=1), 
-                      tr.RandomRotation(degrees=45),
+                      tr.RandomRotation(degrees=15),
 					  tr.RandomErasing(p=1, scale=(0.05, 0.15)),
 					  tr.ColorJitter(brightness=0.05, contrast=0.05, hue=0.05),
                       tr.GaussianBlur(kernel_size=(5, 5)),
                       ]
 
 # although the normalization was part of the original data augmentations, the normalized image loses a lot of its semantic meaning after normalization.
-_UNIFORM_DATA_AUGS = [#tr.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-                    ]
+_UNIFORM_DATA_AUGS = []#tr.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+                    
 
 _WANDB_PROJECT_NAME = "SimClr"
 
@@ -46,7 +46,7 @@ def _set_data(train_data_folder: Union[str, Path],
     train_data_folder = dirf.process_path(train_data_folder, 
                                           dir_ok=True, 
                                           file_ok=False, 
-                                          condition=lambda p: all([os.path.splitext(p)[-1] in dirf.IMAGE_EXTENSIONS]),
+                                          condition=dirf.image_directory,
                                           error_message="The data diretory is expected to contain only image data"
                                           )
 
@@ -58,11 +58,11 @@ def _set_data(train_data_folder: Union[str, Path],
 
     if val_data_folder is not None:
         val_data_folder = dirf.process_path(val_data_folder, 
-                                            dir_ok=True, 
-                                            file_ok=False, 
-                                            condition=lambda p: all([os.path.splitext(p)[-1] in dirf.IMAGE_EXTENSIONS]),
-                                            error_message="The data diretory is expected to contain only image data"
-                                            )
+                                          dir_ok=True, 
+                                          file_ok=False, 
+                                          condition=dirf.image_directory,
+                                          error_message="The data diretory is expected to contain only image data"
+                                          )
 
 
         val_ds = ParallelAugDs(root=val_data_folder, 
@@ -98,7 +98,7 @@ def _set_optimizer(model: ResnetSimClr,
                   num_epochs: int) -> Tuple[SGD, AnnealingLR]:
 
     if isinstance(lrs, float):
-        lr1, lr2 = lrs, lrs
+        lr1, lr2 = lrs, 10 * lrs
     elif isinstance(lrs, List) and len(lrs) == 2:
         lr1, lr2 = lrs
 
@@ -139,7 +139,12 @@ def _run(
         device: str,
 
         ):
-    
+
+    # process the checkpoint directory
+    ckpnt_dir = dirf.process_path(ckpnt_dir, 
+                                  dir_ok=True, 
+                                  file_ok=False)
+
     # keep two variables: min_train_loss, min_val_loss
     min_train_loss, min_val_loss = float('inf'), float('inf')
 
@@ -182,7 +187,7 @@ def _run(
             # save the best checkpoint on validation
 
             min_val_loss = epoch_val_loss
-            ckpnt_file_name = f'ckpnt_val_loss-{round(min_val_loss, 4)}epoch-{epoch_index}.pt'
+            ckpnt_file_name = f'ckpnt_val_loss_{round(min_val_loss, 4)}epoch_{epoch_index}.pt'
 
             if len(os.listdir(ckpnt_dir)) != 0:
                 # keep only one checkpoint             
@@ -195,6 +200,8 @@ def _run(
                                 val_loss=epoch_val_loss, 
                                 epoch=epoch_index)
 
+    # make sure to return the checkpoint 
+    return os.path.join(ckpnt_dir, ckpnt_file_name)
 
 def run_pipeline(model: ResnetSimClr, 
 
@@ -231,19 +238,20 @@ def run_pipeline(model: ResnetSimClr,
 
     optimizer, lr_scheduler = _set_optimizer(model=model, lrs=learning_rates, num_epochs=num_epochs)
 
+    res = None
     try:
-        _run(model=model, 
-             train_dl=train_dl, 
-             val_dl=val_dl, 
-             loss_obj=loss_obj, 
-             optimizer=optimizer,
-             lr_scheduler=lr_scheduler,
-             ckpnt_dir=ckpnt_dir,
-             num_epochs=num_epochs,
-             val_per_epoch=val_per_epoch,
-             device=device)
+        res = _run(model=model, 
+                train_dl=train_dl, 
+                val_dl=val_dl, 
+                loss_obj=loss_obj, 
+                optimizer=optimizer,
+                lr_scheduler=lr_scheduler,
+                ckpnt_dir=ckpnt_dir,
+                num_epochs=num_epochs,
+                val_per_epoch=val_per_epoch,
+                device=device)
 
-    # this piece of code is taken from the fairSeq (by the Facebook AI research team) as recommmended on the Pytorch forum
+    # this piece of code is taken from the fairSeq (by the Facebook AI research team) as recommmended on the Pytorch forum    
     except RuntimeError as e:
         if 'out of memory' not in str(e):
             raise e
@@ -255,14 +263,15 @@ def run_pipeline(model: ResnetSimClr,
         # stop the program for a 30 seconds before calling the function once again
         sleep(seconds=30)
         batch_size = int(batch_size / 1.2)
-        run_pipeline(model=model, 
-            train_data_folder=train_data_folder, 
-            val_data_folder=val_data_folder, 
-            num_epochs=num_epochs, 
-            batch_size=batch_size,
-            learning_rates=learning_rates,
-            temperature=temperature,
-            seed=seed,
-            run_name=run_name)
+        res = run_pipeline(model=model, 
+                train_data_folder=train_data_folder, 
+                val_data_folder=val_data_folder, 
+                num_epochs=num_epochs, 
+                batch_size=batch_size,
+                learning_rates=learning_rates,
+                temperature=temperature,
+                seed=seed,
+                run_name=run_name)
 
     wandb.finish()
+    return res

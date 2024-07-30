@@ -5,5 +5,6 @@ wandb
 *.pyc
 *__pycache__/
 *.pt
+*.pnt
 *.jpg
 *.jpeg

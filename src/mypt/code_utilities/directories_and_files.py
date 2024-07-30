@@ -28,9 +28,11 @@ def process_path(save_path: Union[str, Path, None],
         # first make the save_path absolute
         save_path = abs_path(save_path)
 
-        # create the directory if needed
-        if not os.path.isfile(save_path):
-            os.makedirs(save_path, exist_ok=True)
+        if not os.path.exists(save_path):
+            if dir_ok and not file_ok:
+                os.makedirs(save_path)
+            else:
+                raise ValueError(f"when passing a non-existing file, the parameters dir_ok and file_ok must be set to True and False respectively")
 
         assert not \
             ((not file_ok and os.path.isfile(save_path)) or

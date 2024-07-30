@@ -3,8 +3,7 @@ Unlike helper_functionalities.py, this script contains, Pytorch code that is gen
 scripts and Deep Learning functionalities
 """
 
-import gc, torch, os, random
-
+import gc, torch, os, random, re
 import numpy as np
 
 from torch import nn
@@ -46,11 +45,21 @@ def save_checkpoint(model: nn.Module,
                     path: Union[str, Path], 
                     **kwargs):
 
-    path = process_path(path, file_ok=True, dir_ok=False, condition=lambda p : os.path.splitext(p)[-1] in ['.pt', '.pnt'], error_message="Make sure the checkpoint has the correct extension")
+    # # it is quite common to save a model with some loss value in the name
+    # file_name, ext = os.path.splitext(path)
+    # # replace any '.' in the file name by ','
+    # file_name = re.sub(f'^[A-Za-z1-9.]', '_', file_name)
+    # # file_name = file_name.replace(r'', '_')
+
+    # # assemble the final filename
+    # path = os.path.join(Path(path).parent, f'{file_name}{ext}')
+
+    # path = process_path(path,
+    #                     condition=lambda p : os.path.splitext(p)[-1] in ['.pt', '.pnt'], 
+    #                     error_message="Make sure the checkpoint has the correct extension")
 
     ckpnt_dict = {"model_state_dict": model.state_dict(), 
-                  "optimizer_state_dict": optimizer.state_dict(), 
-                }   
+                  "optimizer_state_dict": optimizer.state_dict()}   
 
     if lr_scheduler is not None:
         ckpnt_dict["lr_scheduler_state_dict"] = lr_scheduler.state_dict()
@@ -59,7 +68,10 @@ def save_checkpoint(model: nn.Module,
     ckpnt_dict.update(kwargs)
     torch.save(ckpnt_dict, path)
 
-
+    # make sure the path is correctly created
+    path = process_path(save_path=path, dir_ok=False, file_ok=True, 
+                        condition=lambda p : os.path.splitext(p)[-1] in ['.pt', '.pnt'], 
+                        error_message="Make sure the checkpoint has the correct extension")
 
 def save_model(model: nn.Module, path: Union[str, Path] = None) -> None:
     # the time of saving the model
