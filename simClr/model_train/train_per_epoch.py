@@ -5,7 +5,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 from typing import Tuple, Union
 
-from .models.simClrModel import SimClrModel
+from mypt.models.simClr.simClrModel import SimClrModel
 from mypt.code_utilities import pytorch_utilities as pu
 from mypt.losses.simClrLoss import SimClrLoss
 
@@ -109,6 +109,7 @@ def validation_per_batch(model: SimClrModel,
 
 def validation_per_epoch(model: SimClrModel,
                          dataloader: DataLoader,
+                         loss_function: nn.Module,
                          epoch_index: int,
                          device: str, 
                         log_per_batch: Union[float, int]) -> Tuple[float, float]:
@@ -118,7 +119,6 @@ def validation_per_epoch(model: SimClrModel,
         log_per_batch = int(num_batches * log_per_batch)
 
     epoch_val_loss = 0
-    loss_function = nn.CrossEntropyLoss()        
 
     model = model.to(device=device)
     model.eval()
