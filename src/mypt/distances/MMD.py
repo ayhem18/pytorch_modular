@@ -70,6 +70,9 @@ class GaussianMMD(nn.Module):
         
         return (first_term + second_term - 2 * third_term)
 
+    def __call__(self, x: torch.Tensor, y:torch.Tensor) -> torch.Tensor:
+        return self.forward(x, y)
+
 
 def naive_implementation(x: torch.Tensor, y: torch.Tensor, sigma: float):
     x, y = x.to(torch.float32), y.to(torch.float32)
