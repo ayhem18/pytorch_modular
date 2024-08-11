@@ -46,6 +46,7 @@ def train_per_epoch(model: SimClrModel,
                 epoch_index: int,
                 device: str,
                 log_per_batch: Union[int, float],
+                use_wandb:bool=True
                 ) -> Tuple[float, float]:
 
     if isinstance(log_per_batch, float):
@@ -69,8 +70,8 @@ def train_per_epoch(model: SimClrModel,
                                             device=device)
         
         # log the batch loss depending on the batch index
-        if batch_index % log_per_batch == 0:
-            wandb.log({"epoch": epoch_index, "train_loss": batch_train_loss})
+        if batch_index % log_per_batch == 0 and use_wandb:
+            wandb.log({"epoch": epoch_index, "train_loss": batch_train_loss, "batch": batch_index})
 
 
         epoch_train_loss += batch_train_loss
@@ -82,8 +83,9 @@ def train_per_epoch(model: SimClrModel,
     epoch_train_loss = epoch_train_loss / len(dataloader)
 
     # log the metrics
-    wandb.log({"epoch": epoch_index, 
-               "train_loss": epoch_train_loss})
+    if use_wandb:
+        wandb.log({"epoch": epoch_index, 
+                "train_loss": epoch_train_loss})
 
     return epoch_train_loss
 
@@ -108,11 +110,12 @@ def validation_per_batch(model: SimClrModel,
     return batch_loss
 
 def validation_per_epoch(model: SimClrModel,
-                         dataloader: DataLoader,
-                         loss_function: nn.Module,
-                         epoch_index: int,
-                         device: str, 
-                        log_per_batch: Union[float, int]) -> Tuple[float, float]:
+                        dataloader: DataLoader,
+                        loss_function: nn.Module,
+                        epoch_index: int,
+                        device: str, 
+                        log_per_batch: Union[float, int],
+                        use_wandb:bool=True) -> Tuple[float, float]:
 
     if isinstance(log_per_batch, float):
         num_batches = len(dataloader)
@@ -128,10 +131,11 @@ def validation_per_epoch(model: SimClrModel,
                                         x2_batch=x2, 
                                         loss_function=loss_function)
 
-        if batch_index % log_per_batch == 0:
+        if batch_index % log_per_batch == 0 and use_wandb:
             wandb.log({"epoch": epoch_index, "val_loss": batch_loss})
 
         # add the batch loss to the epoch loss         
         epoch_val_loss += batch_loss
 
-    wandb.log({"epoch": epoch_index, "val_loss": epoch_val_loss / len(dataloader)})
+    if use_wandb:
+        wandb.log({"epoch": epoch_index, "val_loss": epoch_val_loss / len(dataloader)})

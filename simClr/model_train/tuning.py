@@ -8,13 +8,13 @@ from typing import Union, Dict, Optional, Tuple
 from functools import partial
 
 from mypt.code_utilities import directories_and_files as dirf
+from mypt.models.simClr.simClrModel import AlexnetSimClr
 
 from .training import run_pipeline
-from .models.resnet.model import ResnetSimClr
 
 WANDB_PROJECT_NAME="SimClr"
 
-_BATCH_SIZE = 32
+_BATCH_SIZE = 128
 
 def _sweep_function( 
           train_data_folder:Union[str, Path],
@@ -34,16 +34,19 @@ def _sweep_function(
 
     # extract the number of fully connected layers form the sweep configuration
     num_fc_layers = wandb.config.num_fc_layers
-    lr = wandb.config.lr    
+    lr = 10 ** wandb.config.lr    
 
-    model = ResnetSimClr(input_shape=(3, 224, 224), output_dim= 256, num_fc_layers=num_fc_layers) # no dropout for the moment
+    model = AlexnetSimClr(input_shape=(3, 96, 96), 
+                          output_dim=128,  
+                          num_fc_layers=num_fc_layers)
 
     # create a directory where to save the checkpoint
     ckpnt_dir = os.path.join(log_dir,  f'sweep_{len(os.listdir(log_dir)) + 1}')
 
     _ = run_pipeline(model=model, 
                  train_data_folder=train_data_folder, 
-                 val_data_folder=val_data_folder,
+                 val_data_folder=val_data_folder,   
+                 output_shape=(96, 96),
                  num_epochs=epochs_per_sweep,
                  batch_size=batch_size, 
                  learning_rates=lr, 

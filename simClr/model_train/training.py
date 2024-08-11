@@ -18,13 +18,13 @@ from mypt.schedulers.annealing_lr import AnnealingLR
 from mypt.models.simClr.simClrModel import SimClrModel
 
 from .train_per_epoch import train_per_epoch, validation_per_epoch
-from .ds_wrapper import FashionMnistWrapper
+from .ds_wrapper import STL10Wrapper
 
-_DEFAULT_DATA_AUGS = [tr.RandomVerticalFlip(p=1), 
+_DEFAULT_DATA_AUGS = [ 
                       tr.RandomHorizontalFlip(p=1), 
-                      tr.RandomRotation(degrees=15),
+                      tr.RandomRotation(degrees=10),
 					#   tr.RandomErasing(p=1, scale=(0.05, 0.15)),
-					#   tr.ColorJitter(brightness=0.05, contrast=0.05, hue=0.05),
+					  tr.ColorJitter(brightness=0.05, contrast=0.05, hue=0.05),
                       tr.GaussianBlur(kernel_size=(5, 5)),
                       ]
 
@@ -108,7 +108,7 @@ def _set_data(train_data_folder: Union[str, Path],
                                           file_ok=False, 
                                           )
 
-    train_ds = FashionMnistWrapper(root_dir=train_data_folder, 
+    train_ds = STL10Wrapper(root_dir=train_data_folder, 
                                 train=True,
                                 output_shape=output_shape,
                                 augs_per_sample=2, 
@@ -121,7 +121,7 @@ def _set_data(train_data_folder: Union[str, Path],
                                           file_ok=False, 
                                           )
 
-        val_ds = FashionMnistWrapper(root_dir=val_data_folder, 
+        val_ds = STL10Wrapper(root_dir=val_data_folder, 
                                     train=False,
                                     output_shape=output_shape,
                                     augs_per_sample=2, 
@@ -197,6 +197,7 @@ def _run(
         val_per_epoch: int,
         device: str,
 
+        use_wandb: bool = True,
         ):
 
     # process the checkpoint directory
@@ -216,7 +217,8 @@ def _run(
                         device=device, 
                         log_per_batch=0.1, 
                         optimizer=optimizer,
-                        scheduler=lr_scheduler)
+                        scheduler=lr_scheduler,
+                        use_wandb=use_wandb)
 
         print(f"epoch {epoch_index}: train loss: {epoch_train_loss}")
 
@@ -241,7 +243,8 @@ def _run(
                                             loss_function=loss_obj,
                                             epoch_index=epoch_index + 1, 
                                             device=device,
-                                            log_per_batch=0.2)
+                                            log_per_batch=0.2,
+                                            use_wandb=use_wandb)
             print(f"epoch {epoch_index}: validation loss: {epoch_val_loss}")
 
             # save the best checkpoint on validation

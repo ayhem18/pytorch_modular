@@ -6,11 +6,11 @@ from pathlib import Path
 from typing import Union, List, Tuple
 
 from torch.utils.data import Dataset
-from torchvision.datasets import FashionMNIST
+from torchvision.datasets import FashionMNIST, STL10
 
 
 
-class FashionMnistWrapper(Dataset):
+class STL10Wrapper(Dataset):
     def __init__(self, root_dir: Union[str, Path], 
                 train:bool,
 
@@ -21,10 +21,12 @@ class FashionMnistWrapper(Dataset):
                 
                 length: int = None) -> None:
         super().__init__()
-
-        self._ds = FashionMNIST(root=root_dir, 
-                                train=train, 
-                                download=True)
+        
+        self._ds = STL10(root=root_dir, 
+                         split='train' if train else 'test', 
+                         transform=tr.ToTensor(), 
+                         download=True)
+        
         self._len = length if length is not None else len(self._ds)
 
         self.output_shape = output_shape
@@ -37,16 +39,11 @@ class FashionMnistWrapper(Dataset):
     def __getitem__(self, index: int):
         # extract the path to the sample (using the map between the index and the sample path !!!)
         sample_image = self._ds[index][0]
-        if sample_image.ndim == 1:
-            sample_image = torch.stack([sample_image for _ in range(3)], dim=0)
 
-        sample_image = self.load_sample(self.idx2path[index])   
+        if sample_image.shape[0] == 1:
+            sample_image = torch.concat([sample_image for _ in range(3)], dim=0)
 
         augs1, augs2 = random.sample(self.sampled_data_augs, self.augs_per_sample), random.sample(self.sampled_data_augs, self.augs_per_sample)
-
-        # convert to a tensor
-        augs1.insert(0, tr.ToTensor())
-        augs2.insert(0, tr.ToTensor())
 
         # resize before any specific transformations
         augs1.insert(1, tr.Resize(size=self.output_shape))

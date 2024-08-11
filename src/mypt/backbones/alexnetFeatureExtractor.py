@@ -327,14 +327,14 @@ class AlexNetFeatureExtractor(nn.Module):
     def __repr__(self):
         return self.model.__repr__() 
     
-    def children(self) -> Iterator['Module']:
+    def children(self) -> Iterator[nn.Module]:
         # not overloading this method will return to an iterator with 2 elements: self.__net and self.feature_extractor
         return self.model.children()
 
     def modules(self) -> Iterator[nn.Module]:
         return self.model.modules()
     
-    def named_children(self) -> Iterator[Tuple[str, 'Module']]:
+    def named_children(self) -> Iterator[Tuple[str, nn.Module]]:
         return self.model.named_children()
 
 if __name__ == '__main__':
