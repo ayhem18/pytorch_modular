@@ -12,7 +12,8 @@ from mypt.backbones import resnetFeatureExtractor as rfe
 from mypt.linearBlocks import classification_head as ch
 from mypt.dimensions_analysis import dimension_analyser as da
 
-from ..simClrModel import SimClrModel
+from .simClrModel import SimClrModel
+
 
 class ResnetSimClr(SimClrModel):
     def __init__(self, 

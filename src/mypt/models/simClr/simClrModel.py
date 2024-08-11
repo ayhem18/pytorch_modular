@@ -47,3 +47,6 @@ class SimClrModel(nn.Module):
         self.flatten_layer = self.flatten_layer.to(*args, **kwargs)
         self.ph = self.ph.to(*args, **kwargs)
         return self 
+
+    def __call__(self, x: torch.Tensor):
+        return self.forward(x)[1]
