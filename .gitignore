@@ -1,13 +1,19 @@
 env
-*.png
+
 *.zip
 wandb
+
 *.pyc
 *__pycache__/
+
 *.pt
 *.pnt
+
 *.jpg
 *.jpeg
+
+*.png
+!simClr/images/*.png
 
 simClr/data
 

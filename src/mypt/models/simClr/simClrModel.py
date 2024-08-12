@@ -26,8 +26,8 @@ class SimClrModel(nn.Module):
 
     def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         # the forward function returns both f(x_i) and g(f(x_i)), any loss object should work with gf(x_i)
-        f_xi = self.fe(x)
-        return f_xi, self.ph.forward(self.flatten_layer.forward(f_xi))
+        f_xi = self.flatten_layer.forward(self.fe(x))
+        return f_xi, self.ph.forward(f_xi)
 
 
     def __str__(self):
@@ -54,7 +54,7 @@ class SimClrModel(nn.Module):
         return self 
 
     def __call__(self, x: torch.Tensor):
-        return self.forward(x)[1]
+        return self.forward(x)[0]
 
 
 class ResnetSimClr(SimClrModel):

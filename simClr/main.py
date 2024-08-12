@@ -32,19 +32,12 @@ SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 #       use_wandb=False)
 
 from mypt.subroutines.topk_nearest_neighbors import model_embs as me
-from model_train.ds_wrapper import STL10Wrapper
-from model_train.training import _DEFAULT_DATA_AUGS, _UNIFORM_DATA_AUGS
+
 
 
 def evaluate_ckpnt(model, ckpnt): 
-
-    ds = STL10Wrapper(root_dir=os.path.join(SCRIPT_DIR ,'data', 'stl10', 'train'), 
-                                train=True,
-                                length=256, 
-                                output_shape=(96,96),
-                                augs_per_sample=2, 
-                                sampled_data_augs=_DEFAULT_DATA_AUGS,
-                                uniform_data_augs=_UNIFORM_DATA_AUGS)
+    ds = STL10(root=os.path.join(SCRIPT_DIR ,'data', 'stl10', 'train'), 
+               transform=tr.ToTensor(), )
 
     res = me.topk_nearest_model_ckpnt(results_directory=os.path.join(SCRIPT_DIR, 'eval_res'),
                                       dataset=ds,
@@ -52,7 +45,7 @@ def evaluate_ckpnt(model, ckpnt):
                                       model=model,
                                       model_ckpnt=ckpnt,
                                       k_neighbors=5,
-                                      batch_size=128)
+                                      batch_size=256)
 
 def visualize_neighbors(res: Union[str, Path, Dict]):
     ds = STL10(root=os.path.join(SCRIPT_DIR ,'data', 'stl10', 'train'), 
@@ -72,18 +65,18 @@ def visualize_neighbors(res: Union[str, Path, Dict]):
         plt.imshow(x)
         plt.title("original image")
 
-        for rank, index in enumerate(ilist):
+        for rank, (index, measure) in enumerate(ilist):
             n, _ = ds[index] 
             n = np.moveaxis(n.numpy(), 0, -1)
             fig.add_subplot(1, 1 + len(ilist), 2 + rank)
             plt.imshow(n)
-            plt.title(f"nearest neighbor: {rank + 1}")
+            plt.title(f"nearest neighbor: {rank + 1}, similarity: {round(measure, 4)}")
 
         plt.show()
                 
 
 if __name__ == '__main__':
-    # model = AlexnetSimClr(input_shape=(3, 96, 96), output_dim=128, num_fc_layers=6, freeze=False)
-    # ckpnt = os.path.join(SCRIPT_DIR, 'logs', 'tune_logs', 'sweep_7', 'ckpnt_train_loss-5.0265_epoch-49.pt') 
-    # evaluate_ckpnt(model, ckpnt)
-    visualize_neighbors(res=os.path.join(SCRIPT_DIR, 'eval_res', 'ckpnt_train_loss-5.0265_epoch-49_results.obj'))
+    model = AlexnetSimClr(input_shape=(3, 96, 96), output_dim=128, num_fc_layers=6, freeze=False)
+    ckpnt = os.path.join(SCRIPT_DIR, 'logs', 'tune_logs', 'sweep_7', 'ckpnt_train_loss-5.0265_epoch-49.pt') 
+    evaluate_ckpnt(model, ckpnt)
+    # visualize_neighbors(res=os.path.join(SCRIPT_DIR, 'eval_res', 'ckpnt_train_loss-5.0265_epoch-49_results.obj'))

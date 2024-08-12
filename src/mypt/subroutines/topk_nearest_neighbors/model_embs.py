@@ -23,7 +23,7 @@ def _top_k_nearest_model(dataset: Dataset,
                         measure: Union[callable, torch.nn.Module] ,
                         measure_as_similarity:bool,
                         device:str,
-                        ) -> Dict:
+                        ) -> Dict[int, Tuple[List[int], List[int]]]:
       results = {}
 
       for id1 in tqdm(range(0, len(dataset), batch_size), desc='finding the nearest neighbors'):
@@ -52,13 +52,15 @@ def _top_k_nearest_model(dataset: Dataset,
                   else:
                         distances2ref = torch.concat([distances2ref, batch_dis], dim=1)
 
-            _, indices  = torch.topk(distances2ref, k=k_neighbors + 1, dim=-1, largest=measure_as_similarity)
+            values, indices  = torch.topk(distances2ref, k=k_neighbors + 1, dim=-1, largest=measure_as_similarity)
 
             # make sure to ignore the first element at each row as it should be the element itself
             indices = indices[:, 1:]
+            values = values[:, 1:]
 
             # save the results for the current batch
-            batch_res = {id1 + i : indices[i, :].squeeze().tolist() for i in range(len(indices))}
+            batch_res = {id1 + i : list(zip(indices[i, :].squeeze().tolist(), values[i, :].squeeze().tolist())) # associating each index with a list of tuples (index, measure) 
+                         for i in range(len(indices))}
             results.update(batch_res)
 
       return results

@@ -20,13 +20,24 @@ from mypt.models.simClr.simClrModel import SimClrModel
 from .train_per_epoch import train_per_epoch, validation_per_epoch
 from .ds_wrapper import STL10Wrapper
 
-_DEFAULT_DATA_AUGS = [ 
-                      tr.RandomHorizontalFlip(p=1), 
-                      tr.RandomRotation(degrees=10),
-					#   tr.RandomErasing(p=1, scale=(0.05, 0.15)),
-					  tr.ColorJitter(brightness=0.05, contrast=0.05, hue=0.05),
-                      tr.GaussianBlur(kernel_size=(5, 5)),
-                      ]
+
+_DEFAULT_DATA_AUGS = [
+    tr.RandomHorizontalFlip(p=1), 
+    tr.RandomResizedCrop((224, 224), scale=(0.5, 1)),
+    
+    tr.RandomGrayscale(p=0.2),
+    tr.GaussianBlur(kernel_size=(5, 5)),
+    tr.ColorJitter(brightness=0.5, contrast=0.5)
+]
+
+
+# _DEFAULT_DATA_AUGS = [ 
+#                       tr.RandomHorizontalFlip(p=1), 
+#                       tr.RandomRotation(degrees=10),
+# 					#   tr.RandomErasing(p=1, scale=(0.05, 0.15)),
+# 					  tr.ColorJitter(brightness=0.2, contrast=0.2),
+#                       tr.GaussianBlur(kernel_size=(5, 5)),
+#                       ]
 
 # although the normalization was part of the original data augmentations, the normalized image loses a lot of its semantic meaning after normalization.
 _UNIFORM_DATA_AUGS = []#tr.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
