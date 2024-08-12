@@ -10,6 +10,8 @@ from tqdm import tqdm
 from torch.optim.sgd import SGD
 from torch.utils.data import DataLoader
 
+from torchlars import LARS # the authors of the paper used this optimizer
+
 from mypt.losses.simClrLoss import SimClrLoss
 from mypt.data.datasets.parallel_aug_ds import ParallelAugDs
 from mypt.data.dataloaders.standard_dataloaders import initialize_train_dataloader, initialize_val_dataloader
@@ -162,35 +164,44 @@ def _set_data(train_data_folder: Union[str, Path],
     return train_dl, val_dl
 
 
+# def _set_optimizer(model: SimClrModel, 
+#                   lrs: Union[Tuple[float], float], 
+#                   num_epochs: int) -> Tuple[SGD, AnnealingLR]:
 
-def _set_optimizer(model: SimClrModel, 
-                  lrs: Union[Tuple[float], float], 
-                  num_epochs: int) -> Tuple[SGD, AnnealingLR]:
+#     if isinstance(lrs, float):
+#         lr1, lr2 = lrs, 10 * lrs
+#     elif isinstance(lrs, List) and len(lrs) == 2:
+#         lr1, lr2 = lrs
 
-    if isinstance(lrs, float):
-        lr1, lr2 = lrs, 10 * lrs
-    elif isinstance(lrs, List) and len(lrs) == 2:
-        lr1, lr2 = lrs
-
-    elif isinstance(lrs, List) and len(lrs) == 1:
-        return _set_optimizer(model, lrs[0])
-    else:
-        raise ValueError(f"The current implementation supports at most 2 learning rates. Found: {len(lrs)} learning rates")
+#     elif isinstance(lrs, List) and len(lrs) == 1:
+#         return _set_optimizer(model, lrs[0])
+#     else:
+#         raise ValueError(f"The current implementation supports at most 2 learning rates. Found: {len(lrs)} learning rates")
 
 
-    # set the optimizer
-    optimizer = SGD(params=[{"params": model.fe.parameters(), "lr": lr1}, # using different learning rates with different components of the model 
-                            {"params": model.flatten_layer.parameters(), "lr": lr1},
-                            {"params": model.ph.parameters(), "lr": lr2}
-                            ])
+#     # set the optimizer
+#     optimizer = SGD(params=[{"params": model.fe.parameters(), "lr": lr1}, # using different learning rates with different components of the model 
+#                             {"params": model.flatten_layer.parameters(), "lr": lr1},
+#                             {"params": model.ph.parameters(), "lr": lr2}
+#                             ])
 
-    lr_scheduler = AnnealingLR(optimizer=optimizer, 
-                               num_epochs=num_epochs,
-                               alpha=10,
-                               beta= 0.75)
+#     lr_scheduler = AnnealingLR(optimizer=optimizer, 
+#                                num_epochs=num_epochs,
+#                                alpha=10,
+#                                beta= 0.75)
 
-    return optimizer, lr_scheduler
+#     return optimizer, lr_scheduler
 
+def _set_optimizer(model: SimClrModel,
+                   learning_rate: float) -> LARS:
+    # create the base optimizer 
+    base_optimizer = SGD(model.parameters(), 
+                         lr=learning_rate, 
+                         weight_decay=10**-6 # as per the paper's recommendations
+                        )
+
+    optimizer = LARS(optimizer=base_optimizer, eps=10**-8, trust_coef=10**-3)
+    return optimizer
 
 def _run(
         model:SimClrModel,
@@ -200,7 +211,7 @@ def _run(
 
         loss_obj: SimClrLoss,
         optimizer: torch.optim.Optimizer, 
-        lr_scheduler: torch.optim.lr_scheduler.LRScheduler, 
+        lr_scheduler: Optional[torch.optim.lr_scheduler.LRScheduler], 
 
         ckpnt_dir: Optional[Union[str, Path]],
 
@@ -208,7 +219,8 @@ def _run(
         val_per_epoch: int,
         device: str,
 
-        use_wandb: bool = True,
+        use_wandb:bool=True,
+        batch_stats:bool=False
         ):
 
     # process the checkpoint directory
@@ -229,7 +241,8 @@ def _run(
                         log_per_batch=0.1, 
                         optimizer=optimizer,
                         scheduler=lr_scheduler,
-                        use_wandb=use_wandb)
+                        use_wandb=use_wandb,
+                        batch_stats=batch_stats)
 
         print(f"epoch {epoch_index}: train loss: {epoch_train_loss}")
 
@@ -255,7 +268,10 @@ def _run(
                                             epoch_index=epoch_index + 1, 
                                             device=device,
                                             log_per_batch=0.2,
-                                            use_wandb=use_wandb)
+                                            use_wandb=use_wandb,
+                                            batch_stats=batch_stats
+                                            )
+            
             print(f"epoch {epoch_index}: validation loss: {epoch_val_loss}")
 
             # save the best checkpoint on validation
@@ -286,7 +302,7 @@ def run_pipeline(model: SimClrModel,
           num_epochs: int, 
           batch_size: int,
 
-          learning_rates: Union[Tuple[float, float], float],  
+          initial_lr: float,  
           temperature: float,
 
           ckpnt_dir: Union[str, Path],
@@ -294,6 +310,7 @@ def run_pipeline(model: SimClrModel,
           seed:int = 69,
           run_name: str = 'sim_clr_run',
           use_wandb: bool = True,
+          batch_stats:bool=False
           ):    
 
     if use_wandb:
@@ -308,7 +325,6 @@ def run_pipeline(model: SimClrModel,
     # set the loss object    
     loss_obj = SimClrLoss(temperature=temperature)
 
-
     # DATA: 
     train_dl, val_dl = _set_data(train_data_folder=train_data_folder,
                                 val_data_folder=val_data_folder, 
@@ -316,7 +332,8 @@ def run_pipeline(model: SimClrModel,
                                 batch_size=batch_size, 
                                 seed=seed)
 
-    optimizer, lr_scheduler = _set_optimizer(model=model, lrs=learning_rates, num_epochs=num_epochs)
+    optimizer = _set_optimizer(model=model, learning_rate=initial_lr)
+    # optimizer = _set_optimizer(model=model, lrs=learning_rates, num_epochs=num_epochs)
 
     res = None
     try:
@@ -326,17 +343,17 @@ def run_pipeline(model: SimClrModel,
 
                 loss_obj=loss_obj, 
                 optimizer=optimizer,
-                lr_scheduler=lr_scheduler,
+                lr_scheduler=None,
 
                 ckpnt_dir=ckpnt_dir,
                 num_epochs=num_epochs,
                 val_per_epoch=val_per_epoch,
                 device=device,
-                use_wandb=use_wandb
+                use_wandb=use_wandb, 
+                batch_stats=batch_stats
                 )
 
     # this piece of code is taken from the fairSeq repo (by the Facebook AI research team) as recommmended on the Pytorch forum:
-    #  
     except RuntimeError as e:
         if 'out of memory' not in str(e):
             raise e
@@ -360,14 +377,15 @@ def run_pipeline(model: SimClrModel,
             num_epochs=num_epochs, 
             batch_size=batch_size,
 
-            learning_rates=learning_rates,  
+            initial_lr=initial_lr,  
             temperature=temperature,
 
             ckpnt_dir=ckpnt_dir,
             val_per_epoch=val_per_epoch,
             seed=seed,
             run_name=run_name, 
-            use_wandb=use_wandb             
+            use_wandb=use_wandb, 
+            batch_stats=batch_stats           
             )
 
     

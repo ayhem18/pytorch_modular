@@ -15,24 +15,8 @@ from model_train.training import run_pipeline
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 
-# train_data_folder = os.path.join(SCRIPT_DIR, 'data', 'fashionMnist', 'train')
-
-# model = AlexnetSimClr(input_shape=(3, 96, 96), output_dim=128, num_fc_layers=3, freeze=False)
-
-# run_pipeline(model=model, 
-#       train_data_folder=train_data_folder, 
-#       val_data_folder=None,
-#       learning_rates=[0.01, 0.1],
-#       output_shape=(96, 96),
-#       ckpnt_dir=os.path.join(SCRIPT_DIR, 'logs', 'train_logs'),
-#       num_epochs=3, 
-#       batch_size=128, 
-#       temperature=0.5, 
-#       seed=0, 
-#       use_wandb=False)
 
 from mypt.subroutines.topk_nearest_neighbors import model_embs as me
-
 
 
 def evaluate_ckpnt(model, ckpnt): 
@@ -70,13 +54,33 @@ def visualize_neighbors(res: Union[str, Path, Dict]):
             n = np.moveaxis(n.numpy(), 0, -1)
             fig.add_subplot(1, 1 + len(ilist), 2 + rank)
             plt.imshow(n)
-            plt.title(f"nearest neighbor: {rank + 1}, similarity: {round(measure, 4)}")
+            plt.title(f"nearest neighbor: {rank + 1}\nsimilarity: {round(measure, 4)}")
 
         plt.show()
                 
+def train_main():
+    train_data_folder = os.path.join(SCRIPT_DIR, 'data', 'stl10', 'train')
+
+    model = AlexnetSimClr(input_shape=(3, 96, 96), output_dim=128, num_fc_layers=3, freeze=False)
+
+    return run_pipeline(model=model, 
+        train_data_folder=train_data_folder, 
+        val_data_folder=None,
+        initial_lr=0.01,
+        output_shape=(96, 96),
+        ckpnt_dir=os.path.join(SCRIPT_DIR, 'logs', 'train_logs'),
+        num_epochs=10, 
+        batch_size=128, 
+        temperature=0.5, 
+        seed=0, 
+        use_wandb=True,
+        batch_stats=True)
+
+
 
 if __name__ == '__main__':
-    model = AlexnetSimClr(input_shape=(3, 96, 96), output_dim=128, num_fc_layers=6, freeze=False)
-    ckpnt = os.path.join(SCRIPT_DIR, 'logs', 'tune_logs', 'sweep_7', 'ckpnt_train_loss-5.0265_epoch-49.pt') 
-    evaluate_ckpnt(model, ckpnt)
+    train_main()
+    # model = AlexnetSimClr(input_shape=(3, 96, 96), output_dim=128, num_fc_layers=6, freeze=False)
+    # ckpnt = os.path.join(SCRIPT_DIR, 'logs', 'tune_logs', 'sweep_7', 'ckpnt_train_loss-5.0265_epoch-49.pt') 
+    # evaluate_ckpnt(model, ckpnt)
     # visualize_neighbors(res=os.path.join(SCRIPT_DIR, 'eval_res', 'ckpnt_train_loss-5.0265_epoch-49_results.obj'))

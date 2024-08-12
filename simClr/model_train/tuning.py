@@ -49,7 +49,7 @@ def _sweep_function(
                  output_shape=(96, 96),
                  num_epochs=epochs_per_sweep,
                  batch_size=batch_size, 
-                 learning_rates=lr, 
+                 initial_lr=lr, 
                  temperature=temperature,
                  ckpnt_dir=ckpnt_dir,
                  val_per_epoch=val_per_epoch,

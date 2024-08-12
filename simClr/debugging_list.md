@@ -25,7 +25,11 @@ The observations:
 
 * It is possible that all images are close to each others. As we can see the similarity measures are very close for the nearest 5 neighbors. One possible solution is to use the dot product instead of the cosine similarity. This can also be debugged by tracking the variance of similarities across training
 
-* The paper authors use the LARS optimizer. The latter is claimed to be more suitable for large batch training. The learning rate is set to 0.3 * (batch size / 256). Using this setting might lead to more stable training
+* The paper authors use the LARS optimizer. The latter is claimed to be more suitable for large batch training. The learning rate is set to 0.3 * (batch size / 256). 
+Using this setting might lead to more stable training
+
+* easier ?? dataset
+* different backbone maybe (Vision Transfer)
+
 
 # Iteration 2: 
-
