@@ -10,3 +10,8 @@ wandb
 *.jpeg
 
 simClr/data
+
+*.obj
+
+simClr/logs
+

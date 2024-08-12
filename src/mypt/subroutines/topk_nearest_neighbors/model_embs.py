@@ -110,7 +110,7 @@ def topk_nearest_model_ckpnt(
             try: 
                   processed_item = sample_processing(item)
             except Exception as e:
-                  raise ValueError(f"The item returned by the dataset.__getitem____() raised an error: {e}")
+                  raise ValueError(f"The item returned by the dataset.__getitem__() raised an error: {e}")
 
             # the case of tuple and list types were added after using a standard image classification dataset
             if isinstance(processed_item, (Tuple, List)):

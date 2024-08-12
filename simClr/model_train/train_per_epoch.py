@@ -1,4 +1,4 @@
-import torch, wandb
+import torch, wandb, math
 
 from torch import nn
 from torch.utils.data import DataLoader
@@ -51,7 +51,7 @@ def train_per_epoch(model: SimClrModel,
 
     if isinstance(log_per_batch, float):
         num_batches = len(dataloader)
-        log_per_batch = int(num_batches * log_per_batch)
+        log_per_batch = int(math.ceil(num_batches * log_per_batch))
 
     # set the model to the train mode
     model.to(device=device)
@@ -119,7 +119,7 @@ def validation_per_epoch(model: SimClrModel,
 
     if isinstance(log_per_batch, float):
         num_batches = len(dataloader)
-        log_per_batch = int(num_batches * log_per_batch)
+        log_per_batch = int(math.ceil(num_batches * log_per_batch))
 
     epoch_val_loss = 0
 
