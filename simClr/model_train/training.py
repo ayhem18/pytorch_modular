@@ -10,7 +10,7 @@ from tqdm import tqdm
 from torch.optim.sgd import SGD
 from torch.utils.data import DataLoader
 
-from torchlars import LARS # the authors of the paper used this optimizer
+# from torchlars import LARS # the authors of the paper used this optimizer
 
 from mypt.losses.simClrLoss import SimClrLoss
 from mypt.data.datasets.parallel_aug_ds import ParallelAugDs
@@ -20,28 +20,18 @@ from mypt.schedulers.annealing_lr import AnnealingLR
 from mypt.models.simClr.simClrModel import SimClrModel
 
 from .train_per_epoch import train_per_epoch, validation_per_epoch
-from .ds_wrapper import STL10Wrapper
+from .ds_wrapper import CALTECH101Wrapper
 
 
 _DEFAULT_DATA_AUGS = [
     tr.RandomHorizontalFlip(p=1), 
-    tr.RandomResizedCrop((224, 224), scale=(0.5, 1)),
+    tr.RandomResizedCrop((200, 200), scale=(0.5, 1)),
     
     tr.RandomGrayscale(p=0.2),
     tr.GaussianBlur(kernel_size=(5, 5)),
     tr.ColorJitter(brightness=0.5, contrast=0.5)
 ]
 
-
-# _DEFAULT_DATA_AUGS = [ 
-#                       tr.RandomHorizontalFlip(p=1), 
-#                       tr.RandomRotation(degrees=10),
-# 					#   tr.RandomErasing(p=1, scale=(0.05, 0.15)),
-# 					  tr.ColorJitter(brightness=0.2, contrast=0.2),
-#                       tr.GaussianBlur(kernel_size=(5, 5)),
-#                       ]
-
-# although the normalization was part of the original data augmentations, the normalized image loses a lot of its semantic meaning after normalization.
 _UNIFORM_DATA_AUGS = []#tr.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
                     
 
@@ -121,8 +111,7 @@ def _set_data(train_data_folder: Union[str, Path],
                                           file_ok=False, 
                                           )
 
-    train_ds = STL10Wrapper(root_dir=train_data_folder, 
-                                train=True,
+    train_ds = CALTECH101Wrapper(root_dir=train_data_folder, 
                                 output_shape=output_shape,
                                 augs_per_sample=2, 
                                 sampled_data_augs=_DEFAULT_DATA_AUGS,
@@ -134,8 +123,7 @@ def _set_data(train_data_folder: Union[str, Path],
                                           file_ok=False, 
                                           )
 
-        val_ds = STL10Wrapper(root_dir=val_data_folder, 
-                                    train=False,
+        val_ds = CALTECH101Wrapper(root_dir=val_data_folder, 
                                     output_shape=output_shape,
                                     augs_per_sample=2, 
                                     sampled_data_augs=_DEFAULT_DATA_AUGS,
@@ -164,44 +152,44 @@ def _set_data(train_data_folder: Union[str, Path],
     return train_dl, val_dl
 
 
-# def _set_optimizer(model: SimClrModel, 
-#                   lrs: Union[Tuple[float], float], 
-#                   num_epochs: int) -> Tuple[SGD, AnnealingLR]:
+def _set_optimizer(model: SimClrModel, 
+                  lrs: Union[Tuple[float], float], 
+                  num_epochs: int) -> Tuple[SGD, AnnealingLR]:
 
-#     if isinstance(lrs, float):
-#         lr1, lr2 = lrs, 10 * lrs
-#     elif isinstance(lrs, List) and len(lrs) == 2:
-#         lr1, lr2 = lrs
+    if isinstance(lrs, float):
+        lr1, lr2 = lrs, 10 * lrs
+    elif isinstance(lrs, List) and len(lrs) == 2:
+        lr1, lr2 = lrs
 
-#     elif isinstance(lrs, List) and len(lrs) == 1:
-#         return _set_optimizer(model, lrs[0])
-#     else:
-#         raise ValueError(f"The current implementation supports at most 2 learning rates. Found: {len(lrs)} learning rates")
+    elif isinstance(lrs, List) and len(lrs) == 1:
+        return _set_optimizer(model, lrs[0])
+    else:
+        raise ValueError(f"The current implementation supports at most 2 learning rates. Found: {len(lrs)} learning rates")
 
 
-#     # set the optimizer
-#     optimizer = SGD(params=[{"params": model.fe.parameters(), "lr": lr1}, # using different learning rates with different components of the model 
-#                             {"params": model.flatten_layer.parameters(), "lr": lr1},
-#                             {"params": model.ph.parameters(), "lr": lr2}
-#                             ])
+    # set the optimizer
+    optimizer = SGD(params=[{"params": model.fe.parameters(), "lr": lr1}, # using different learning rates with different components of the model 
+                            {"params": model.flatten_layer.parameters(), "lr": lr1},
+                            {"params": model.ph.parameters(), "lr": lr2}
+                            ])
 
-#     lr_scheduler = AnnealingLR(optimizer=optimizer, 
-#                                num_epochs=num_epochs,
-#                                alpha=10,
-#                                beta= 0.75)
+    lr_scheduler = AnnealingLR(optimizer=optimizer, 
+                               num_epochs=num_epochs,
+                               alpha=10,
+                               beta= 0.75)
 
-#     return optimizer, lr_scheduler
+    return optimizer, lr_scheduler
 
-def _set_optimizer(model: SimClrModel,
-                   learning_rate: float) -> LARS:
-    # create the base optimizer 
-    base_optimizer = SGD(model.parameters(), 
-                         lr=learning_rate, 
-                         weight_decay=10**-6 # as per the paper's recommendations
-                        )
+# def _set_optimizer(model: SimClrModel,
+#                    learning_rate: float) -> LARS:
+#     # create the base optimizer 
+#     base_optimizer = SGD(model.parameters(), 
+#                          lr=learning_rate, 
+#                          weight_decay=10**-6 # as per the paper's recommendations
+#                         )
 
-    optimizer = LARS(optimizer=base_optimizer, eps=10**-8, trust_coef=10**-3)
-    return optimizer
+#     optimizer = LARS(optimizer=base_optimizer, eps=10**-8, trust_coef=10**-3)
+#     return optimizer
 
 def _run(
         model:SimClrModel,
@@ -302,7 +290,8 @@ def run_pipeline(model: SimClrModel,
           num_epochs: int, 
           batch_size: int,
 
-          initial_lr: float,  
+        #   initial_lr: float,  
+          learning_rates: Union[Tuple[float, float], float],
           temperature: float,
 
           ckpnt_dir: Union[str, Path],
@@ -332,8 +321,8 @@ def run_pipeline(model: SimClrModel,
                                 batch_size=batch_size, 
                                 seed=seed)
 
-    optimizer = _set_optimizer(model=model, learning_rate=initial_lr)
-    # optimizer = _set_optimizer(model=model, lrs=learning_rates, num_epochs=num_epochs)
+    # optimizer = _set_optimizer(model=model, learning_rate=initial_lr)
+    optimizer, lr_scheduler = _set_optimizer(model=model, lrs=learning_rates, num_epochs=num_epochs)
 
     res = None
     try:
@@ -343,7 +332,7 @@ def run_pipeline(model: SimClrModel,
 
                 loss_obj=loss_obj, 
                 optimizer=optimizer,
-                lr_scheduler=None,
+                lr_scheduler=lr_scheduler,
 
                 ckpnt_dir=ckpnt_dir,
                 num_epochs=num_epochs,
@@ -377,7 +366,8 @@ def run_pipeline(model: SimClrModel,
             num_epochs=num_epochs, 
             batch_size=batch_size,
 
-            initial_lr=initial_lr,  
+            # initial_lr=initial_lr,  
+            learning_rates=learning_rates,
             temperature=temperature,
 
             ckpnt_dir=ckpnt_dir,

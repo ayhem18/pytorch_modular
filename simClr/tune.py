@@ -41,12 +41,12 @@ def set_the_initial_model():
     lr_options = {"max": -1.0, "min":-3.0}
     num_fc_layers = {"values": list(range(2, 7))}
 
-    sanity_train = os.path.join(SCRIPT_DIR, 'data', 'stl10', 'train')
+    sanity_train = os.path.join(SCRIPT_DIR, 'data', 'caltech101', 'train')
     sanity_check_tuning(sanity_train=sanity_train, 
                         lr_options=lr_options, 
                         num_layers_options=num_fc_layers,
-                        epochs_per_sweeps=50, 
-                        sweep_count=20, 
+                        epochs_per_sweeps=3, 
+                        sweep_count=2, 
                         temperature=0.5)
     
 

@@ -6,14 +6,12 @@ from pathlib import Path
 from typing import Union, List, Tuple
 
 from torch.utils.data import Dataset
-from torchvision.datasets import FashionMNIST, STL10
+from torchvision.datasets import STL10, Caltech101
 
 
 
-class STL10Wrapper(Dataset):
+class CALTECH101Wrapper(Dataset):
     def __init__(self, root_dir: Union[str, Path], 
-                train:bool,
-
                 output_shape: Tuple[int, int],
                 augs_per_sample: int,
                 sampled_data_augs:List,
@@ -22,8 +20,7 @@ class STL10Wrapper(Dataset):
                 length: int = None) -> None:
         super().__init__()
         
-        self._ds = STL10(root=root_dir, 
-                         split='train' if train else 'test', 
+        self._ds = Caltech101(root=root_dir, 
                          transform=tr.ToTensor(), 
                          download=True)
         

@@ -9,15 +9,15 @@ from typing import Union, Dict
 from torchvision.datasets import STL10
 
 from mypt.code_utilities import pytorch_utilities as pu
-from mypt.models.simClr.simClrModel import AlexnetSimClr
+from mypt.models.simClr.simClrModel import AlexnetSimClr, ResnetSimClr
 from model_train.training import run_pipeline
 
+from mypt.subroutines.topk_nearest_neighbors import model_embs as me
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 
 
-from mypt.subroutines.topk_nearest_neighbors import model_embs as me
-
+_BATCH_SIZE = 200
 
 def evaluate_ckpnt(model, ckpnt): 
     ds = STL10(root=os.path.join(SCRIPT_DIR ,'data', 'stl10', 'train'), 
@@ -59,18 +59,19 @@ def visualize_neighbors(res: Union[str, Path, Dict]):
         plt.show()
                 
 def train_main():
-    train_data_folder = os.path.join(SCRIPT_DIR, 'data', 'stl10', 'train')
+    train_data_folder = os.path.join(SCRIPT_DIR, 'data', 'caltech101', 'train')
 
-    model = AlexnetSimClr(input_shape=(3, 96, 96), output_dim=128, num_fc_layers=3, freeze=False)
+    model = ResnetSimClr(input_shape=(3, 200, 200), output_dim=128, num_fc_layers=3, freeze=False)
 
     return run_pipeline(model=model, 
         train_data_folder=train_data_folder, 
         val_data_folder=None,
-        initial_lr=0.01,
-        output_shape=(96, 96),
+        # initial_lr=0.01,
+        learning_rates=0.01,
+        output_shape=(200, 200),
         ckpnt_dir=os.path.join(SCRIPT_DIR, 'logs', 'train_logs'),
         num_epochs=10, 
-        batch_size=128, 
+        batch_size=_BATCH_SIZE, 
         temperature=0.5, 
         seed=0, 
         use_wandb=True,

@@ -98,7 +98,9 @@ def train_per_epoch(model: SimClrModel,
 
         if batch_stats:
             batch_train_loss = batch_train_res[0]
-
+        else:
+            batch_train_loss = batch_train_res
+            
         # log the batch loss depending on the batch index
         if batch_index % log_per_batch == 0 and use_wandb:
             log_dict = {"epoch": epoch_index, "train_loss": batch_train_loss, "batch": batch_index} 
@@ -190,6 +192,8 @@ def validation_per_epoch(model: SimClrModel,
 
         if batch_stats:
             batch_val_loss = batch_val_res[0]
+        else:
+            batch_val_loss = batch_val_res
 
         # log the batch loss depending on the batch index
         if batch_index % log_per_batch == 0 and use_wandb:

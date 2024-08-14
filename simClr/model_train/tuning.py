@@ -4,17 +4,17 @@ This script contains the implementation of the tuning process
 import os, wandb, json
 
 from pathlib import Path
-from typing import Union, Dict, Optional, Tuple
+from typing import Union, Dict, Optional
 from functools import partial
 
 from mypt.code_utilities import directories_and_files as dirf
-from mypt.models.simClr.simClrModel import AlexnetSimClr
+from mypt.models.simClr.simClrModel import AlexnetSimClr, ResnetSimClr
 
 from .training import run_pipeline
 
 WANDB_PROJECT_NAME="SimClr"
 
-_BATCH_SIZE = 512
+_BATCH_SIZE = 200
 
 def _sweep_function( 
           train_data_folder:Union[str, Path],
@@ -36,9 +36,11 @@ def _sweep_function(
     num_fc_layers = wandb.config.num_fc_layers
     lr = 10 ** wandb.config.lr    
 
-    model = AlexnetSimClr(input_shape=(3, 96, 96), 
-                          output_dim=128,  
-                          num_fc_layers=num_fc_layers)
+    # model = AlexnetSimClr(input_shape=(3, 96, 96), 
+    #                       output_dim=128,  
+    #                       num_fc_layers=num_fc_layers)
+
+    model = ResnetSimClr(input_shape=(3, 200, 200), output_dim=128, num_fc_layers=3, freeze=False)
 
     # create a directory where to save the checkpoint
     ckpnt_dir = os.path.join(log_dir,  f'sweep_{len(os.listdir(log_dir)) + 1}')
@@ -49,7 +51,8 @@ def _sweep_function(
                  output_shape=(96, 96),
                  num_epochs=epochs_per_sweep,
                  batch_size=batch_size, 
-                 initial_lr=lr, 
+                 learning_rates=lr,
+                #  initial_lr=lr, 
                  temperature=temperature,
                  ckpnt_dir=ckpnt_dir,
                  val_per_epoch=val_per_epoch,
