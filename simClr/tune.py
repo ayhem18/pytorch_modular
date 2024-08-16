@@ -45,8 +45,8 @@ def set_the_initial_model():
     sanity_check_tuning(sanity_train=sanity_train, 
                         lr_options=lr_options, 
                         num_layers_options=num_fc_layers,
-                        epochs_per_sweeps=3, 
-                        sweep_count=2, 
+                        epochs_per_sweeps=50, 
+                        sweep_count=20, 
                         temperature=0.5)
     
 

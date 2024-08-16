@@ -40,7 +40,7 @@ def _sweep_function(
     #                       output_dim=128,  
     #                       num_fc_layers=num_fc_layers)
 
-    model = ResnetSimClr(input_shape=(3, 200, 200), output_dim=128, num_fc_layers=3, freeze=False)
+    model = ResnetSimClr(input_shape=(3, 200, 200), output_dim=128, num_fc_layers=num_fc_layers, freeze=False)
 
     # create a directory where to save the checkpoint
     ckpnt_dir = os.path.join(log_dir,  f'sweep_{len(os.listdir(log_dir)) + 1}')
