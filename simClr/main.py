@@ -29,9 +29,9 @@ def evaluate_ckpnt(model, ckpnt):
                                       model=model,
                                       model_ckpnt=ckpnt,
                                       k_neighbors=5,
-                                      batch_size=256)
+                                      batch_size=4)
 
-def visualize_neighbors(res: Union[str, Path, Dict]):
+def visualize_neighbors(res: Union[str, Path, Dict], num_images: int = 5):
     ds = STL10(root=os.path.join(SCRIPT_DIR ,'data', 'stl10', 'train'), 
                transform=tr.ToTensor(), )
 
@@ -40,7 +40,7 @@ def visualize_neighbors(res: Union[str, Path, Dict]):
         with open(res, 'rb') as f:
             res = pickle.load(f)        
 
-    for i, ilist in list(res.items())[:3]:
+    for i, ilist in list(res.items())[:num_images]:
         x, y = ds[i]
         x = np.moveaxis(x.numpy(), 0,-1)
 
@@ -70,7 +70,7 @@ def train_main(model):
         learning_rates=0.01,
         output_shape=(200, 200),
         ckpnt_dir=os.path.join(SCRIPT_DIR, 'logs', 'train_logs'),
-        num_epochs=10, 
+        num_epochs=150, 
         batch_size=_BATCH_SIZE, 
         temperature=0.5, 
         seed=0, 
@@ -83,7 +83,6 @@ if __name__ == '__main__':
     model = ResnetSimClr(input_shape=(3, 200, 200), output_dim=128, num_fc_layers=6, freeze=False)
     train_main(model)
 
-    # model = AlexnetSimClr(input_shape=(3, 96, 96), output_dim=128, num_fc_layers=6, freeze=False)
-    # ckpnt = os.path.join(SCRIPT_DIR, 'logs', 'saved_logs', 'sweep_8', 'ckpnt_train_loss-4.0872_epoch-47.pt') 
-    # evaluate_ckpnt(model, ckpnt)
-    # visualize_neighbors(res=os.path.join(SCRIPT_DIR, 'eval_res', 'ckpnt_train_loss-4.0872_epoch-47.pt_results.obj'))
+    ckpnt = os.path.join(SCRIPT_DIR, 'logs', 'train_logs', 'ckpnt_train_loss-4.0917_epoch-123.pt')
+    evaluate_ckpnt(model, ckpnt)
+    visualize_neighbors(res=os.path.join(SCRIPT_DIR, 'eval_res', 'ckpnt_train_loss-4.0917_epoch-123_results.obj'), num_images=25)
