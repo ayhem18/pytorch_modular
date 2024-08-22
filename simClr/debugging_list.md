@@ -2,7 +2,7 @@
 1. Train a model with SimClr
 2. save the checkpoint
 3. iterate through the dataset, for each sample find the closest samples using cosine similarity
-4. 
+4. Build a topk
 
 
 
@@ -16,8 +16,8 @@ Alexnet with STL10 dataset
 * Best training loss after 20 epochs: 5
 * Semantically such a high loss is a problem: 
 
-    1. ![img](./images/iteration_1_nearest_neighbors_res_1.png)
-    2. ![img](./images/iteration_1_nearest_neighbors_res_2.png)
+    ![img](./images/iteration_1_nearest_neighbors_res_1.png)
+    ![img](./images/iteration_1_nearest_neighbors_res_2.png)
 
 The observations: 
 
@@ -29,7 +29,34 @@ The observations:
 Using this setting might lead to more stable training
 
 * easier ?? dataset
-* different backbone maybe (Vision Transfer)
+* different backbone maybe (Vision Transformer)
 
 
 # Iteration 2: 
+
+## Changes
+
+* Using The Resnet50 feature Extractor instead of Alexnet
+* training on the Caltech101 dataset; larger images resized to (200, 200)
+* heavier color-based augmentations
+
+## Results
+
+The results are significantly better: 
+    ![img](./images/iteration_2_nearest_neighbors_res_1.png)
+    ![img](./images/iteration_2_nearest_neighbors_res_2.png)
+    ![img](./images/iteration_2_nearest_neighbors_res_3.png)
+    ![img](./images/iteration_2_nearest_neighbors_res_4.png)
+
+The model started to learn more class-related features (beyond basic features such as the dominant color, the background...). The similarities to the nearest elements suggest that samples are not simply cluttered in a small minifold leading to a representation with very little discriminability.
+
+The loss is still relatively high which leaves a lot of room for improvement. 
+
+![img](./images/iteratation_2_train_loss.png)
+
+
+## Next steps
+
+* Trying to scale images: using the same scaling transformation as the original Resnet50 architecture
+* Using the Lars Optimizer
+

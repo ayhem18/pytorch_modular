@@ -16,15 +16,19 @@ def train_per_batch(model: SimClrModel,
                     x2_batch: torch.Tensor,
                     loss_function: SimClrLoss,
                     optimizer: torch.optim.Optimizer,
+                    optimizer_zero_grad:bool,
+                    optimizer_step:bool,
                     device: str,
                     batch_stats: bool=False
                     ) -> float:
-    
+
     model.to(device=device)
     # make sure to stack the two batches into a single batch 
     x = torch.cat([x1_batch, x2_batch]).to(device=device)
-    # set the optimizer's gradients to zero
-    optimizer.zero_grad()
+    
+    if optimizer_zero_grad:
+        # set the optimizer's gradients to zero
+        optimizer.zero_grad()
     
     # forward pass through the model
     _, g_x = model.forward(x)
@@ -55,8 +59,9 @@ def train_per_batch(model: SimClrModel,
     # perform the backpropagation
     batch_loss_obj.backward()
 
-    # update the weights
-    optimizer.step()
+    if optimizer_step:
+        # update the weights
+        optimizer.step()
 
     if batch_stats:
         return batch_loss, batch_stats
@@ -71,6 +76,7 @@ def train_per_epoch(model: SimClrModel,
                 epoch_index: int,
                 device: str,
                 log_per_batch: Union[int, float],
+                accumulate_grads: int = 1,
                 batch_stats:bool=False,
                 use_wandb:bool=True
                 ) -> Tuple[float, float]:
@@ -87,12 +93,24 @@ def train_per_epoch(model: SimClrModel,
     # define a function to save the average loss per epoch
     epoch_train_loss = 0
     
-    for batch_index, (x1, x2) in tqdm(enumerate(dataloader), desc=f'training batch at epoch {epoch_index }'): 
+    num_batches = len(dataloader)
+
+    for batch_index, (x1, x2) in tqdm(enumerate(dataloader, start=1), desc=f'training batch at epoch {epoch_index }'): 
+        # to make the gradient accumulation work
+
+        # 1. the optimizer.zero_grad() method should be called with batch indices such that batch_index % acc_grad == 1 (or no gradient accumulation at all (acc_grad == 1))
+
+        # 2. the optimizer.step() should be called with batch_indices divisbly by acc_grad or the very last batch
+ 
+        # the batch index should be 1-indexed not 0-indexed for the implementation above to work
+        
         batch_train_res = train_per_batch(model=model, 
                                             x1_batch=x1, 
                                             x2_batch=x2, 
                                             loss_function=loss_function,
                                             optimizer=optimizer, 
+                                            optimizer_zero_grad=((batch_index % accumulate_grads) == 1 or (accumulate_grads == 1)),
+                                            optimizer_step=((batch_index % accumulate_grads == 0) or (batch_index == num_batches)),
                                             device=device, 
                                             batch_stats=batch_stats)
 
@@ -184,7 +202,7 @@ def validation_per_epoch(model: SimClrModel,
 
     model = model.to(device=device)
     model.eval()
-    for batch_index, (x1, x2) in tqdm(enumerate(dataloader), desc=f'validation batch for epoch {epoch_index}'):
+    for batch_index, (x1, x2) in tqdm(enumerate(dataloader, start=1), desc=f'validation batch for epoch {epoch_index}'):
         batch_val_res = validation_per_batch(model=model, 
                                         x1_batch=x1, 
                                         x2_batch=x2, 

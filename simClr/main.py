@@ -61,8 +61,6 @@ def visualize_neighbors(res: Union[str, Path, Dict], num_images: int = 5):
 def train_main(model):
     train_data_folder = os.path.join(SCRIPT_DIR, 'data', 'caltech101', 'train')
 
-    # model = ResnetSimClr(input_shape=(3, 200, 200), output_dim=128, num_fc_layers=3, freeze=False)
-
     return run_pipeline(model=model, 
         train_data_folder=train_data_folder, 
         val_data_folder=None,
@@ -70,7 +68,7 @@ def train_main(model):
         learning_rates=0.01,
         output_shape=(200, 200),
         ckpnt_dir=os.path.join(SCRIPT_DIR, 'logs', 'train_logs'),
-        num_epochs=150, 
+        num_epochs=3, 
         batch_size=_BATCH_SIZE, 
         temperature=0.5, 
         seed=0, 
@@ -80,9 +78,9 @@ def train_main(model):
 
 
 if __name__ == '__main__':
-    model = ResnetSimClr(input_shape=(3, 200, 200), output_dim=128, num_fc_layers=6, freeze=False)
+    model = ResnetSimClr(input_shape=(3, 200, 200), output_dim=128, num_fc_layers=2, freeze=False)
     train_main(model)
 
-    ckpnt = os.path.join(SCRIPT_DIR, 'logs', 'train_logs', 'ckpnt_train_loss-4.0917_epoch-123.pt')
-    evaluate_ckpnt(model, ckpnt)
-    visualize_neighbors(res=os.path.join(SCRIPT_DIR, 'eval_res', 'ckpnt_train_loss-4.0917_epoch-123_results.obj'), num_images=25)
+    # ckpnt = os.path.join(SCRIPT_DIR, 'logs', 'train_logs', 'ckpnt_train_loss-4.0917_epoch-123.pt')
+    # evaluate_ckpnt(model, ckpnt)
+    # visualize_neighbors(res=os.path.join(SCRIPT_DIR, 'eval_res', 'ckpnt_train_loss-4.0917_epoch-123_results.obj'), num_images=25)

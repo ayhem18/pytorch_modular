@@ -1,4 +1,4 @@
-import wandb, torch, os
+import wandb, torch, os, math
 
 import torchvision.transforms as tr
 
@@ -32,10 +32,16 @@ _DEFAULT_DATA_AUGS = [
     tr.ColorJitter(brightness=0.5, contrast=0.5)
 ]
 
-_UNIFORM_DATA_AUGS = []#tr.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+# one possible reason for the high training loss is the input scale
+# 
+_UNIFORM_DATA_AUGS = [tr.Normalize(mean=[0.485, 0.456, 0.406], 
+                                   std=[0.229, 0.224, 0.225])] 
                     
 
 _WANDB_PROJECT_NAME = "SimClr"
+
+
+PREFERABLE_BATCH_SIZE = 1024
 
 # let's split the training pipeline into several functions
 # def _set_data(train_data_folder: Union[str, Path],
@@ -100,12 +106,9 @@ _WANDB_PROJECT_NAME = "SimClr"
 def _set_data(train_data_folder: Union[str, Path],
              val_data_folder: Optional[Union[str, Path]],
              batch_size:int,
-             output_shape: Tuple[int, int] = None,
+             output_shape: Tuple[int, int],
              seed:int=69) -> Tuple[DataLoader, Optional[DataLoader]]:
     
-    if output_shape is None:
-        output_shape = (224, 224)
-
     train_data_folder = dirf.process_path(train_data_folder, 
                                           dir_ok=True, 
                                           file_ok=False, 
@@ -200,6 +203,8 @@ def _run(
         loss_obj: SimClrLoss,
         optimizer: torch.optim.Optimizer, 
         lr_scheduler: Optional[torch.optim.lr_scheduler.LRScheduler], 
+        
+        accumulate_grad: int,
 
         ckpnt_dir: Optional[Union[str, Path]],
 
@@ -230,7 +235,8 @@ def _run(
                         optimizer=optimizer,
                         scheduler=lr_scheduler,
                         use_wandb=use_wandb,
-                        batch_stats=batch_stats)
+                        batch_stats=batch_stats,
+                        accumulate_grads=accumulate_grad)
 
         print(f"epoch {epoch_index}: train loss: {epoch_train_loss}")
 
@@ -321,6 +327,18 @@ def run_pipeline(model: SimClrModel,
                                 batch_size=batch_size, 
                                 seed=seed)
 
+    # dealing with gradient accumulation
+    accumulate_grads_factor = PREFERABLE_BATCH_SIZE / batch_size 
+
+    # scale the learning rate by the gradient accumulation factor
+    if isinstance(learning_rates, (Tuple, List)):
+        learning_rates = [lr / accumulate_grads_factor for lr in learning_rates]
+    else:
+        learning_rates /= accumulate_grads_factor
+    
+    # make sure to convert it to an integer
+    accumulate_grads_factor = int(math.ceil(accumulate_grads_factor))
+
     # optimizer = _set_optimizer(model=model, learning_rate=initial_lr)
     optimizer, lr_scheduler = _set_optimizer(model=model, lrs=learning_rates, num_epochs=num_epochs)
 
@@ -333,6 +351,8 @@ def run_pipeline(model: SimClrModel,
                 loss_obj=loss_obj, 
                 optimizer=optimizer,
                 lr_scheduler=lr_scheduler,
+                
+                accumulate_grad=accumulate_grads_factor, # make sure to add the gradient accumulation factor
 
                 ckpnt_dir=ckpnt_dir,
                 num_epochs=num_epochs,

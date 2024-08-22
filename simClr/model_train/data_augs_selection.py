@@ -32,7 +32,7 @@ _DEFAULT_DATA_AUGS = [
                       tr.GaussianBlur(kernel_size=(5, 5)),
                       ]
 
-_UNIFORM_DATA_AUGS = [#tr.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+_UNIFORM_DATA_AUGS = [tr.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
                     ]
 
 from torchvision.datasets import ImageFolder
@@ -105,50 +105,50 @@ def check_data_aug(data_folder):
     # create a dataloader
     dl = initialize_train_dataloader(train_ds, seed=0, batch_size=10, num_workers=1)
 
-    for i, (x1, x2) in enumerate(dl):
-        x = torch.cat([x1, x2])
+    # for i, (x1, x2) in enumerate(dl):
+    #     x = torch.cat([x1, x2])
 
-        n = len(x1)
+    #     # n = len(x1)
 
 
-        for j in range(n):
-            fig = plt.figure() 
-            p1, p2 = x[j].squeeze(), x[(j + n) % (2 * n)].squeeze()
-            p1, p2 = np.moveaxis(p1.numpy(), 0,-1), np.moveaxis(p2.numpy(), 0, -1)
+    #     # for j in range(n):
+    #     #     fig = plt.figure() 
+    #     #     p1, p2 = x[j].squeeze(), x[(j + n) % (2 * n)].squeeze()
+    #     #     p1, p2 = np.moveaxis(p1.numpy(), 0,-1), np.moveaxis(p2.numpy(), 0, -1)
 
-            fig.add_subplot(1, 2, 1) 
-            plt.imshow(p1) 
-            plt.title("augmented image 1") 
+    #     #     fig.add_subplot(1, 2, 1) 
+    #     #     plt.imshow(p1) 
+    #     #     plt.title("augmented image 1") 
 
-            fig.add_subplot(1, 2, 2) 
-            plt.imshow(p2) 
-            plt.title("augmented image 2") 
+    #     #     fig.add_subplot(1, 2, 2) 
+    #     #     plt.imshow(p2) 
+    #     #     plt.title("augmented image 2") 
 
-            plt.show()
+    #     #     plt.show()
 
-    # for i in range(5):
-    #     # im = train_ds.load_sample(train_ds.idx2path[i])
-    #     x1, x2 = train_ds[i]
+    for i in range(5):
+        # im = train_ds.load_sample(train_ds.idx2path[i])
+        x1, x2 = train_ds[i]
 
-    #     # im = np.array(im)
-    #     x1, x2 = x1.numpy(), x2.numpy()
+        # im = np.array(im)
+        x1, x2 = x1.numpy(), x2.numpy()
 
-    #     # transpose the image 
-    #     x1, x2 = np.moveaxis(x1, 0,-1), np.moveaxis(x2, 0, -1)
-    #     fig = plt.figure() 
-    #     # fig.add_subplot(1, 2, 1) 
-    #     # plt.imshow(im) 
-    #     # plt.title("original image") 
+        # transpose the image 
+        x1, x2 = np.moveaxis(x1, 0,-1), np.moveaxis(x2, 0, -1)
+        fig = plt.figure() 
+        # fig.add_subplot(1, 2, 1) 
+        # plt.imshow(im) 
+        # plt.title("original image") 
 
-    #     fig.add_subplot(1, 2, 1) 
-    #     plt.imshow(x1) 
-    #     plt.title("augmented image 1") 
+        fig.add_subplot(1, 2, 1) 
+        plt.imshow(x1) 
+        plt.title("augmented image 1") 
 
-    #     fig.add_subplot(1, 2, 2) 
-    #     plt.imshow(x2) 
-    #     plt.title("augmented image 2") 
+        fig.add_subplot(1, 2, 2) 
+        plt.imshow(x2) 
+        plt.title("augmented image 2") 
 
-    #     plt.show()
+        plt.show()
 
 
 
