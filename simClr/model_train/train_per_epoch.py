@@ -109,7 +109,7 @@ def train_per_epoch(model: SimClrModel,
                                             x2_batch=x2, 
                                             loss_function=loss_function,
                                             optimizer=optimizer, 
-                                            optimizer_zero_grad=((batch_index % accumulate_grads) == 1 or (accumulate_grads == 1)),
+                                            optimizer_zero_grad=((accumulate_grads == 1) or (batch_index % accumulate_grads) == 1),
                                             optimizer_step=((batch_index % accumulate_grads == 0) or (batch_index == num_batches)),
                                             device=device, 
                                             batch_stats=batch_stats)

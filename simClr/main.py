@@ -17,7 +17,7 @@ from mypt.subroutines.topk_nearest_neighbors import model_embs as me
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 
 
-_BATCH_SIZE = 200
+_BATCH_SIZE = 16
 
 def evaluate_ckpnt(model, ckpnt): 
     ds = STL10(root=os.path.join(SCRIPT_DIR ,'data', 'stl10', 'train'), 
@@ -59,16 +59,18 @@ def visualize_neighbors(res: Union[str, Path, Dict], num_images: int = 5):
         plt.show()
                 
 def train_main(model):
-    train_data_folder = os.path.join(SCRIPT_DIR, 'data', 'caltech101', 'train')
+    train_data_folder = os.path.join(SCRIPT_DIR, 'data', 'food101', 'train')
 
+
+    ckpnt_dir_parent = os.path.join(SCRIPT_DIR, 'logs', 'train_logs') 
     return run_pipeline(model=model, 
         train_data_folder=train_data_folder, 
         val_data_folder=None,
         # initial_lr=0.01,
         learning_rates=0.01,
         output_shape=(200, 200),
-        ckpnt_dir=os.path.join(SCRIPT_DIR, 'logs', 'train_logs'),
-        num_epochs=3, 
+        ckpnt_dir=os.path.join(ckpnt_dir_parent, f'iteration_{len(os.listdir(ckpnt_dir_parent)) + 1}'),
+        num_epochs=64, 
         batch_size=_BATCH_SIZE, 
         temperature=0.5, 
         seed=0, 
@@ -78,7 +80,7 @@ def train_main(model):
 
 
 if __name__ == '__main__':
-    model = ResnetSimClr(input_shape=(3, 200, 200), output_dim=128, num_fc_layers=2, freeze=False)
+    model = ResnetSimClr(input_shape=(3, 200, 200), output_dim=128, num_fc_layers=4, freeze=False)
     train_main(model)
 
     # ckpnt = os.path.join(SCRIPT_DIR, 'logs', 'train_logs', 'ckpnt_train_loss-4.0917_epoch-123.pt')

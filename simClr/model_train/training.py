@@ -20,7 +20,7 @@ from mypt.schedulers.annealing_lr import AnnealingLR
 from mypt.models.simClr.simClrModel import SimClrModel
 
 from .train_per_epoch import train_per_epoch, validation_per_epoch
-from .ds_wrapper import CALTECH101Wrapper
+from .ds_wrapper import Food101Wrapper
 
 
 _DEFAULT_DATA_AUGS = [
@@ -114,11 +114,12 @@ def _set_data(train_data_folder: Union[str, Path],
                                           file_ok=False, 
                                           )
 
-    train_ds = CALTECH101Wrapper(root_dir=train_data_folder, 
+    train_ds = Food101Wrapper(root_dir=train_data_folder, 
                                 output_shape=output_shape,
                                 augs_per_sample=2, 
                                 sampled_data_augs=_DEFAULT_DATA_AUGS,
-                                uniform_data_augs=_UNIFORM_DATA_AUGS)
+                                uniform_data_augs=_UNIFORM_DATA_AUGS,
+                                train=True)
 
     if val_data_folder is not None:
         val_data_folder = dirf.process_path(val_data_folder, 
@@ -126,11 +127,12 @@ def _set_data(train_data_folder: Union[str, Path],
                                           file_ok=False, 
                                           )
 
-        val_ds = CALTECH101Wrapper(root_dir=val_data_folder, 
+        val_ds = Food101Wrapper(root_dir=val_data_folder, 
                                     output_shape=output_shape,
                                     augs_per_sample=2, 
                                     sampled_data_augs=_DEFAULT_DATA_AUGS,
-                                    uniform_data_augs=_UNIFORM_DATA_AUGS)
+                                    uniform_data_augs=_UNIFORM_DATA_AUGS,
+                                    train=False)
 
     else:
         val_ds = None

@@ -6,21 +6,21 @@ from pathlib import Path
 from typing import Union, List, Tuple
 
 from torch.utils.data import Dataset
-from torchvision.datasets import STL10, Caltech101
+from torchvision.datasets import STL10, Caltech101, Food101
 
 
-
-class CALTECH101Wrapper(Dataset):
+class Food101Wrapper(Dataset):
     def __init__(self, root_dir: Union[str, Path], 
                 output_shape: Tuple[int, int],
                 augs_per_sample: int,
                 sampled_data_augs:List,
                 uniform_data_augs: List,
-                
+                train:bool=True,
                 length: int = None) -> None:
         super().__init__()
         
-        self._ds = Caltech101(root=root_dir, 
+        self._ds = Food101(root=root_dir,     
+                         split='train' if train else 'test',
                          transform=tr.ToTensor(), 
                          download=True)
         
