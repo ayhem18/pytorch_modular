@@ -12,7 +12,6 @@ from torch.utils.data import Dataset
 from ...code_utilities import directories_and_files as dirf, annotation_utilites as au
 
 
-
 # let's define a common datatype
 my_iter = Union[Tuple, List]
 
@@ -29,7 +28,6 @@ class ObjectDetectionDs(Dataset):
 
         # the first element should represent the class labels 
         # the second element should represent the bounding boxes
-
         if len(annotation[0]) != len(annotation[1]):
             raise ValueError(f"The length of the class labels must match the lenght of the bounding boxes. Found: {len(annotation[0])} and {len(annotation[1])}")
 
@@ -54,16 +52,6 @@ class ObjectDetectionDs(Dataset):
         au.verify_object_detection_annotation(annotation=ann)
 
         return label_type
-
-    @classmethod
-    def __convert2yolo(cls, 
-                       img_shape: Tuple[int, int], 
-                       ann: my_iter, 
-                       current_format: str) -> my_iter:
-        img_w, img_h = img_shape
-        
-
-
 
     @classmethod
     def _convert_annotations(cls, 
@@ -103,5 +91,4 @@ class ObjectDetectionDs(Dataset):
         ######################### annotation verification #########################
         if img_annotations is None and (img2ann_dict is None or read_ann is None):
             raise ValueError(f"Make sure to pass either 'img_annotations' argument or both of 'img2ann_dict' and 'read_ann'")
-        
         
