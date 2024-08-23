@@ -25,7 +25,6 @@ def _random_yolo_ann(img_shape=None):
 
     return [x_c, y_c, w, h]
 
-
 def _random_coco_ann(img_shape: Tuple[int, int]):
     y, x = img_shape
     min_x, min_y = random.randint(0, int(0.8 * x)), random.randint(0, int(0.8 * y))
@@ -62,7 +61,7 @@ __format_random_generation = {au.COCO: _random_coco_ann,
                               au.YOLO: _random_yolo_ann}
 
 
-
+################################# test conversion #################################
 def _test_conversion_single_format(format: str, num_tests:int = 5 * 10 ** 4):
     if format not in au.OBJ_DETECT_ANN_FORMATS:
         raise NotImplementedError(f"Currently supporting only the following formats: {au.OBJ_DETECT_ANN_FORMATS}")
