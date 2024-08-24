@@ -3,8 +3,7 @@ This script contains an implementation of a dataset class designed for the objec
 """
 
 import torch
-import albumentations as A
-
+import albumentations as A, numpy as np
 
 from torchvision import transforms as tr
 from pathlib import Path
@@ -20,6 +19,8 @@ class ObjectDetectionDs(ObjectDataset):
                  
                  img_augs: List,
                  output_shape: Tuple[int, int],
+
+                 compact: bool,
 
                  img_annotations: Optional[Dict],
                  img2ann_dict: Optional[Dict], 
@@ -58,28 +59,52 @@ class ObjectDetectionDs(ObjectDataset):
             else:
                 self.augmentations[-1] = A.Resize(output_shape[0], output_shape[1])
 
-        # add a ToTensor transformation
-        self.augmentations.append(tr.ToTensor())
-
+        if isinstance(self.augmentations[-1], tr.ToTensor):
+            self.augmentations.pop()
+        
         self.final_aug = A.Compose(self.augmentations, A.BboxParams(format=target_format, label_fields='cls_labels'))        
 
+        # this field determines whether to returns 
+        self.compact = compact 
 
-    def __getitem__(self, index) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    def __getitem__(self, index) -> Union[
+                                          Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor], 
+                                          Tuple[torch.Tensor, torch.Tensor]
+                                        ]:
         # load the sample
         sample_path = self.idx2sample_path[index]
         sample = self.load_sample(sample_path)
         # fetch the bounding boxes and the class labels
         sample_cls, sample_bbox = self.annotations[sample_path]
-        
+
+        if len(sample_cls) > 1 or len(sample_bbox) > 1:
+            raise ValueError(f"found a sample with more than one cls or bounding box !!!")
+
         # pass the sample through the final augmentation
         transform = self.final_aug(sample, bboxes=sample_bbox, cls_labels=sample_cls)
 
         # fetch the labels after augmentations
         img, cls_labels, bboxes = transform['image'], transform['cls_labels'], transform['bboxes']
 
-        # make sure to convert the data to torch Tensors
-        if not isinstance(cls_labels, torch.Tensor):
-            cls_labels = torch.Tensor(cls_labels)
-            bboxes = torch.from_numpy(bboxes)
+        # convert the image to a torch tensor anyway
+        img = tr.ToTensor()(img)
 
-        return img, cls_labels, bboxes            
+        # after applying the augmentation and adjusting the bounding boxes accordingly
+        # return the final labels: depends on self.compact
+        
+        # first the object indicator: a boolean flat indicating whether there is an object of interest on the image or not
+        object_indicator = int(cls_labels[0] != self.background_cls_index)
+    
+        if self.compact:
+            # one hot encode the label
+            cls_label_index = self.cls_2_cls_index[cls_labels[0]]
+            cls_label_one_hot = [int(i == cls_label_index) for i in len(self.all_classes)]
+            # concatenate everything together
+            final_label = [object_indicator] + (bboxes.tolist() if isinstance(bboxes, np.ndarray) else bboxes) + cls_label_one_hot
+            # convert the compact label to tensor tensor
+            final_output =  img, torch.Tensor(final_label)
+            return final_output
+
+        # self.compact set to False implies that the object indicator, the bboxes and the cls labels will be returned as 3 seperated values
+        return img, torch.tensor(object_indicator), torch.tensor(bboxes), torch.tensor(cls_labels[0])  
+

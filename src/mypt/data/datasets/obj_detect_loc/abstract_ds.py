@@ -137,6 +137,62 @@ class ObjectDataset(Dataset, ABC):
         return self.__set_img_annotations(img_annotations=img_anns, current_format=current_format, convert=convert)
 
 
+    def __set_cls_indices_str(self, add_background_label:bool):
+        # since the labels are originally provided as strings, we will simply assign 0 to the background class 
+        # and 1 + for other classes
+        self.background_cls_index = 0
+
+        for _, v in self.annotations.items():
+            cls_ann, _ = v
+            self.all_classes.update([c.lower() for c in cls_ann])
+        
+        self.cls_2_cls_index = dict([(c, i) for i, c in enumerate(sorted(list(self.all_classes)), start=1)])
+
+        # convert to indices
+        for k, v in self.annotations.items():
+            cls_ann, bbox_ann = v
+            cls_ann = [self.cls_2_cls_index[c] for c in cls_ann]
+            
+            if len(cls_ann) == 0:
+                if add_background_label:
+                    cls_ann = [self.background_cls_index]
+                    bbox_ann = [[0, 0, 0, 0]]
+                else:
+                    raise ValueError(f"The 'add_background_label' is set to False while some images are not associated with cls labels. Either make sure to have cls labels for each image or set 'add_background_label' to True")
+
+            self.annotations[k] = cls_ann, bbox_ann
+
+        # all_classes should save the numerical indices in all cases 
+        self.all_classes = set([self.cls_2_cls_index[c] for c in self.all_classes])
+
+        if self.background_cls_index not in self.all_classes and add_background_label:
+            self.all_classes.add(self.background_cls_index)
+
+
+    def __set_cls_indices_int(self, add_background_label:bool):
+        for _, v in self.annotations.items():
+            cls_ann, _ = v
+            self.all_classes.update(cls_ann)
+
+        # since the classes are initially provided as indices, assign the background class either 0 or the last number + 1 (if 0 is already occupied)
+        self.background_cls_index = max(self.all_classes) + 1 if 0 in self.all_classes else 0  
+
+        if add_background_label and self.background_cls_index not in self.all_classes:
+            self.all_classes.add(self.background_cls_index)
+
+        for k, v in self.annotations.items():
+            if len(cls_ann) == 0:
+                if add_background_label:
+                    cls_ann = [self.background_cls_index]
+                    bbox_ann = [[0, 0, 0, 0]]
+                    self.annotations[k] = cls_ann, bbox_ann
+                else:
+                    raise ValueError(f"The 'add_background_label' is set to False while some images are not associated with cls labels. Either make sure to have cls labels for each image or set 'add_background_label' to True")
+
+        # the final step here is to map the classes to the indices
+        self.cls_2_cls_index = dict([(c, i) for i, c in enumerate(sorted(list(self.all_classes)), start=0)])
+
+
     def __init__(self,
                  root_dir: Union[str, Path],
 
@@ -148,7 +204,7 @@ class ObjectDataset(Dataset, ABC):
                  current_format: Optional[str],
                  convert: Optional[callable]=None,
 
-                 add_background_label:bool=False,
+                 background_label:Union[int, str]=None,
                  image_extensions: Optional[List[str]]=None
                 ) -> None:
         # init the parent class
@@ -186,44 +242,26 @@ class ObjectDataset(Dataset, ABC):
 
         self.idx2sample_path = dict(enumerate(sorted([os.path.join(self.root_dir, img) for img in os.listdir(self.root_dir)])))
 
-        self.str_cls_2_index_cls = None 
+        # a dictionary that maps the original classes to their numerical indices (add more flexibility to the object)
+        self.cls_2_cls_index = None 
 
-        # if the labels are passed as string, they need to be converted to integer indices
+        # if the user passes the background label, then save it, otherwise it will be automatically deduced
+        self.background_cls_index = background_label 
+        # a set of all class indices
+        self.all_classes = set()
+
+        # extract the type of initial classes: string or integers
         _, label_type = self._verify_single_annotation(self.annotations.items()[0][1], label_type=None)
 
         if label_type in [str, 'str']:
-            all_classes = set()    
-            for _, v in self.annotations:
-                cls_ann, _ = v
-                all_classes.update([c.lower() for c in cls_ann])
-            
-            self.str_cls_2_index_cls = dict([(c, i) for i, c in enumerate(sorted(list(all_classes)), start=1)])
-
-            # convert to indices
-            for k, v in self.annotations:
-                cls_ann, bbox_ann = v
-                cls_ann = [self.str_cls_2_index_cls[c] for c in cls_ann]
-                
-                if add_background_label and len(cls_ann) == 0:
-                    cls_ann = [0]
-                    bbox_ann = [[0, 0, 0, 0]]
-                    
-                self.annotations[k] = cls_ann, bbox_ann
-
+            self.__set_cls_indices_str(add_background_label=background_label is None)
             return 
 
-        # at this point classes were already saved as indices
-        all_classes = set()    
-        for _, v in self.annotations:
-            cls_ann, _ = v
-            all_classes.update([c.lower() for c in cls_ann])
-
-        for k, v in self.annotations:
-            if add_background_label and len(cls_ann) == 0:
-                cls_ann = [max(all_classes) + 1 if 0 in all_classes else 0]
-                bbox_ann = [[0, 0, 0, 0]]
-                self.annotations[k] = cls_ann, bbox_ann
-            
+        elif label_type in [int, 'int']:
+            self.__set_cls_indices_int(add_background_label=background_label is None)
+            return
+        
+        raise NotImplementedError(f"the current implementation supports only string or integer labels. Found another type: {label_type}")
     
     @abstractmethod
     def __getitem__(self, index):
