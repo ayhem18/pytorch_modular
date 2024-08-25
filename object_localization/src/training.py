@@ -12,15 +12,14 @@ from torch.utils.data import DataLoader
 
 # from torchlars import LARS # the authors of the paper used this optimizer
 
-from mypt.losses.simClrLoss import SimClrLoss
-from mypt.data.datasets.parallel_aug_ds import ParallelAugDs
+from mypt.losses.simClrLoss import SimClrLoss 
+
 from mypt.data.dataloaders.standard_dataloaders import initialize_train_dataloader, initialize_val_dataloader
 from mypt.code_utilities import pytorch_utilities as pu, directories_and_files as dirf
 from mypt.schedulers.annealing_lr import AnnealingLR
 from mypt.models.simClr.simClrModel import SimClrModel
 
 from .train_per_epoch import train_per_epoch, validation_per_epoch
-from .ds_wrapper import Food101Wrapper
 
 
 _DEFAULT_DATA_AUGS = [
@@ -42,65 +41,6 @@ _WANDB_PROJECT_NAME = "SimClr"
 
 
 PREFERABLE_BATCH_SIZE = 1024
-
-# let's split the training pipeline into several functions
-# def _set_data(train_data_folder: Union[str, Path],
-#              val_data_folder: Optional[Union[str, Path]],
-#              batch_size:int,
-#              output_shape: Tuple[int, int] = None,
-#              seed:int=69) -> Tuple[DataLoader, Optional[DataLoader]]:
-    
-#     if output_shape is None:
-#         output_shape = (224, 224)
-
-#     train_data_folder = dirf.process_path(train_data_folder, 
-#                                           dir_ok=True, 
-#                                           file_ok=False, 
-#                                           condition=dirf.image_directory,
-#                                           error_message="The data diretory is expected to contain only image data"
-#                                           )
-
-#     train_ds = ParallelAugDs(root=train_data_folder, 
-#                        output_shape=output_shape, 
-#                        augs_per_sample=2, 
-#                        sampled_data_augs=_DEFAULT_DATA_AUGS,
-#                        uniform_data_augs=_UNIFORM_DATA_AUGS)
-
-#     if val_data_folder is not None:
-#         val_data_folder = dirf.process_path(val_data_folder, 
-#                                           dir_ok=True, 
-#                                           file_ok=False, 
-#                                           condition=dirf.image_directory,
-#                                           error_message="The data diretory is expected to contain only image data"
-#                                           )
-
-
-#         val_ds = ParallelAugDs(root=val_data_folder, 
-#                         output_shape=output_shape, 
-#                         augs_per_sample=2, 
-#                         data_augs=_DEFAULT_DATA_AUGS,
-#                         uniform_data_augs=_UNIFORM_DATA_AUGS)
-#     else:
-#         val_ds = None
-
-#     ## data loaders
-#     train_dl = initialize_train_dataloader(dataset_object=train_ds, 
-#                                          seed=seed,
-#                                          batch_size=batch_size,
-#                                          num_workers=0,
-#                                          warning=False # the num_workers=0 is deliberately set to 0  
-#                                          )
-
-#     if val_ds is not None:
-#         val_dl = initialize_val_dataloader(dataset_object=train_ds, 
-#                                             seed=seed,
-#                                             batch_size=batch_size,
-#                                             num_workers=0,
-#                                             )
-#     else:
-#         val_dl = None
-
-#     return train_dl, val_dl
 
 
 def _set_data(train_data_folder: Union[str, Path],

@@ -180,14 +180,16 @@ def classification_ds_partition(directory_with_classes: Union[str, Path],
 
     # process the path
     des = process_path(des, file_ok=False, dir_ok=True)    
-    # for each dri
 
     for src_dir in sorted(os.listdir(src)):
         des_dir = process_path(os.path.join(des, src_dir), file_ok=False)
         src_dir = os.path.join(src, src_dir)
 
-        src_dir_files = np.asarray(sorted(os.listdir(src_dir)))
+        if portion == 1.0:
+            copy_directories(src_dir, des_dir, copy=copy)
+            continue
 
+        src_dir_files = np.asarray(sorted(os.listdir(src_dir)))
         # split the data 
         _, files_move = train_test_split(src_dir_files, test_size=portion, random_state=seed)
         # define the criterion 
