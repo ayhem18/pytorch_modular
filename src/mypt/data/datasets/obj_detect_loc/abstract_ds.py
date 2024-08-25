@@ -1,10 +1,11 @@
-import os
+import os, warnings
 import numpy as np
 
 from pathlib import Path
 from typing import Union, Optional, Dict, Tuple, List
 from torch.utils.data import Dataset
 from PIL import Image
+from copy import copy
 
 from abc  import ABC, abstractmethod
 
@@ -31,8 +32,11 @@ class ObjectDataset(Dataset, ABC):
 
         # the first element should represent the class labels 
         # the second element should represent the bounding boxes
+        if not (isinstance(annotation[0], (Tuple, List)) and isinstance(annotation[1], (Tuple, List))): 
+            raise TypeError(f"The class and bounding boxes must be passed as iterables of the same length. Found: {type(annotation[0])} and {type(annotation[1])}")
+            
         if len(annotation[0]) != len(annotation[1]):
-            raise ValueError(f"The length of the class labels must match the lenght of the bounding boxes. Found: {len(annotation[0])} and {len(annotation[1])}")
+            raise ValueError(f"The class and bounding boxes must be passed as iterables of the same length. Found: {len(annotation[0])} and {len(annotation[1])}")
 
         cls, ann = annotation
 
@@ -67,74 +71,109 @@ class ObjectDataset(Dataset, ABC):
             return img.convert("RGB")
     
 
-    def __set_img_annotations(self, 
-                               img_annotations: Dict,
-                               current_format: str, 
-                               convert: callable):
-
-        # if not isinstance(img_annotations, Dict):
-        #     raise TypeError(f"the prepared image annotations must of the type Dict. Found: {type(img_annotations)}")
-
+    def __verify_img_annotation_map(self, image2annotation: Dict):
+        """
+        The keys have to be sample file paths
+        The values can be either: 
+            1. a tuple of two iterables: image classes, bounding boxes
+            2. a tuple of three iterables: image classes, bounding boxes, and iage 
+            3. a callable that returns the first option
+            4. a callable that returns the second option
+            
+        This functions verifies the provided mapping satisfies the requirements
+        Args:
+            image2annotation (Dict): a dictionary that maps a sample file path to its corresponding annotation
+        """        
         # read the image files
         img_files = sorted([os.path.join(self.root_dir, img) for img in os.listdir(self.root_dir)])
 
         # make sure the keys match the image files
-        keys = sorted([k if os.path.isabs(k) else os.path.join(self.root_dir, k) for k in list(img_annotations.keys())])
-        
+        keys = sorted([k if os.path.isabs(k) else os.path.join(self.root_dir, k) for k in list(image2annotation.keys())])
+
+                
         if keys != img_files:
             raise ValueError(f"Please make sure to pass an annotation to all files in the root directory.")
+
+        k, val = image2annotation.items()[0]
+
+        if not isinstance(val, (Tuple, List, callable)):
+            raise TypeError(f"the dataset expects the img2ann mapping to map sample paths to either Tuples, List or callable objects. Found: {val} of type: {type(val)}")
+
+        annotation_callable = False
+
+        if isinstance(val, callable):
+            try:
+                ann = val(k) 
+                annotation_callable = True
+
+            except Exception as e:
+                raise ValueError(f"calling the callable with a sample file path raised the following error: {e}")
+        else:
+            ann = copy(val)
+
+        if  not isinstance(ann, (Tuple, List)):
+            raise TypeError(f"The img2ann includes a callable object that does not return a tuple or a list. The callabel returns an object of type: {type(ann)}")
+            
+        if len(ann) not in [2, 3]:
+            raise ValueError("The img2ann mapping returns an iterable of length different from 2 and 4")
+        
+        if len(ann) == 2:
+            self._verify_single_annotation(annotation=val)
+            return annotation_callable
+        
+        # first raise a warning letting the user know that passing only the annotation would require laoding the samples to extract their shapes
+        # which is preferably avoided
+        warnings.warn(message=f"not passing the image shape requires loading all the samples !!")    
+        return annotation_callable
+
+            
+    def __set_img_annotations(self, 
+                               image2annotation: Dict,
+                               current_format: Optional[str], 
+                               convert: callable):
+
+        # let's verify that the mapping corresponds to the expected format
+        ann_callable = self.__verify_img_annotation_map(image2annotation=image2annotation)
+
+        # copy the mapping to avoid modifying the input
+        img_annotations = image2annotation.copy()
 
         # verify the annotations
         _, label_type = self._verify_single_annotation(img_annotations.items()[0][1], label_type=None)
         
-        for key, ann in img_annotations.items():
-            flattened_ann, _ = self._verify_single_annotation(annotation=ann, label_type=label_type)
+        for key, annotation in img_annotations.items():
+            ann = annotation(key) if ann_callable else annotation
+            flattened_ann, _ = self._verify_single_annotation(annotation=ann[:2], label_type=label_type)
             img_annotations[key] = flattened_ann
 
         # annotations verified !! final step: convert to the target format
         for img_path, img_ann in img_annotations.items():
             
             # load the image shape
-            img_shape = (np.asarray(self.load_sample(img_path)).shape)[:2], # self.load_sample return a PIL.Image, convert to numpy array whose shape would be [w, h, 3]
-            cls_ann, bbox_ann = img_ann
+            if len(img_ann) == 3:
+                cls_ann, bbox_ann, img_shape = img_ann
+            else:
+                img_shape = (np.asarray(self.load_sample(img_path)).shape)[:2], # self.load_sample return a PIL.Image, convert to numpy array of shape [w, h, 3]
+                cls_ann, bbox_ann = img_ann
 
             if current_format is not None:
                 bbox_ann = [np.asarray(au.convert_annotations(annotation=b, 
                                                     current_format=current_format,
-                                                    target_format=self.target_format) 
+                                                    target_format=self.target_format, 
+                                                    img_shape=img_shape) 
                                                     for b in bbox_ann)]
             else:
                 try:
                     bbox_ann = [convert(b, img_shape=img_shape) for b in bbox_ann]
                 except:
                     try:
-                        bbox_ann = [convert(b, img_shape=img_shape) for b in bbox_ann]
+                        bbox_ann = [convert(b) for b in bbox_ann]
                     except:
                         raise ValueError(f"the 'convert' callable should accept only the bounding box as an input or bbox + the shape of the image as a keyword argument: 'img_shape'")
 
             img_annotations[img_path] = [cls_ann, bbox_ann]
 
         return img_annotations
-
-
-    def __read_img_annotations(self, 
-                                img_path_2_img_ann: Dict,
-                                read_ann: callable, 
-                                current_format: str, 
-                                convert: callable):
-        # read the image files
-        img_files = sorted([os.path.join(self.root_dir, img) for img in os.listdir(self.root_dir)])
-
-        # make sure the keys match the image files
-        keys = sorted([k if os.path.isabs(k) else os.path.join(self.root_dir, k) for k in list(img_path_2_img_ann.keys())])
-        
-        if keys != img_files:
-            raise ValueError(f"Please make sure to pass an annotation to all files in the root directory.")
-
-        # build a map between the image paths and their corresponding 
-        img_anns = {img_path: read_ann(ann) for img_path, ann in img_path_2_img_ann.items()}
-
-        return self.__set_img_annotations(img_annotations=img_anns, current_format=current_format, convert=convert)
 
 
     def __set_cls_indices_str(self, add_background_label:bool):
@@ -196,10 +235,8 @@ class ObjectDataset(Dataset, ABC):
     def __init__(self,
                  root_dir: Union[str, Path],
 
-                 img_annotations: Optional[Dict],
-                 img2ann_dict: Optional[Dict], 
-                 read_ann: Optional[callable],
-                 
+                 image2annotation: Dict,
+        
                  target_format: str,
                  current_format: Optional[str],
                  convert: Optional[callable]=None,
@@ -230,23 +267,18 @@ class ObjectDataset(Dataset, ABC):
         self.target_format = target_format
 
         ######################### annotation verification #########################
-        if img_annotations is None and (img2ann_dict is None or read_ann is None):
-            raise ValueError(f"Make sure to pass either 'img_annotations' argument or both of 'img2ann_dict' and 'read_ann'")
+        self.annotations = self.__set_img_annotations(image2annotation, 
+                                                        current_format, 
+                                                        convert)
 
-        if img_annotations is not None:
-            self.annotations = self.__set_img_annotations(img_annotations, 
-                                                          current_format, 
-                                                          convert)
-        else:
-            self.annotations = self.__read_img_annotations()
-
+        ######################### class conversion #########################        
         self.idx2sample_path = dict(enumerate(sorted([os.path.join(self.root_dir, img) for img in os.listdir(self.root_dir)])))
 
-        # a dictionary that maps the original classes to their numerical indices (add more flexibility to the object)
+        # a dictionary that maps the original classes to their numerical indices (add more flexibility to the class)
         self.cls_2_cls_index = None 
 
         # if the user passes the background label, then save it, otherwise it will be automatically deduced
-        self.background_cls_index = background_label 
+        self.background_cls_index = background_label # if the user does not explicitly pass the 'background_label' argument, the self.background_cls_index will field will be set to None
         # a set of all class indices
         self.all_classes = set()
 

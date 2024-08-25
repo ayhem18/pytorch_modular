@@ -152,11 +152,11 @@ def unzip_data_file(data_zip_path: Union[Path, str],
     return unzipped_dir
 
 
-def dataset_portion(directory_with_classes: Union[str, Path], 
-                    destination_directory: Union[str, Path] = None,
-                    portion: Union[int, float] = 0.1, 
-                    copy: bool = False, 
-                    seed: int = 69) -> Union[str, Path]:
+def classification_ds_partition(directory_with_classes: Union[str, Path], 
+                        destination_directory: Union[str, Path] = None,
+                        portion: Union[int, float] = 0.1, 
+                        copy: bool = False, 
+                        seed: int = 69) -> Union[str, Path]:
     
     # make sure the portion is a float between '0' and '1'
     if not (isinstance(portion, float) and 1 >= portion > 0):
@@ -200,6 +200,32 @@ def dataset_portion(directory_with_classes: Union[str, Path],
         
     return Path(des)
 
+
+def directory_partition(src_dir: Union[str, Path], 
+                        des_dir: Union[str, Path],
+                        portion: Union[int, float] = 0.1, 
+                        copy: bool = False, 
+                        seed: int = 69) -> Union[str, Path]:
+
+    # make sure the portion is a float between '0' and '1'
+    if not (isinstance(portion, float) and 1 >= portion > 0):
+        raise ValueError(f"The portion of the dataset is expected to be a number from '0' to '1'.Found: {portion}")
+
+    src_dir = process_path(src_dir, dir_ok=True, file_ok=False)
+    # process the path
+    des_dir = process_path(des_dir, file_ok=False, dir_ok=True)    
+
+    # sorting the files ensures the reproducibility of the function across different systems (since os.listdir is not uniform across different platforms)
+    src_dir_files = np.asarray(sorted(os.listdir(src_dir)))
+
+    # split the data 
+    _, files_move = train_test_split(src_dir_files, test_size=portion, random_state=seed)
+    # define the criterion 
+    files_move = set(files_move.tolist())
+    
+    copy_directories(src_dir, des_dir, copy=copy, filter_directories=lambda f: f in files_move)
+        
+    return Path(des_dir)
 
 IMAGE_EXTENSIONS = ['.png', '.jpeg', '.jpg']
 
