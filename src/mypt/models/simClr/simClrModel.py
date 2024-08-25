@@ -88,7 +88,6 @@ class ResnetSimClr(SimClrModel):
                                            num_layers=num_fc_layers, 
                                            dropout=dropout)
 
-        self.flatten_layer = nn.Flatten()
 
 
 class AlexnetSimClr(SimClrModel):
@@ -115,5 +114,3 @@ class AlexnetSimClr(SimClrModel):
                                            in_features=in_features, 
                                            num_layers=num_fc_layers, 
                                            dropout=dropout)
-
-        self.flatten_layer = nn.Flatten()
