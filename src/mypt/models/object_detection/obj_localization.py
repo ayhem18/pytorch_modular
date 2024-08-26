@@ -50,7 +50,7 @@ class ObjectLocalizationModel(torch.torch.nn.Module):
         return self 
 
     def __call__(self, x: torch.Tensor):
-        return self.forward(x)[0]
+        return self.forward(x)
 
 
 class AlexnetObjectLocalization(ObjectLocalizationModel):
@@ -73,9 +73,9 @@ class AlexnetObjectLocalization(ObjectLocalizationModel):
         _, in_features = dim_analyser.analyse_dimensions(input_shape=(10,) + input_shape, net=torch.nn.Sequential(self.fe, torch.nn.Flatten()))
 
         # calculate the output of the
-        self.ph = ch.ExponentialClassifier(num_classes=self.num_classes + 5, # 5 represent 4 units for bounding box + 1 unit as an object indicator
+        self.head = ch.ExponentialClassifier(num_classes=self.num_classes + 5, # 5 represent 4 units for bounding box + 1 unit as an object indicator
                                            in_features=in_features, 
                                            num_layers=num_fc_layers, 
                                            dropout=dropout)
 
-
+        self.model = torch.nn.Sequential(self.fe, self.flatten_layer, self.head)

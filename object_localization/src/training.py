@@ -1,6 +1,6 @@
-import wandb, torch, os, math
+import wandb, torch, os
 
-import torchvision.transforms as tr
+import torchvision.transforms as tr, albumentations as A
 
 from time import sleep
 from typing import Union, Optional, Tuple, List
@@ -9,18 +9,18 @@ from pathlib import Path
 from tqdm import tqdm
 from torch.optim.sgd import SGD
 from torch.utils.data import DataLoader
+from functools import partial
 
-# from torchlars import LARS # the authors of the paper used this optimizer
-
-from mypt.losses.simClrLoss import SimClrLoss 
-
+from mypt.losses.object_detection.object_localization import ObjectLocalizationLoss
+from mypt.data.datasets.obj_detect_loc.object_localization import ObjectLocalizationDs
 from mypt.data.dataloaders.standard_dataloaders import initialize_train_dataloader, initialize_val_dataloader
 from mypt.code_utilities import pytorch_utilities as pu, directories_and_files as dirf
 from mypt.schedulers.annealing_lr import AnnealingLR
-from mypt.models.simClr.simClrModel import SimClrModel
+from mypt.models.object_detection.obj_localization import ObjectLocalizationModel
+from mypt.code_utilities import annotation_utilites as au
 
 from .train_per_epoch import train_per_epoch, validation_per_epoch
-
+from .data_preparation import extract_annotation_from_xml, get_annotation_file_path
 
 _DEFAULT_DATA_AUGS = [
     tr.RandomHorizontalFlip(p=1), 
@@ -36,43 +36,81 @@ _DEFAULT_DATA_AUGS = [
 _UNIFORM_DATA_AUGS = [tr.Normalize(mean=[0.485, 0.456, 0.406], 
                                    std=[0.229, 0.224, 0.225])] 
                     
+# _AUGS = [A.RandomSizedBBoxSafeCrop(*output_shape, p=1), A.ColorJitter(p=1)]
 
-_WANDB_PROJECT_NAME = "SimClr"
+_WANDB_PROJECT_NAME = "ObjLoc"
 
 
-PREFERABLE_BATCH_SIZE = 1024
+def img_2_annotation(file_path: Union[str, Path], ann_folder: Union[str, Path]):
+    ann_file = os.path.join(ann_folder, get_annotation_file_path(file_path))
+
+    if not os.path.exists(ann_file):
+        # this means that the sample is a background sample
+        return [
+            ['background'], 
+            [au.DEFAULT_BBOX_BY_FORMAT[au.PASCAL_VOC]]
+                ]    
+
+    cls, bbox, img_shape = extract_annotation_from_xml(ann_file)
+    if len(bbox) != 1:
+        bbox = [bbox]
+
+    if not isinstance(cls, (List, Tuple)):
+        cls = [cls]
+
+    return cls, bbox, img_shape
 
 
 def _set_data(train_data_folder: Union[str, Path],
              val_data_folder: Optional[Union[str, Path]],
+             annotation_folder: Union[str, Path],
              batch_size:int,
              output_shape: Tuple[int, int],
              seed:int=69) -> Tuple[DataLoader, Optional[DataLoader]]:
     
-    train_data_folder = dirf.process_path(train_data_folder, 
-                                          dir_ok=True, 
-                                          file_ok=False, 
-                                          )
+    train_data_folder = dirf.process_path(train_data_folder, dir_ok=True, file_ok=False, 
+                                    condition=lambda d: all([os.path.splitext(f)[-1].lower() in dirf.IMAGE_EXTENSIONS for f in os.listdir(d)]), # basically make sure that all files are either images of .xml files
+                                    error_message=f'Make sure the directory contains only image data'
+                                    )
 
-    train_ds = Food101Wrapper(root_dir=train_data_folder, 
-                                output_shape=output_shape,
-                                augs_per_sample=2, 
-                                sampled_data_augs=_DEFAULT_DATA_AUGS,
-                                uniform_data_augs=_UNIFORM_DATA_AUGS,
-                                train=True)
+
+    annotation_folder = dirf.process_path(annotation_folder, dir_ok=True, file_ok=False, 
+                                    condition=lambda d: all([os.path.splitext(f)[-1].lower() == '.xml' for f in os.listdir(d)]), # basically make sure that all files are either images of .xml files
+                                    error_message=f'Make sure the directory contains only xml files'
+                                    )
+
+    train_ds = ObjectLocalizationDs(root_dir=train_data_folder, 
+                                    img_augs=[A.RandomSizedBBoxSafeCrop(*output_shape, p=1), A.ColorJitter(p=1)],
+
+                                    output_shape=output_shape,
+                                    compact=True,
+
+                                    image2annotation=partial(img_2_annotation, ann_folder=annotation_folder),
+
+                                    target_format=au.ALBUMENTATIONS,
+                                    current_format=au.PASCAL_VOC,
+                                    background_label='background', 
+                                    )
+
 
     if val_data_folder is not None:
-        val_data_folder = dirf.process_path(val_data_folder, 
-                                          dir_ok=True, 
-                                          file_ok=False, 
-                                          )
+        val_data_folder = dirf.process_path(val_data_folder, dir_ok=True, file_ok=False, 
+                                        condition=lambda d: all([os.path.splitext(f)[-1].lower() in dirf.IMAGE_EXTENSIONS for f in os.listdir(d)]), # basically make sure that all files are either images of .xml files
+                                        error_message=f'Make sure the directory contains only image data'
+                                        )
 
-        val_ds = Food101Wrapper(root_dir=val_data_folder, 
-                                    output_shape=output_shape,
-                                    augs_per_sample=2, 
-                                    sampled_data_augs=_DEFAULT_DATA_AUGS,
-                                    uniform_data_augs=_UNIFORM_DATA_AUGS,
-                                    train=False)
+        val_ds = ObjectLocalizationDs(root_dir=val_data_folder, 
+                                        img_augs=[],
+
+                                        output_shape=output_shape,
+                                        compact=True,
+
+                                        image2annotation=partial(img_2_annotation, ann_folder=annotation_folder),
+
+                                        target_format=au.ALBUMENTATIONS,
+                                        current_format=au.PASCAL_VOC,
+                                        background_label='background', 
+                                        )
 
     else:
         val_ds = None
@@ -97,7 +135,7 @@ def _set_data(train_data_folder: Union[str, Path],
     return train_dl, val_dl
 
 
-def _set_optimizer(model: SimClrModel, 
+def _set_optimizer(model: ObjectLocalizationModel, 
                   lrs: Union[Tuple[float], float], 
                   num_epochs: int) -> Tuple[SGD, AnnealingLR]:
 
@@ -115,7 +153,7 @@ def _set_optimizer(model: SimClrModel,
     # set the optimizer
     optimizer = SGD(params=[{"params": model.fe.parameters(), "lr": lr1}, # using different learning rates with different components of the model 
                             {"params": model.flatten_layer.parameters(), "lr": lr1},
-                            {"params": model.ph.parameters(), "lr": lr2}
+                            {"params": model.head.parameters(), "lr": lr2}
                             ])
 
     lr_scheduler = AnnealingLR(optimizer=optimizer, 
@@ -125,24 +163,15 @@ def _set_optimizer(model: SimClrModel,
 
     return optimizer, lr_scheduler
 
-# def _set_optimizer(model: SimClrModel,
-#                    learning_rate: float) -> LARS:
-#     # create the base optimizer 
-#     base_optimizer = SGD(model.parameters(), 
-#                          lr=learning_rate, 
-#                          weight_decay=10**-6 # as per the paper's recommendations
-#                         )
 
-#     optimizer = LARS(optimizer=base_optimizer, eps=10**-8, trust_coef=10**-3)
-#     return optimizer
 
 def _run(
-        model:SimClrModel,
+        model:ObjectLocalizationModel,
         
         train_dl: DataLoader,
         val_dl: Optional[DataLoader],
 
-        loss_obj: SimClrLoss,
+        loss_obj: ObjectLocalizationLoss,
         optimizer: torch.optim.Optimizer, 
         lr_scheduler: Optional[torch.optim.lr_scheduler.LRScheduler], 
         
@@ -155,7 +184,6 @@ def _run(
         device: str,
 
         use_wandb:bool=True,
-        batch_stats:bool=False
         ):
 
     # process the checkpoint directory
@@ -177,7 +205,6 @@ def _run(
                         optimizer=optimizer,
                         scheduler=lr_scheduler,
                         use_wandb=use_wandb,
-                        batch_stats=batch_stats,
                         accumulate_grads=accumulate_grad)
 
         print(f"epoch {epoch_index}: train loss: {epoch_train_loss}")
@@ -205,7 +232,6 @@ def _run(
                                             device=device,
                                             log_per_batch=0.2,
                                             use_wandb=use_wandb,
-                                            batch_stats=batch_stats
                                             )
             
             print(f"epoch {epoch_index}: validation loss: {epoch_val_loss}")
@@ -230,24 +256,24 @@ def _run(
     return os.path.join(ckpnt_dir, ckpnt_file_name)
 
 
-def run_pipeline(model: SimClrModel, 
+def run_pipeline(model: ObjectLocalizationModel, 
           train_data_folder:Union[str, Path],          
           val_data_folder:Optional[Union[str, Path]],
+
+          annotation_folder: Union[str, Path],
+
           output_shape:Tuple[int, int], 
 
           num_epochs: int, 
           batch_size: int,
-
-        #   initial_lr: float,  
+        
           learning_rates: Union[Tuple[float, float], float],
-          temperature: float,
 
           ckpnt_dir: Union[str, Path],
           val_per_epoch: int = 3,
           seed:int = 69,
           run_name: str = 'sim_clr_run',
           use_wandb: bool = True,
-          batch_stats:bool=False
           ):    
 
     if use_wandb:
@@ -258,29 +284,17 @@ def run_pipeline(model: SimClrModel,
     # get the default device
     device = pu.get_default_device()
 
-    
-    # set the loss object    
-    loss_obj = SimClrLoss(temperature=temperature)
+
+    loss_obj = ObjectLocalizationLoss()
 
     # DATA: 
     train_dl, val_dl = _set_data(train_data_folder=train_data_folder,
-                                val_data_folder=val_data_folder, 
+                                val_data_folder=val_data_folder,
+                                annotation_folder=annotation_folder, 
                                 output_shape=output_shape,
                                 batch_size=batch_size, 
                                 seed=seed)
-
-    # dealing with gradient accumulation
-    accumulate_grads_factor = PREFERABLE_BATCH_SIZE / batch_size 
-
-    # scale the learning rate by the gradient accumulation factor
-    if isinstance(learning_rates, (Tuple, List)):
-        learning_rates = [lr / accumulate_grads_factor for lr in learning_rates]
-    else:
-        learning_rates /= accumulate_grads_factor
     
-    # make sure to convert it to an integer
-    accumulate_grads_factor = int(math.ceil(accumulate_grads_factor))
-
     # optimizer = _set_optimizer(model=model, learning_rate=initial_lr)
     optimizer, lr_scheduler = _set_optimizer(model=model, lrs=learning_rates, num_epochs=num_epochs)
 
@@ -294,14 +308,13 @@ def run_pipeline(model: SimClrModel,
                 optimizer=optimizer,
                 lr_scheduler=lr_scheduler,
                 
-                accumulate_grad=accumulate_grads_factor, # make sure to add the gradient accumulation factor
+                accumulate_grad=1, # make sure to add the gradient accumulation factor
 
                 ckpnt_dir=ckpnt_dir,
                 num_epochs=num_epochs,
                 val_per_epoch=val_per_epoch,
                 device=device,
                 use_wandb=use_wandb, 
-                batch_stats=batch_stats
                 )
 
     # this piece of code is taken from the fairSeq repo (by the Facebook AI research team) as recommmended on the Pytorch forum:
@@ -330,14 +343,12 @@ def run_pipeline(model: SimClrModel,
 
             # initial_lr=initial_lr,  
             learning_rates=learning_rates,
-            temperature=temperature,
 
             ckpnt_dir=ckpnt_dir,
             val_per_epoch=val_per_epoch,
             seed=seed,
             run_name=run_name, 
             use_wandb=use_wandb, 
-            batch_stats=batch_stats           
             )
 
     

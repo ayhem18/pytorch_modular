@@ -58,9 +58,12 @@ class ObjectLocalizationDs(ObjectDataset):
             else:
                 self.augmentations[-1] = A.Resize(output_shape[0], output_shape[1])
 
+        else:
+            self.augmentations = [A.Resize(*output_shape, p=1)]
+
         if isinstance(self.augmentations[-1], tr.ToTensor):
             self.augmentations.pop()
-        
+
         self.final_aug = A.Compose(self.augmentations, A.BboxParams(format=target_format, 
                                                                     label_fields=['cls_labels'] # make sure to pass a list !!!
                                                                     ))        
@@ -74,15 +77,15 @@ class ObjectLocalizationDs(ObjectDataset):
                                         ]:
         # load the sample
         sample_path = self.idx2sample_path[index]
-        sample = np.asarray(self.load_sample(sample_path).copy()) # using albumentations requires the input to a numpy array
+        img = np.asarray(self.load_sample(sample_path).copy()) # albumentations requires the input to a numpy array
         # fetch the bounding boxes and the class labels
-        sample_cls, sample_bbox = self.annotations[sample_path]
+        cls_labels, bboxes = self.annotations[sample_path]
 
-        if len(sample_cls) > 1 or len(sample_bbox) > 1:
+        if len(cls_labels) > 1 or len(bboxes) > 1:
             raise ValueError(f"found a sample with more than one cls or bounding box !!!")
 
         # pass the sample through the final augmentation
-        transform = self.final_aug(image=sample, bboxes=sample_bbox, cls_labels=sample_cls)
+        transform = self.final_aug(image=img, bboxes=bboxes, cls_labels=cls_labels)
 
         # fetch the labels after augmentations
         img, cls_labels, bboxes = transform['image'], transform['cls_labels'][0], transform['bboxes'][0]
@@ -107,5 +110,5 @@ class ObjectLocalizationDs(ObjectDataset):
             return final_output
 
         # self.compact set to False implies that the object indicator, the bboxes and the cls labels will be returned as 3 seperated values
-        return img, torch.tensor(object_indicator), torch.tensor(bboxes), torch.tensor(cls_labels[0])  
+        return img, torch.tensor(object_indicator), torch.tensor(bboxes), torch.tensor(cls_labels)  
 
