@@ -26,14 +26,14 @@ class ObjectDataset(Dataset, ABC):
     
     
     @classmethod
-    def _verify_single_annotation(cls, annotation: my_iter, label_type: Union[str, type] = None) -> str:
+    def _verify_single_label(cls, annotation: my_iter, label_type: Optional[Union[str, type]]=None) -> str:
         if not isinstance(annotation, (Tuple, List)) or len(annotation) != 2:
             raise ValueError(f"Make sure each annotation is either a list of a tuple of length 2. Found type: {type(annotation)} and length: {len(annotation)}")
 
         # the first element should represent the class labels 
         # the second element should represent the bounding boxes
         if not (isinstance(annotation[0], (Tuple, List)) and isinstance(annotation[1], (Tuple, List))): 
-            raise TypeError(f"The class and bounding boxes must be passed as iterables of the same length. Found: {type(annotation[0])} and {type(annotation[1])}")
+            raise TypeError(f"The class and bounding boxes must be passed as iterables of the same length. Found: classes as {type(annotation[0])}, bboxes as {type(annotation[1])}")
             
         if len(annotation[0]) != len(annotation[1]):
             raise ValueError(f"The class and bounding boxes must be passed as iterables of the same length. Found: {len(annotation[0])} and {len(annotation[1])}")
@@ -56,7 +56,7 @@ class ObjectDataset(Dataset, ABC):
                 if not isinstance(c, label_type):
                     raise ValueError(f"make sure all class labels are of the same type")
             
-        ann = [au.verify_object_detection_annotation(a) for a in ann]
+        ann = [au.verify_object_detection_bbox(a) for a in ann]
         return ann, label_type
 
     @classmethod
@@ -71,7 +71,7 @@ class ObjectDataset(Dataset, ABC):
             return img.convert("RGB")
     
 
-    def __verify_img_annotation_map(self, image2annotation: Dict):
+    def __verify_img_annotation_map(self, image2annotation: Union[Dict, callable]):
         """
         The keys have to be sample file paths
         The values can be either: 
@@ -84,84 +84,94 @@ class ObjectDataset(Dataset, ABC):
         Args:
             image2annotation (Dict): a dictionary that maps a sample file path to its corresponding annotation
         """        
-        # read the image files
-        img_files = sorted([os.path.join(self.root_dir, img) for img in os.listdir(self.root_dir)])
 
-        # make sure the keys match the image files
-        keys = sorted([k if os.path.isabs(k) else os.path.join(self.root_dir, k) for k in list(image2annotation.keys())])
+        if not (isinstance(image2annotation, Dict) or callable(image2annotation)):
+            raise TypeError(f"the dataset expects the image 2 annotation mapping to be either a Dict or a callable object. Found: {type(image2annotation)}")
 
-                
-        if keys != img_files:
-            raise ValueError(f"Please make sure to pass an annotation to all files in the root directory.")
+        is_callable = False
 
-        k, val = image2annotation.items()[0]
+        if isinstance(image2annotation, Dict):
+            # read the image files
+            img_files = sorted([os.path.join(self.root_dir, img) for img in os.listdir(self.root_dir)])
 
-        if not isinstance(val, (Tuple, List, callable)):
-            raise TypeError(f"the dataset expects the img2ann mapping to map sample paths to either Tuples, List or callable objects. Found: {val} of type: {type(val)}")
+            # make sure the keys match the image files
+            keys = sorted([k if os.path.isabs(k) else os.path.join(self.root_dir, k) for k in list(image2annotation.keys())])
+                    
+            if keys != img_files:
+                raise ValueError(f"Please make sure to pass an annotation to all files in the root directory.")
 
-        annotation_callable = False
+            k, val = image2annotation.items()[0]
 
-        if isinstance(val, callable):
+        else:
+            is_callable = True
+            k = os.path.join(self.root_dir, os.listdir(self.root_dir)[0])
             try:
-                ann = val(k) 
-                annotation_callable = True
-
+                val = image2annotation(k)
             except Exception as e:
                 raise ValueError(f"calling the callable with a sample file path raised the following error: {e}")
-        else:
-            ann = copy(val)
+
+        ann = copy(val)
 
         if  not isinstance(ann, (Tuple, List)):
-            raise TypeError(f"The img2ann includes a callable object that does not return a tuple or a list. The callabel returns an object of type: {type(ann)}")
+            raise TypeError(f"The img2ann includes a callable object that does not return a tuple or a list. The callable returns an object of type: {type(ann)}")
             
         if len(ann) not in [2, 3]:
-            raise ValueError("The img2ann mapping returns an iterable of length different from 2 and 4")
+            raise ValueError(f"The img2ann mapping returns an iterable of length different from 2 and 3: {ann}")
         
-        if len(ann) == 2:
-            self._verify_single_annotation(annotation=val)
-            return annotation_callable
-        
-        # first raise a warning letting the user know that passing only the annotation would require laoding the samples to extract their shapes
-        # which is preferably avoided
-        warnings.warn(message=f"not passing the image shape requires loading all the samples !!")    
-        return annotation_callable
+        self._verify_single_label(annotation=val[:2])
 
+        if len(val) == 2:
+            # first raise a warning letting the user know that passing only the annotation would require laoding the samples to extract their shapes
+            # which is preferably avoided
+            warnings.warn(message=f"not passing the image shape requires loading all the samples !!")    
+
+        return is_callable
             
     def __set_img_annotations(self, 
-                               image2annotation: Dict,
+                               image2annotation: Union[Dict, callable],
                                current_format: Optional[str], 
                                convert: callable):
 
         # let's verify that the mapping corresponds to the expected format
-        ann_callable = self.__verify_img_annotation_map(image2annotation=image2annotation)
+        is_callable = self.__verify_img_annotation_map(image2annotation=image2annotation)
 
         # copy the mapping to avoid modifying the input
-        img_annotations = image2annotation.copy()
+        if is_callable:
+            # build a dictionary between the sample path and its annotation
+            img_files = [os.path.join(self.root_dir, img) for img in os.listdir(self.root_dir)]
+            img_annotations = {f: image2annotation(f) for f in img_files}
+        else:
+            img_annotations = image2annotation.copy()
 
-        # verify the annotations
-        _, label_type = self._verify_single_annotation(img_annotations.items()[0][1], label_type=None)
+        # since dict.items() method is not subscriptable, to get a random element, one needs to convert the entire dictionary either to a list or an iterator
+        # which is computationally inefficient
         
         for key, annotation in img_annotations.items():
-            ann = annotation(key) if ann_callable else annotation
-            flattened_ann, _ = self._verify_single_annotation(annotation=ann[:2], label_type=label_type)
-            img_annotations[key] = flattened_ann
+            _, cls_label_type = self._verify_single_label(annotation=annotation[:2])
+            break # breaking after one iteration, as only the one label type is needed
+        
+        for key, annotation in img_annotations.items():
+            flattened_ann, _ = self._verify_single_label(annotation=annotation[:2], label_type=cls_label_type)
+            img_annotations[key] = [annotation[0], flattened_ann] + list(annotation[2:])
 
         # annotations verified !! final step: convert to the target format
         for img_path, img_ann in img_annotations.items():
             
-            # load the image shape
             if len(img_ann) == 3:
+                # load the image shape  
                 cls_ann, bbox_ann, img_shape = img_ann
             else:
-                img_shape = (np.asarray(self.load_sample(img_path)).shape)[:2], # self.load_sample return a PIL.Image, convert to numpy array of shape [w, h, 3]
+                img_shape = (np.asarray(self.load_sample(img_path)).shape)[:2] # self.load_sample return a PIL.Image, convert to numpy array of shape [w, h, 3]
                 cls_ann, bbox_ann = img_ann
 
             if current_format is not None:
-                bbox_ann = [np.asarray(au.convert_annotations(annotation=b, 
+                # the bbox annotation supposedly contains the bounding box for each object in the image
+                # convert each bounding box to the target format
+                bbox_ann = [au.convert_bbox_annotation(annotation=b, 
                                                     current_format=current_format,
                                                     target_format=self.target_format, 
                                                     img_shape=img_shape) 
-                                                    for b in bbox_ann)]
+                                                    for b in bbox_ann]
             else:
                 try:
                     bbox_ann = [convert(b, img_shape=img_shape) for b in bbox_ann]
@@ -176,72 +186,69 @@ class ObjectDataset(Dataset, ABC):
         return img_annotations
 
 
-    def __set_cls_indices_str(self, add_background_label:bool):
-        # since the labels are originally provided as strings, we will simply assign 0 to the background class 
-        # and 1 + for other classes
-        self.background_cls_index = 0
-
+    def __set_cls_indices_str(self, background_label: str):        
+        # save all the classes provided by the data
         for _, v in self.annotations.items():
             cls_ann, _ = v
             self.all_classes.update([c.lower() for c in cls_ann])
+
+        # the background label is provided, so classes will be associated with their rank (lexicographically)
+        self.cls_2_cls_index = dict([(c, i) for i, c in enumerate(sorted(list(self.all_classes)), start=0)])
+        self.background_cls_index = self.cls_2_cls_index[background_label]
         
-        self.cls_2_cls_index = dict([(c, i) for i, c in enumerate(sorted(list(self.all_classes)), start=1)])
+        # at this point self.cls_2_cls_index contains all classes and their indices
+        # all_classes should save the numerical indices in all cases 
+        self.all_classes = set([v for _, v in self.cls_2_cls_index.items() if v != self.background_cls_index])
 
         # convert to indices
         for k, v in self.annotations.items():
             cls_ann, bbox_ann = v
-            cls_ann = [self.cls_2_cls_index[c] for c in cls_ann]
             
             if len(cls_ann) == 0:
-                if add_background_label:
+                if background_label is None:
                     cls_ann = [self.background_cls_index]
-                    bbox_ann = [[0, 0, 0, 0]]
+                    bbox_ann = [au.DEFAULT_BBOX_BY_FORMAT[self.target_format]]
                 else:
-                    raise ValueError(f"The 'add_background_label' is set to False while some images are not associated with cls labels. Either make sure to have cls labels for each image or set 'add_background_label' to True")
-
-            self.annotations[k] = cls_ann, bbox_ann
-
-        # all_classes should save the numerical indices in all cases 
-        self.all_classes = set([self.cls_2_cls_index[c] for c in self.all_classes])
-
-        if self.background_cls_index not in self.all_classes and add_background_label:
-            self.all_classes.add(self.background_cls_index)
+                    raise ValueError(f"There is a sample without class labels while the 'background_label' argument is passed")
+                
+                self.annotations[k] = cls_ann, bbox_ann
 
 
-    def __set_cls_indices_int(self, add_background_label:bool):
+
+    def __set_cls_indices_int(self, background_label: Optional[int]=None):
         for _, v in self.annotations.items():
             cls_ann, _ = v
             self.all_classes.update(cls_ann)
 
-        # since the classes are initially provided as indices, assign the background class either 0 or the last number + 1 (if 0 is already occupied)
-        self.background_cls_index = max(self.all_classes) + 1 if 0 in self.all_classes else 0  
+        self.cls_2_cls_index = dict([(c, i) for i, c in enumerate(sorted(list(self.all_classes)), start=0)])
+        self.background_cls_index = self.cls_2_cls_index[background_label]
 
-        if add_background_label and self.background_cls_index not in self.all_classes:
-            self.all_classes.add(self.background_cls_index)
+        # all_classes should save the indices and not the labels themselves
+        self.all_classes = set([v for _, v in self.cls_2_cls_index.items() if v != self.background_cls_index])
 
         for k, v in self.annotations.items():
-            if len(cls_ann) == 0:
-                if add_background_label:
-                    cls_ann = [self.background_cls_index]
-                    bbox_ann = [[0, 0, 0, 0]]
-                    self.annotations[k] = cls_ann, bbox_ann
-                else:
-                    raise ValueError(f"The 'add_background_label' is set to False while some images are not associated with cls labels. Either make sure to have cls labels for each image or set 'add_background_label' to True")
+            cls_ann, _ = v
 
-        # the final step here is to map the classes to the indices
-        self.cls_2_cls_index = dict([(c, i) for i, c in enumerate(sorted(list(self.all_classes)), start=0)])
+            if len(cls_ann) == 0:
+                if background_label is None:
+                    cls_ann = [self.background_cls_index]
+                    bbox_ann = [au.DEFAULT_BBOX_BY_FORMAT[self.target_format]]
+                else:
+                    raise ValueError(f"There is a sample without class labels while the 'background_label' argument is passed")
+
+                self.annotations[k] = cls_ann, bbox_ann 
 
 
     def __init__(self,
                  root_dir: Union[str, Path],
 
-                 image2annotation: Dict,
+                 image2annotation: Union[Dict, callable],
         
                  target_format: str,
                  current_format: Optional[str],
-                 convert: Optional[callable]=None,
+                 background_label:Union[int, str],
 
-                 background_label:Union[int, str]=None,
+                 convert: Optional[callable]=None,
                  image_extensions: Optional[List[str]]=None
                 ) -> None:
         # init the parent class
@@ -255,6 +262,8 @@ class ObjectDataset(Dataset, ABC):
                         file_ok=False,
                         condition=lambda d: dirf.image_directory(d, image_extensions=image_extensions),
                         error_message=f'the directory is expected to contain only image files')
+
+        self.data_count = len(os.listdir(root_dir))
 
         ######################### annotation formats #########################
         # the target format must be supported as it will be passed to the augmentations 
@@ -283,18 +292,23 @@ class ObjectDataset(Dataset, ABC):
         self.all_classes = set()
 
         # extract the type of initial classes: string or integers
-        _, label_type = self._verify_single_annotation(self.annotations.items()[0][1], label_type=None)
+        for _, annotation in self.annotations.items():
+            _, cls_label_type = self._verify_single_label(annotation=annotation[:2])
+            break # breaking after one iteration, as only the one label type is needed
 
-        if label_type in [str, 'str']:
-            self.__set_cls_indices_str(add_background_label=background_label is None)
+        if cls_label_type in [str, 'str']:
+            self.__set_cls_indices_str(background_label)
             return 
 
-        elif label_type in [int, 'int']:
-            self.__set_cls_indices_int(add_background_label=background_label is None)
+        elif cls_label_type in [int, 'int']:
+            self.__set_cls_indices_int(background_label)
             return
         
-        raise NotImplementedError(f"the current implementation supports only string or integer labels. Found another type: {label_type}")
+        raise NotImplementedError(f"the current implementation supports only string or integer labels. Found another type: {cls_label_type}")
     
+    def __len__(self) -> int:
+        return self.data_count
+
     @abstractmethod
     def __getitem__(self, index):
         pass

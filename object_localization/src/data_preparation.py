@@ -162,10 +162,20 @@ def prepare_data(data_folder: Union[str, Path], ann_folder: Optional[Union[str, 
     ann_folder = seperate_data(data_folder=data_folder, ann_folder=ann_folder)
     # 2. create the background class
     add_background_cls(data_folder=data_folder, ann_folder=ann_folder, num_samples=0.4,)
-    # 3. group the files by cls
+    # 3. group the files by cls: to guarantee a similar split for all classes
     group_data_by_cls(data_folder=data_folder)
     # 4. split the data into train and validation splits
     train_dir, val_dir = split_data_train_val(data_folder=data_folder, val_split=0.15)  
+
+    # flatten both the training and validation folders: required by the object localization dataset class
+    for c in os.listdir(train_dir):
+        c = os.path.join(train_dir, c)
+        dirf.copy_directories(c, train_dir, copy=False)
+
+    for c in os.listdir(val_dir):
+        c = os.path.join(val_dir, c)
+        dirf.copy_directories(c, val_dir, copy=False)
+
     return ann_folder, train_dir, val_dir
 
 

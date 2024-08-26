@@ -9,10 +9,10 @@ from torchvision import transforms as tr
 from pathlib import Path
 from typing import Union, Optional, Dict, List, Tuple
 
-
+from mypt.code_utilities import pytorch_utilities as pu
 from .abstract_ds import ObjectDataset
 
-class ObjectDetectionDs(ObjectDataset):
+class ObjectLocalizationDs(ObjectDataset):
 
     def __init__(self,
                  root_dir: Union[str, Path],
@@ -22,31 +22,30 @@ class ObjectDetectionDs(ObjectDataset):
 
                  compact: bool,
 
-                 img_annotations: Optional[Dict],
-                 img2ann_dict: Optional[Dict], 
-                 read_ann: Optional[callable],
-                 
+                 image2annotation: Union[Dict, callable],
+        
                  target_format: str,
                  current_format: Optional[str],
-                 convert: Optional[callable]=None,
 
-                 add_background_label:bool=False,
-                 image_extensions: Optional[List[str]]=None
+                 background_label:Union[int, str],
+                 
+                 convert: Optional[callable]=None,
+                 image_extensions: Optional[List[str]]=None,
+                 seed:int=69,
                 ) -> None:
 
         # init the parent class
         super().__init__(root_dir=root_dir,
-                    img_annotations=img_annotations,
-                    img2ann_dict=img2ann_dict, 
-                    read_ann=read_ann,
-                    
+                    image2annotation=image2annotation,                    
                     target_format=target_format,
                     current_format=current_format,
                     convert=convert,
 
-                    add_background_label=add_background_label,
+                    background_label=background_label,
                     image_extensions=image_extensions
                     )   
+
+        pu.seed_everything(seed=seed)
 
         self.augmentations = img_augs
 
@@ -62,7 +61,9 @@ class ObjectDetectionDs(ObjectDataset):
         if isinstance(self.augmentations[-1], tr.ToTensor):
             self.augmentations.pop()
         
-        self.final_aug = A.Compose(self.augmentations, A.BboxParams(format=target_format, label_fields='cls_labels'))        
+        self.final_aug = A.Compose(self.augmentations, A.BboxParams(format=target_format, 
+                                                                    label_fields=['cls_labels'] # make sure to pass a list !!!
+                                                                    ))        
 
         # this field determines whether to returns 
         self.compact = compact 
@@ -73,7 +74,7 @@ class ObjectDetectionDs(ObjectDataset):
                                         ]:
         # load the sample
         sample_path = self.idx2sample_path[index]
-        sample = self.load_sample(sample_path)
+        sample = np.asarray(self.load_sample(sample_path).copy()) # using albumentations requires the input to a numpy array
         # fetch the bounding boxes and the class labels
         sample_cls, sample_bbox = self.annotations[sample_path]
 
@@ -81,26 +82,26 @@ class ObjectDetectionDs(ObjectDataset):
             raise ValueError(f"found a sample with more than one cls or bounding box !!!")
 
         # pass the sample through the final augmentation
-        transform = self.final_aug(sample, bboxes=sample_bbox, cls_labels=sample_cls)
+        transform = self.final_aug(image=sample, bboxes=sample_bbox, cls_labels=sample_cls)
 
         # fetch the labels after augmentations
-        img, cls_labels, bboxes = transform['image'], transform['cls_labels'], transform['bboxes']
+        img, cls_labels, bboxes = transform['image'], transform['cls_labels'][0], transform['bboxes'][0]
 
         # convert the image to a torch tensor anyway
-        img = tr.ToTensor()(img)
+        img = tr.ToTensor()(img.copy())
 
         # after applying the augmentation and adjusting the bounding boxes accordingly
         # return the final labels: depends on self.compact
         
         # first the object indicator: a boolean flat indicating whether there is an object of interest on the image or not
-        object_indicator = int(cls_labels[0] != self.background_cls_index)
+        cls_label_index = self.cls_2_cls_index[cls_labels]
+        object_indicator = int(cls_label_index != self.background_cls_index)
     
         if self.compact:
             # one hot encode the label
-            cls_label_index = self.cls_2_cls_index[cls_labels[0]]
-            cls_label_one_hot = [int(i == cls_label_index) for i in len(self.all_classes)]
+            cls_label_one_hot = [int(i == cls_label_index) for i in self.all_classes]
             # concatenate everything together
-            final_label = [object_indicator] + (bboxes.tolist() if isinstance(bboxes, np.ndarray) else bboxes) + cls_label_one_hot
+            final_label = [object_indicator] + (bboxes.tolist() if isinstance(bboxes, np.ndarray) else list(bboxes)) + cls_label_one_hot
             # convert the compact label to tensor tensor
             final_output =  img, torch.Tensor(final_label)
             return final_output

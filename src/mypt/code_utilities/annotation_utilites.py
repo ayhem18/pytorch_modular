@@ -16,13 +16,17 @@ OBJ_DETECT_ANN_TYPE = List[Union[float, int]]
 COCO = 'coco'
 PASCAL_VOC = 'pascal_voc'
 YOLO = 'yolo'
-ALBUMENTATION = 'albumentation'
+ALBUMENTATIONS = 'albumentations'
 
-OBJ_DETECT_ANN_FORMATS = [COCO, PASCAL_VOC, YOLO, ALBUMENTATION]
+OBJ_DETECT_ANN_FORMATS = [COCO, PASCAL_VOC, YOLO, ALBUMENTATIONS]
+
+
+DEFAULT_BBOX_BY_FORMAT = {COCO: [0, 0, 1, 1], YOLO: [0, 0, 0.1, 0.1], PASCAL_VOC: [0, 0, 1, 1], ALBUMENTATIONS: [0.0, 0.0, 0.1, 0.1]}
+
 
 ######################################################## OBJECT DETECTION FORMAT VERIFICATION ########################################################
 
-def verify_object_detection_annotation(annotation) -> OBJ_DETECT_ANN_TYPE:
+def verify_object_detection_bbox(annotation) -> OBJ_DETECT_ANN_TYPE:
     # proceed with checking the annotations
     if len(annotation) not in [2, 4]:
         raise ValueError(f"The annotation is expected to be of length 2 or 4. Found: {len(annotation)}")
@@ -31,7 +35,7 @@ def verify_object_detection_annotation(annotation) -> OBJ_DETECT_ANN_TYPE:
         raise ValueError(f"found an annotation of size 2 whose elements are not iterables")
 
     # flatten the annotation 
-    flattened_ann = list(itertools.chain(*annotation)) 
+    flattened_ann = list(itertools.chain(*annotation)) if len(annotation) == 2 else annotation
     if len(flattened_ann) != 4:
         raise ValueError(f"Each bounding box annotation is expected to contain exactly 4 values. Found: {len(flattened_ann)}")
     
@@ -97,7 +101,7 @@ def _verify_coco_format(annotation: OBJ_DETECT_ANN_TYPE,
     return [x_min, y_min, w, h]
 
 
-def _verify_albumentation_format(annotation: OBJ_DETECT_ANN_TYPE, 
+def _verify_albumentations_format(annotation: OBJ_DETECT_ANN_TYPE, 
                              img_shape: IMG_SHAPE_TYPE, 
                              normalize: bool = True) -> OBJ_DETECT_ANN_TYPE:
     
@@ -108,7 +112,7 @@ def _verify_albumentation_format(annotation: OBJ_DETECT_ANN_TYPE,
     x_min, y_min, x_max, y_max = annotation
     
     if not all([isinstance(x, float) and 1 >= x >= 0 for x in annotation]):
-        raise ValueError(f"the albumentation format is supposed to be normalized")
+        raise ValueError(f"the albumentations format is supposed to be normalized")
     
     if not (x_min < x_max and x_min >= 0):
         raise ValueError(f"elements 1 and 3 must represent x_min and x_max")
@@ -130,7 +134,7 @@ def _verify_yolo_format(annotation: OBJ_DETECT_ANN_TYPE,
     x_center, y_center, w_n, h_n = annotation
     
     if not all([isinstance(x, float) and 1 >= x >= 0 for x in annotation]):
-        raise ValueError(f"the albumentation format is supposed to be normalized")
+        raise ValueError(f"the albumentations format is supposed to be normalized")
     
     if x_center < w_n / 2:
         raise ValueError("The x_center must be larger or equal to half the width")
@@ -147,7 +151,7 @@ def _verify_yolo_format(annotation: OBJ_DETECT_ANN_TYPE,
     return annotation
 
 
-__ann_verification_dict = {'coco': _verify_coco_format, 'pascal_voc': _verify_pascal_voc_format, 'yolo': _verify_yolo_format, 'albumentation': _verify_albumentation_format}
+__ann_verification_dict = {'coco': _verify_coco_format, 'pascal_voc': _verify_pascal_voc_format, 'yolo': _verify_yolo_format, 'albumentations': _verify_albumentations_format}
 
 
 def verify_object_detection_ann_format(annotation: OBJ_DETECT_ANN_TYPE, 
@@ -181,7 +185,7 @@ def _yolo_2_coco(annotation: OBJ_DETECT_ANN_TYPE,
 
     return [x_min, y_min, w, h]
 
-def _albumentation_2_coco(annotation: OBJ_DETECT_ANN_TYPE, 
+def _albumentations_2_coco(annotation: OBJ_DETECT_ANN_TYPE, 
                 img_shape: IMG_SHAPE_TYPE) -> OBJ_DETECT_ANN_TYPE:    
     
     x_min_n, y_min_n, x_max_n, y_max_n = annotation
@@ -212,7 +216,7 @@ def _coco_2_yolo(annotation: OBJ_DETECT_ANN_TYPE,
     res = [x_center / img_shape[1], y_center / img_shape[0], width / img_shape[1], height / img_shape[0]]
     return res
 
-def _albumentation_2_yolo(annotation: OBJ_DETECT_ANN_TYPE, 
+def _albumentations_2_yolo(annotation: OBJ_DETECT_ANN_TYPE, 
                 img_shape: IMG_SHAPE_TYPE) -> OBJ_DETECT_ANN_TYPE:    
     x_min_n, y_min_n, x_max_n, y_max_n = annotation
     x_center, y_center = (x_min_n + x_max_n) / 2, (y_min_n + y_max_n) / 2 
@@ -234,7 +238,7 @@ def _yolo_2_pascal_voc(annotation: OBJ_DETECT_ANN_TYPE,
     res = [x_min, y_min, x_min + w, y_min + h]
     return res
 
-def _albumentation_2_pascal_voc(annotation: OBJ_DETECT_ANN_TYPE, 
+def _albumentations_2_pascal_voc(annotation: OBJ_DETECT_ANN_TYPE, 
                 img_shape: IMG_SHAPE_TYPE) -> OBJ_DETECT_ANN_TYPE:    
     x_min_n, y_min_n, x_max_n, y_max_n = annotation
     res = [int(round(x_min_n * img_shape[1])), int(round(y_min_n * img_shape[0])), int(round(x_max_n * img_shape[1])), int(round(y_max_n  * img_shape[0]))]
@@ -245,30 +249,30 @@ def _coco_2_pascal_voc(annotation: OBJ_DETECT_ANN_TYPE,
     x_min, y_min, width, height = annotation
     return [x_min, y_min, x_min + width, y_min + height]
 
-################################ 2 albumentation ################################
+################################ 2 albumentations ################################
 
-def _yolo_2_albumentation(annotation: OBJ_DETECT_ANN_TYPE, 
+def _yolo_2_albumentations(annotation: OBJ_DETECT_ANN_TYPE, 
                 img_shape: IMG_SHAPE_TYPE) -> OBJ_DETECT_ANN_TYPE:    
     
     x_cn, y_cn, w_n, h_n = annotation
-    res = [x_cn - w_n / 2, y_cn - h_n / 2, x_cn + w_n / 2, y_cn + h_n / 2]
+    res = [round(x_cn - w_n / 2, 4), round(y_cn - h_n / 2, 4), round(x_cn + w_n / 2, 4),  round(y_cn + h_n / 2, 4)]
     return res
 
-def _coco_2_albumentation(annotation: OBJ_DETECT_ANN_TYPE, 
+def _coco_2_albumentations(annotation: OBJ_DETECT_ANN_TYPE, 
                 img_shape: IMG_SHAPE_TYPE) -> OBJ_DETECT_ANN_TYPE:    
     x_min, y_min, width, height = annotation
     x_max, y_max = x_min + width, y_min + height
-    res = [x_min / img_shape[1], y_min / img_shape[0], x_max / img_shape[1], y_max / img_shape[0]]
+    res = [round(x_min / img_shape[1], 4), round(y_min / img_shape[0], 4), round(x_max / img_shape[1], 4), round(y_max / img_shape[0],4)]
     return res 
 
-def _pascal_voc_2_albumentation(annotation: OBJ_DETECT_ANN_TYPE, 
+def _pascal_voc_2_albumentations(annotation: OBJ_DETECT_ANN_TYPE, 
                 img_shape: IMG_SHAPE_TYPE) -> OBJ_DETECT_ANN_TYPE:    
     x_min, y_min, x_max, y_max = annotation
-    res = [x_min / img_shape[1], y_min / img_shape[0], x_max / img_shape[1], y_max / img_shape[0]]
+    res = [round(x_min / img_shape[1], 4), round(y_min / img_shape[0], 4), round(x_max / img_shape[1], 4), round(y_max / img_shape[0], 4)]
     return res 
 
 
-def convert_annotations(annotation: OBJ_DETECT_ANN_TYPE, current_format: str, target_format: str, img_shape: IMG_SHAPE_TYPE) -> OBJ_DETECT_ANN_TYPE:
+def convert_bbox_annotation(annotation: OBJ_DETECT_ANN_TYPE, current_format: str, target_format: str, img_shape: IMG_SHAPE_TYPE) -> OBJ_DETECT_ANN_TYPE:
     if current_format not in OBJ_DETECT_ANN_FORMATS or target_format not in OBJ_DETECT_ANN_FORMATS:
         raise NotImplementedError(f"currently supporting only the following formats: {OBJ_DETECT_ANN_FORMATS}")
 
