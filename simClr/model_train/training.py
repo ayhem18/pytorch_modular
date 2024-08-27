@@ -13,7 +13,7 @@ from torch.utils.data import DataLoader
 # from torchlars import LARS # the authors of the paper used this optimizer
 
 from mypt.losses.simClrLoss import SimClrLoss
-from mypt.data.datasets.parallel_aug_ds import ParallelAugDs
+from mypt.data.datasets.parallel_augmentation.parallel_aug_ds import ParallelAugDs
 from mypt.data.dataloaders.standard_dataloaders import initialize_train_dataloader, initialize_val_dataloader
 from mypt.code_utilities import pytorch_utilities as pu, directories_and_files as dirf
 from mypt.schedulers.annealing_lr import AnnealingLR

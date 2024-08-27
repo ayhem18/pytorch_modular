@@ -8,7 +8,7 @@ import torchvision.transforms as tr
 from PIL import Image
 from pathlib import Path
 
-from mypt.data.datasets.parallel_aug_ds import ParallelAugDs
+from mypt.data.datasets.parallel_augmentation.parallel_aug_ds import ParallelAugDs
 from ds_wrapper import CALTECH101Wrapper
 
 from mypt.code_utilities import pytorch_utilities as pu

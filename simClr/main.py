@@ -9,13 +9,13 @@ from typing import Union, Dict
 from torchvision.datasets import STL10
 
 from mypt.code_utilities import pytorch_utilities as pu
-from mypt.models.simClr.simClrModel import AlexnetSimClr, ResnetSimClr
-from model_train.training import run_pipeline
+from mypt.models.simClr.simClrModel import ResnetSimClr
+from mypt.subroutines.neighbors import model_embs as me
 
-from mypt.subroutines.topk_nearest_neighbors import model_embs as me
+from model_train.training import run_pipeline, _DEFAULT_DATA_AUGS, _UNIFORM_DATA_AUGS 
+from model_train.ds_wrapper import Food101Wrapper 
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
-
 
 _BATCH_SIZE = 16
 
@@ -61,7 +61,6 @@ def visualize_neighbors(res: Union[str, Path, Dict], num_images: int = 5):
 def train_main(model):
     train_data_folder = os.path.join(SCRIPT_DIR, 'data', 'food101', 'train')
 
-
     ckpnt_dir_parent = os.path.join(SCRIPT_DIR, 'logs', 'train_logs') 
     return run_pipeline(model=model, 
         train_data_folder=train_data_folder, 
@@ -80,9 +79,40 @@ def train_main(model):
 
 
 if __name__ == '__main__':
-    model = ResnetSimClr(input_shape=(3, 200, 200), output_dim=128, num_fc_layers=4, freeze=False)
-    train_main(model)
+    data = os.path.join(SCRIPT_DIR, 'data', 'food101', 'train')
 
+    # model = ResnetSimClr(input_shape=(3, 200, 200), output_dim=128, num_fc_layers=4, freeze=False)
+    # train_main(model)
     # ckpnt = os.path.join(SCRIPT_DIR, 'logs', 'train_logs', 'ckpnt_train_loss-4.0917_epoch-123.pt')
     # evaluate_ckpnt(model, ckpnt)
     # visualize_neighbors(res=os.path.join(SCRIPT_DIR, 'eval_res', 'ckpnt_train_loss-4.0917_epoch-123_results.obj'), num_images=25)
+
+
+    # ds = Food101Wrapper(root_dir=data, 
+    #                     output_shape=224,
+    #                     augs_per_sample=2, 
+    #                     sampled_data_augs=_DEFAULT_DATA_AUGS,
+    #                     uniform_data_augs=_UNIFORM_DATA_AUGS,
+    #                     train=True, 
+    #                     samples_per_cls=1000)    
+
+    # from bisect import bisect
+    # from collections import Counter
+
+    # occs = Counter()
+
+    # for i in range(3150):
+    #     stop_points = sorted(list(ds.samples_per_cls_map.keys()))
+
+    #     index = bisect(stop_points, i)
+        
+    #     if index == len(stop_points):
+    #         index -= 1
+
+    #     sp = stop_points[index]
+
+    #     _, c = ds._ds[ds.samples_per_cls_map[sp] + i - sp]
+
+    #     occs[c] += 1
+    
+    # print(occs)

@@ -16,21 +16,14 @@ SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 
 
 def knn_test_1(): 
-    train_dir = os.path.join(SCRIPT_DIR, 'data')
-    dirf.process_path(train_dir, file_ok=False)
     
-    val_dir = os.path.join(SCRIPT_DIR, 'data')
-    dirf.process_path(val_dir, file_ok=False)
+    data_dir = os.path.join(SCRIPT_DIR, 'data')
+    dirf.process_path(data_dir, file_ok=False)
     
     # this object will download the 
     img_transform = tr.Compose([tr.Resize((32, 32)), tr.ToTensor()])
 
-    # train_ds = FashionMNIST(root=train_dir, 
-    #              train=True, 
-    #              download=True, 
-    #              transform=img_transform)
-
-    val_ds = FashionMNIST(root=val_dir, train=False, transform=img_transform, download=True)
+    val_ds = FashionMNIST(root=data_dir, train=False, transform=img_transform, download=True)
 
     model = torch.nn.Sequential(torch.nn.Flatten(), torch.nn.Linear(in_features=32 * 32, out_features=128))
 
@@ -41,9 +34,8 @@ def knn_test_1():
                         process_model_output=None,
                         model_ckpnt=None)
 
-    # msr = knn_classifier._measures('cosine_sim')
 
-    for m in ['cosine_sim', 'euclidean'][1:]:            
+    for m in ['cosine_sim', 'euclidean']:            
         values_res, indices_res = knn_classifier.predict(val_ds=val_ds, 
                                             inference_batch_size=1000, 
                                             num_neighbors=11, 
@@ -77,9 +69,8 @@ def knn_test_1():
 
             assert torch.allclose(dis_true.cpu(), torch.from_numpy(dis)), "The precomputed distances do not match the actual ones !!!"
 
-    # remove the data and the results directory
-    shutil.rmtree(train_dir)
-    shutil.rmtree(val_dir)
+    # remove the extra repositories
+    shutil.rmtree(data_dir)
 
 
 if __name__ == '__main__':
