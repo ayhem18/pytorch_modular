@@ -70,7 +70,7 @@ def initialize_val_dataloader(dataset_object: Dataset,
                         batch_size: int,
                         num_workers: int,
                         warning:bool=True,
-                        collect_fn=None,
+                        collate_fn=None,
                         ) -> DataLoader:
 
     dl_gen = torch.Generator()
@@ -78,13 +78,13 @@ def initialize_val_dataloader(dataset_object: Dataset,
 
     if num_workers != 0:
         dl = DataLoader(dataset=dataset_object, 
-                            shuffle=False, # generally there is no point of shuffing the validation data
+                            shuffle=False, # generally there is no point in shuffing the validation data
                             batch_size=batch_size,
                             drop_last=False, 
                             num_workers=num_workers, 
                             worker_init_fn=partial(set_worker_seed, seed=seed), # this function is used to ensure reproducibility between runs in multi-process setting 
                             generator=dl_gen,
-                            collect_fn=collect_fn)
+                            collate_fn=collate_fn)
         return dl
 
     # if the number of workers is set to '0', then the parameter 'pin_memory' will be set to True to improve performance
@@ -98,7 +98,7 @@ def initialize_val_dataloader(dataset_object: Dataset,
                         batch_size=batch_size, 
                         num_workers=0,   
                         pin_memory=True, # this dataloader will be run by the main process.
-                        collect_fn=collect_fn) 
+                        collate_fn=collate_fn) 
     
     return dl
 
