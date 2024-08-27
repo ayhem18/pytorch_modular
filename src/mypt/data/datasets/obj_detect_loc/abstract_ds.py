@@ -45,9 +45,10 @@ class ObjectDataset(Dataset, ABC):
             for c in cls:
                 if not (isinstance(c, (str, int)) or isinstance(c, type(cls[0]))):
                     raise ValueError(f"The class labels must of types {int} or {str}. Found {c} of type {type(c)} + make sure all class labels are of the same type")
-            
-            label_type = type(cls[0]) 
-        
+            try:
+                label_type = type(cls[0]) 
+            except KeyError:
+                raise ValueError(f"The labels cannot be empty. Found annotation with at least on empty label, cls: {cls}, bbox: {ann}")
         else:
             if isinstance(label_type, str):
                 label_type = eval(label_type)
@@ -126,7 +127,8 @@ class ObjectDataset(Dataset, ABC):
             warnings.warn(message=f"not passing the image shape requires loading all the samples !!")    
 
         return is_callable
-            
+
+
     def __set_img_annotations(self, 
                                image2annotation: Union[Dict, callable],
                                current_format: Optional[str], 
@@ -186,58 +188,20 @@ class ObjectDataset(Dataset, ABC):
         return img_annotations
 
 
-    def __set_cls_indices_str(self, background_label: str):        
-        # save all the classes provided by the data
+    def __set_indices(self):
+        self.all_classes = set()
+        # save all the classes in the data
         for _, v in self.annotations.items():
             cls_ann, _ = v
             self.all_classes.update([c.lower() for c in cls_ann])
 
-        # the background label is provided, so classes will be associated with their rank (lexicographically)
-        self.cls_2_cls_index = dict([(c, i) for i, c in enumerate(sorted(list(self.all_classes)), start=0)])
-        self.background_cls_index = self.cls_2_cls_index[background_label]
-        
-        # at this point self.cls_2_cls_index contains all classes and their indices
-        # all_classes should save the numerical indices in all cases 
-        self.all_classes = set([v for _, v in self.cls_2_cls_index.items() if v != self.background_cls_index])
+        self.cls_2_cls_index = dict([(c, i) for i, c in enumerate(sorted(list([c for c in self.all_classes if c != self.background_label])), start=0)])
+        self.cls_2_cls_index[self.background_label] = len(self.cls_2_cls_index)
+        # revert the mapping
+        self.cls_index_2_cls = {v: k for k, v in self.cls_2_cls_index.items()}
 
-        # convert to indices
-        for k, v in self.annotations.items():
-            cls_ann, bbox_ann = v
-            
-            if len(cls_ann) == 0:
-                if background_label is None:
-                    cls_ann = [self.background_cls_index]
-                    bbox_ann = [au.DEFAULT_BBOX_BY_FORMAT[self.target_format]]
-                else:
-                    raise ValueError(f"There is a sample without class labels while the 'background_label' argument is passed")
-                
-                self.annotations[k] = cls_ann, bbox_ann
-
-
-
-    def __set_cls_indices_int(self, background_label: Optional[int]=None):
-        for _, v in self.annotations.items():
-            cls_ann, _ = v
-            self.all_classes.update(cls_ann)
-
-        self.cls_2_cls_index = dict([(c, i) for i, c in enumerate(sorted(list(self.all_classes)), start=0)])
-        self.background_cls_index = self.cls_2_cls_index[background_label]
-
-        # all_classes should save the indices and not the labels themselves
-        self.all_classes = set([v for _, v in self.cls_2_cls_index.items() if v != self.background_cls_index])
-
-        for k, v in self.annotations.items():
-            cls_ann, _ = v
-
-            if len(cls_ann) == 0:
-                if background_label is None:
-                    cls_ann = [self.background_cls_index]
-                    bbox_ann = [au.DEFAULT_BBOX_BY_FORMAT[self.target_format]]
-                else:
-                    raise ValueError(f"There is a sample without class labels while the 'background_label' argument is passed")
-
-                self.annotations[k] = cls_ann, bbox_ann 
-
+        self.all_classes = sorted([k for k, _ in self.cls_2_cls_index.items()], key=self.cls_2_cls_index.get)
+        assert self.all_classes[-1] == self.background_label, "make sure the background label is placed at the last position in the self.all_classes list"
 
     def __init__(self,
                  root_dir: Union[str, Path],
@@ -284,27 +248,14 @@ class ObjectDataset(Dataset, ABC):
         self.idx2sample_path = dict(enumerate(sorted([os.path.join(self.root_dir, img) for img in os.listdir(self.root_dir)])))
 
         # a dictionary that maps the original classes to their numerical indices (add more flexibility to the class)
-        self.cls_2_cls_index = None 
+        self.cls_2_cls_index = None     
+        self.cls_index_2_cls = None # mapping the index to the original class
 
         # if the user passes the background label, then save it, otherwise it will be automatically deduced
-        self.background_cls_index = background_label # if the user does not explicitly pass the 'background_label' argument, the self.background_cls_index will field will be set to None
+        self.background_label = background_label 
         # a set of all class indices
-        self.all_classes = set()
-
-        # extract the type of initial classes: string or integers
-        for _, annotation in self.annotations.items():
-            _, cls_label_type = self._verify_single_label(annotation=annotation[:2])
-            break # breaking after one iteration, as only the one label type is needed
-
-        if cls_label_type in [str, 'str']:
-            self.__set_cls_indices_str(background_label)
-            return 
-
-        elif cls_label_type in [int, 'int']:
-            self.__set_cls_indices_int(background_label)
-            return
-        
-        raise NotImplementedError(f"the current implementation supports only string or integer labels. Found another type: {cls_label_type}")
+        self.all_classes = None
+        self.__set_indices()
     
     def __len__(self) -> int:
         return self.data_count

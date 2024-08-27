@@ -22,21 +22,6 @@ from mypt.code_utilities import annotation_utilites as au
 from .train_per_epoch import train_per_epoch, validation_per_epoch
 from .data_preparation import extract_annotation_from_xml, get_annotation_file_path
 
-_DEFAULT_DATA_AUGS = [
-    tr.RandomHorizontalFlip(p=1), 
-    tr.RandomResizedCrop((200, 200), scale=(0.5, 1)),
-    
-    tr.RandomGrayscale(p=0.2),
-    tr.GaussianBlur(kernel_size=(5, 5)),
-    tr.ColorJitter(brightness=0.5, contrast=0.5)
-]
-
-# one possible reason for the high training loss is the input scale
-# 
-_UNIFORM_DATA_AUGS = [tr.Normalize(mean=[0.485, 0.456, 0.406], 
-                                   std=[0.229, 0.224, 0.225])] 
-                    
-# _AUGS = [A.RandomSizedBBoxSafeCrop(*output_shape, p=1), A.ColorJitter(p=1)]
 
 _WANDB_PROJECT_NAME = "ObjLoc"
 
@@ -80,7 +65,7 @@ def _set_data(train_data_folder: Union[str, Path],
                                     )
 
     train_ds = ObjectLocalizationDs(root_dir=train_data_folder, 
-                                    img_augs=[A.RandomSizedBBoxSafeCrop(*output_shape, p=1), A.ColorJitter(p=1)],
+                                    img_augs=[A.RandomSizedBBoxSafeCrop(*output_shape, p=0.5), A.ColorJitter(p=0.5)],
 
                                     output_shape=output_shape,
                                     compact=True,
@@ -124,7 +109,7 @@ def _set_data(train_data_folder: Union[str, Path],
                                          )
 
     if val_ds is not None:
-        val_dl = initialize_val_dataloader(dataset_object=train_ds, 
+        val_dl = initialize_val_dataloader(dataset_object=val_ds, 
                                             seed=seed,
                                             batch_size=batch_size,
                                             num_workers=0,
@@ -195,8 +180,7 @@ def _run(
     min_train_loss, min_val_loss = float('inf'), float('inf')
 
     for epoch_index in tqdm(range(num_epochs), desc=f'training the model'):
-
-        epoch_train_loss = train_per_epoch(model=model, 
+        epoch_train_metrics = train_per_epoch(model=model, 
                         dataloader=train_dl,
                         loss_function=loss_obj,
                         epoch_index=epoch_index,
@@ -207,9 +191,25 @@ def _run(
                         use_wandb=use_wandb,
                         accumulate_grads=accumulate_grad)
 
-        print(f"epoch {epoch_index}: train loss: {epoch_train_loss}")
+        epoch_train_log = epoch_train_metrics.copy()
+        
+        # the dict object cls not allow altering the keys while iterating through the object
+        items = list(epoch_train_log.items())
+        for k, val in items:
+            epoch_train_log.pop(k)
+            epoch_train_log[f'train_{k}'] = val
 
-        if val_dl is None and min_train_loss > epoch_train_loss:
+        print("#" * 25)
+        print(epoch_train_log)
+
+        # extract the epoch_train_loss
+        epoch_train_loss = epoch_train_metrics[loss_obj._loss_name]
+        
+        if val_dl is None: # meaning we are saving checkpoints according to the trainloss
+            if min_train_loss < epoch_train_loss:
+                continue 
+
+            # at this point the epoch training loss is the minimum so far
             min_train_loss = epoch_train_loss
             ckpnt_file_name = f'ckpnt_train_loss-{round(min_train_loss, 4)}_epoch-{epoch_index}.pt'
 
@@ -223,37 +223,58 @@ def _run(
                                 path=os.path.join(ckpnt_dir, ckpnt_file_name),
                                 train_loss=epoch_train_loss, epoch=epoch_index)
 
-        # compute the performance on validation 
-        if val_dl is not None and ((epoch_index + 1) % val_per_epoch == 0):
-            epoch_val_loss = validation_per_epoch(model=model, 
-                                            dataloader=val_dl,
-                                            loss_function=loss_obj,
-                                            epoch_index=epoch_index + 1, 
-                                            device=device,
-                                            log_per_batch=0.2,
-                                            use_wandb=use_wandb,
-                                            )
+            continue
             
-            print(f"epoch {epoch_index}: validation loss: {epoch_val_loss}")
+        # at this point we know that val_dl is None and hence the validation loss is the criteria to save checkpoints
+        # run the model on the validation set every "val_per_epoch" and the last epoch
+        if not ((epoch_index + 1) % val_per_epoch == 0 or epoch_index == num_epochs - 1):
+            continue
+        
+        # run the model on the validation dataset
+        epoch_val_metrics = validation_per_epoch(model=model, 
+                                        dataloader=val_dl,
+                                        loss_function=loss_obj,
+                                        epoch_index=epoch_index + 1, 
+                                        device=device,
+                                        log_per_batch=0.2,
+                                        use_wandb=use_wandb,
+                                        )
+        # add the 'val' to each key in the 'epoch_val_metrics' dictionary
+        epoch_val_log = epoch_val_metrics.copy()
+        items = list(epoch_val_log.items())
+        
+        for k, val in items:
+            epoch_val_log.pop(k)
+            epoch_val_log[f'val_{k}'] = val
+        
+        print("#" * 25)
+        print(epoch_val_log)
 
-            # save the best checkpoint on validation
+        # extract the validation loss
+        epoch_val_loss = epoch_val_metrics[loss_obj._loss_name]
 
-            min_val_loss = epoch_val_loss
-            ckpnt_file_name = f'ckpnt_val_loss_{round(min_val_loss, 4)}epoch_{epoch_index}.pt'
+        if epoch_val_loss > min_val_loss:
+            continue
 
-            if len(os.listdir(ckpnt_dir)) != 0:
-                # keep only one checkpoint             
-                dirf.clear_directory(directory=ckpnt_dir, condition=lambda _: True)
+        # at this point epoch_val_loss is the minimal validation loss achieved so far
+        min_val_loss = epoch_val_loss
+        ckpnt_file_name = f'ckpnt_val_loss_{round(min_val_loss, 4)}_epoch_{epoch_index}.pt'
 
-            pu.save_checkpoint(model=model, 
-                                optimizer=optimizer, 
-                                lr_scheduler=lr_scheduler,
-                                path=os.path.join(ckpnt_dir, ckpnt_file_name),
-                                val_loss=epoch_val_loss, 
-                                epoch=epoch_index)
+        if len(os.listdir(ckpnt_dir)) != 0:
+            # keep only one checkpoint             
+            dirf.clear_directory(directory=ckpnt_dir, condition=lambda _: True)
+
+        pu.save_checkpoint(model=model, 
+                            optimizer=optimizer, 
+                            lr_scheduler=lr_scheduler,
+                            path=os.path.join(ckpnt_dir, ckpnt_file_name),
+                            val_loss=epoch_val_loss, 
+                            epoch=epoch_index)
+        
 
     # make sure to return the checkpoint 
     return os.path.join(ckpnt_dir, ckpnt_file_name)
+
 
 
 def run_pipeline(model: ObjectLocalizationModel, 
@@ -300,7 +321,7 @@ def run_pipeline(model: ObjectLocalizationModel,
 
     res = None
     try:
-        res = _run(model=model, 
+        res_ckpnt = _run(model=model, 
                 train_dl=train_dl, 
                 val_dl=val_dl, 
 
@@ -330,7 +351,7 @@ def run_pipeline(model: ObjectLocalizationModel,
         sleep(30)
 
         batch_size = int(batch_size / 1.2)
-        res = run_pipeline(model=model, 
+        res_ckpnt = run_pipeline(model=model, 
                                      
             train_data_folder=train_data_folder,
 
@@ -341,7 +362,6 @@ def run_pipeline(model: ObjectLocalizationModel,
             num_epochs=num_epochs, 
             batch_size=batch_size,
 
-            # initial_lr=initial_lr,  
             learning_rates=learning_rates,
 
             ckpnt_dir=ckpnt_dir,
@@ -353,4 +373,4 @@ def run_pipeline(model: ObjectLocalizationModel,
 
     
     wandb.finish()
-    return res
+    return res_ckpnt

@@ -90,25 +90,24 @@ class ObjectLocalizationDs(ObjectDataset):
         # fetch the labels after augmentations
         img, cls_labels, bboxes = transform['image'], transform['cls_labels'][0], transform['bboxes'][0]
 
-        # convert the image to a torch tensor anyway
+        # convert the image to a torch tensor 
         img = tr.ToTensor()(img.copy())
-
-        # after applying the augmentation and adjusting the bounding boxes accordingly
-        # return the final labels: depends on self.compact
         
         # first the object indicator: a boolean flat indicating whether there is an object of interest on the image or not
+        object_indicator = int(cls_labels != self.background_label)
         cls_label_index = self.cls_2_cls_index[cls_labels]
-        object_indicator = int(cls_label_index != self.background_cls_index)
     
         if self.compact:
-            # one hot encode the label
-            cls_label_one_hot = [int(i == cls_label_index) for i in self.all_classes]
+            # one-hot encode the label
+            cls_label_one_hot = [int(i == cls_label_index) for i in range(len(self.all_classes) - 1)]
+            
+            assert sum(cls_label_one_hot) == int(object_indicator), "Make sure the label is all zeros for background cls and with only one value for an object of interest"
+
             # concatenate everything together
             final_label = [object_indicator] + (bboxes.tolist() if isinstance(bboxes, np.ndarray) else list(bboxes)) + cls_label_one_hot
-            # convert the compact label to tensor tensor
-            final_output =  img, torch.Tensor(final_label)
-            return final_output
+            
+            return img, torch.Tensor(final_label)
 
         # self.compact set to False implies that the object indicator, the bboxes and the cls labels will be returned as 3 seperated values
-        return img, torch.tensor(object_indicator), torch.tensor(bboxes), torch.tensor(cls_labels)  
+        return img, torch.tensor(object_indicator), torch.tensor(bboxes), torch.tensor(cls_label_index)  
 
