@@ -202,7 +202,3 @@ def topk_nearest_model_ckpnt(
             pickle.dump(results, f)
 
       return results
-
-
-
-
