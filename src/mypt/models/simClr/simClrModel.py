@@ -54,7 +54,7 @@ class SimClrModel(nn.Module):
         return self 
 
     def __call__(self, x: torch.Tensor):
-        return self.forward(x)[0]
+        return self.forward(x)
 
 
 class ResnetSimClr(SimClrModel):

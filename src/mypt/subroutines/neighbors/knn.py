@@ -7,9 +7,11 @@ import torchvision.transforms as tr
 import numpy as np
 
 from pathlib import Path
-from typing import Union, Optional, Tuple
+from typing import Union, Optional, Tuple, List
 from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
+from collections import Counter,defaultdict
+from functools import partial
 
 from ...code_utilities import pytorch_utilities as pu
 from ...data.dataloaders.standard_dataloaders import initialize_val_dataloader
@@ -337,3 +339,95 @@ class KNN:
         self.model = self.model.to('cpu')
 
         return res
+
+
+class KnnClassifier(KNN):
+    def __init__(self,
+                train_ds: Dataset,
+                train_ds_inference_batch_size:Union[int, float], 
+                model: torch.nn.Module,
+                
+                process_sample_ds: Optional[callable]=None, 
+                process_sample_ds_class: Optional[callable]=None,
+                process_model_output: Optional[callable]=None,
+
+                model_ckpnt: Optional[Union[str, Path, callable]]=None, 
+                inference_device:Optional[str]=None):
+
+        super().__init__(
+                        self,
+                        train_ds=train_ds,
+                        train_ds_inference_batch_size=train_ds_inference_batch_size, 
+                        model=model,
+
+                        process_sample_ds=process_sample_ds,
+                        process_sample_ds_class=process_sample_ds_class,
+                        process_model_output=process_model_output,
+
+                        model_ckpnt=model_ckpnt, 
+                        inference_device=inference_device)
+        
+        if process_sample_ds_class is None:
+            warnings.warn("the 'process_sample_ds_class' is not Passed. The class assumes that the dataset is a classification dataset where each item is a couple of image and classification label")
+            process_sample_ds_class = lambda ds, index: ds[index][1] #  
+
+        self.process_sample_ds_class = process_sample_ds_class
+
+
+    def __predict_per_sample(self, 
+                             sample_distances: Union[List[float]], 
+                             sample_classes: Union[List[int]], 
+                             measure_as_similarity: bool) -> int:
+
+        counter = Counter(sample_classes)
+        max_freq = max([v for _, v in counter.items()])
+        modes = [k for k, v in counter.items if v == max_freq]
+
+        if len(modes) == 1:
+            return modes[0]
+
+        msr_dict = defaultdict(lambda : [])
+
+        if measure_as_similarity:
+            for index,c in sample_classes:
+                if c in modes:
+                    msr_dict[c].append(sample_distances[index])
+            return max(msr_dict, key=lambda x: np.mean(msr_dict[x]))
+
+        for index,c in sample_classes:
+            if c in modes:
+                msr_dict[c].append(sample_distances[index])
+        return min(msr_dict, key=lambda x: np.mean(msr_dict[x]))
+
+
+
+    def predict(
+            self, 
+            val_ds: Dataset,
+            inference_batch_size: Union[int, float],
+            num_neighbors:int,
+
+            measure: Union[str, callable, torch.nn.Module],
+            measure_as_similarity: bool,
+            measure_init_kargs: dict = None,
+
+            process_sample_ds: Optional[callable]=None,
+            process_model_output: Optional[callable]=None,
+            num_workers:int=2) -> np.ndarray:
+        # let's see how it goes
+        distances_res, indices_res =super().predict(val_ds=val_ds,
+                                                inference_batch_size=inference_batch_size,
+                                                num_neighbors=num_neighbors,
+                                                measure=measure,
+                                                measure_as_similarity=measure_as_similarity,
+                                                measure_init_kargs=measure_init_kargs,
+                                                process_sample_ds=process_sample_ds,
+                                                process_model_output=process_model_output,
+                                                num_workers=num_workers                        
+                                                )   
+
+        classes = np.asarray([[self.process_sample_ds_class(self.train_ds, index) for index in arr_indices] for arr_indices in indices_res])
+
+        predictions = np.asarray([self.__predict_per_sample(distances_res[i, :].tolist(), classes[i, :].tolist()) for i in range(len(classes))])
+
+        return predictions

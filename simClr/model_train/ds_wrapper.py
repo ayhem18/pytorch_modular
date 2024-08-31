@@ -21,7 +21,8 @@ class Food101Wrapper(AbstractParallelAugsDs):
                 sampled_data_augs:List,
                 uniform_data_augs: List,
                 train:bool=True,
-                samples_per_cls: Optional[int] = None) -> None:
+                samples_per_cls: Optional[int] = None,
+                classification_mode: bool=False) -> None:
         
         super().__init__(output_shape=output_shape, 
                          augs_per_sample=augs_per_sample,
@@ -40,6 +41,9 @@ class Food101Wrapper(AbstractParallelAugsDs):
             self.__set_samples_per_cls(samples_per_cls) 
         else:
             self._len = len(self._ds)
+
+        self.classification_mode = classification_mode
+
 
     def __set_samples_per_cls(self, samples_per_cls: int):
         # iterate through the dataset
@@ -75,7 +79,8 @@ class Food101Wrapper(AbstractParallelAugsDs):
 
         self.samples_per_cls_map = mapping
 
-    def __getitem__(self, index: int):
+
+    def __get_item_default_(self, index:int) -> Tuple[torch.Tensor, torch.Tensor]:
         # extract the path to the sample (using the map between the index and the sample path !!!)
         if self.samples_per_cls_map is not None:
             stop_points = sorted(list(self.samples_per_cls_map.keys()))
@@ -89,7 +94,7 @@ class Food101Wrapper(AbstractParallelAugsDs):
 
             sample_image:torch.Tensor = self._ds[self.samples_per_cls_map[sp] + index - sp][0]
         else:
-            sample_image = self._ds[index]
+            sample_image = self._ds[index][0]
 
         if sample_image.shape[0] == 1:
             sample_image = torch.concat([sample_image for _ in range(3)], dim=0)
@@ -99,6 +104,30 @@ class Food101Wrapper(AbstractParallelAugsDs):
 
         return s1, s2
 
+
+    def __get_item_cls_(self, index:int) -> Tuple[torch.Tensor, List[int]]:
+        # extract the path to the sample (using the map between the index and the sample path !!!)
+        if self.samples_per_cls_map is not None:
+            stop_points = sorted(list(self.samples_per_cls_map.keys()))
+
+            index = bisect(stop_points, index)
+            
+            if index == len(stop_points):
+                index -= 1
+
+            sp = stop_points[index]
+
+            return self._ds[self.samples_per_cls_map[sp] + index - sp]
+
+        return self._ds[index]
+
+    def __getitem__(self, index: int) -> Union[Tuple[torch.Tensor, torch.Tensor], 
+                                               Tuple[torch.Tensor, List[int]]
+                                               ]:
+        if self.classification_mode:
+            return self.__get_item_cls_(index)
+
+        return self.__get_item_default_(index)
 
     def __len__(self) -> int:
         return self._len

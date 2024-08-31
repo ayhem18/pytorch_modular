@@ -104,10 +104,12 @@ PREFERABLE_BATCH_SIZE = 1024
 
 
 def _set_data(train_data_folder: Union[str, Path],
-             val_data_folder: Optional[Union[str, Path]],
-             batch_size:int,
-             output_shape: Tuple[int, int],
-             seed:int=69) -> Tuple[DataLoader, Optional[DataLoader]]:
+            val_data_folder: Optional[Union[str, Path]],
+            batch_size:int,
+            output_shape: Tuple[int, int],
+            num_train_samples_per_cls:Optional[int],
+            num_val_samples_per_cls:Optional[int],    
+            seed:int=69) -> Tuple[DataLoader, Optional[DataLoader]]:
     
     train_data_folder = dirf.process_path(train_data_folder, 
                                           dir_ok=True, 
@@ -119,7 +121,9 @@ def _set_data(train_data_folder: Union[str, Path],
                                 augs_per_sample=2, 
                                 sampled_data_augs=_DEFAULT_DATA_AUGS,
                                 uniform_data_augs=_UNIFORM_DATA_AUGS,
-                                train=True)
+                                train=True,
+                                samples_per_cls=num_train_samples_per_cls
+                                )
 
     if val_data_folder is not None:
         val_data_folder = dirf.process_path(val_data_folder, 
@@ -128,11 +132,12 @@ def _set_data(train_data_folder: Union[str, Path],
                                           )
 
         val_ds = Food101Wrapper(root_dir=val_data_folder, 
-                                    output_shape=output_shape,
-                                    augs_per_sample=2, 
-                                    sampled_data_augs=_DEFAULT_DATA_AUGS,
-                                    uniform_data_augs=_UNIFORM_DATA_AUGS,
-                                    train=False)
+                                output_shape=output_shape,
+                                augs_per_sample=2, 
+                                sampled_data_augs=_DEFAULT_DATA_AUGS,
+                                uniform_data_augs=_UNIFORM_DATA_AUGS,
+                                train=False,
+                                samples_per_cls=num_val_samples_per_cls)
 
     else:
         val_ds = None
@@ -141,7 +146,7 @@ def _set_data(train_data_folder: Union[str, Path],
     train_dl = initialize_train_dataloader(dataset_object=train_ds, 
                                          seed=seed,
                                          batch_size=batch_size,
-                                         num_workers=0,
+                                         num_workers=2,
                                          warning=False # the num_workers=0 is deliberately set to 0  
                                          )
 
@@ -228,7 +233,7 @@ def _run(
 
     for epoch_index in tqdm(range(num_epochs), desc=f'training the model'):
 
-        epoch_train_loss = train_per_epoch(model=model, 
+        epoch_train_metrics = train_per_epoch(model=model, 
                         dataloader=train_dl,
                         loss_function=loss_obj,
                         epoch_index=epoch_index,
@@ -240,9 +245,27 @@ def _run(
                         batch_stats=batch_stats,
                         accumulate_grads=accumulate_grad)
 
-        print(f"epoch {epoch_index}: train loss: {epoch_train_loss}")
+        epoch_train_log = epoch_train_metrics.copy()
+        
+        # the dict object cls not allow altering the keys while iterating through the object
+        items = list(epoch_train_log.items())
 
-        if val_dl is None and min_train_loss > epoch_train_loss:
+        for k, val in items:
+            epoch_train_log.pop(k)
+            epoch_train_log[f'train_{k}'] = val
+
+        print("#" * 25)
+        print(epoch_train_log)
+
+        # extract the epoch_train_loss
+        epoch_train_loss = epoch_train_metrics["loss"]
+
+
+        if val_dl is None: # meaning we are saving checkpoints according to the trainloss
+            if min_train_loss < epoch_train_loss:
+                continue 
+
+            # at this point the epoch training loss is the minimum so far
             min_train_loss = epoch_train_loss
             ckpnt_file_name = f'ckpnt_train_loss-{round(min_train_loss, 4)}_epoch-{epoch_index}.pt'
 
@@ -256,59 +279,85 @@ def _run(
                                 path=os.path.join(ckpnt_dir, ckpnt_file_name),
                                 train_loss=epoch_train_loss, epoch=epoch_index)
 
-        # compute the performance on validation 
-        if val_dl is not None and ((epoch_index + 1) % val_per_epoch == 0):
-            epoch_val_loss = validation_per_epoch(model=model, 
-                                            dataloader=val_dl,
-                                            loss_function=loss_obj,
-                                            epoch_index=epoch_index + 1, 
-                                            device=device,
-                                            log_per_batch=0.2,
-                                            use_wandb=use_wandb,
-                                            batch_stats=batch_stats
-                                            )
-            
-            print(f"epoch {epoch_index}: validation loss: {epoch_val_loss}")
+            continue
 
-            # save the best checkpoint on validation
+        # at this point we know that val_dl is None and hence the validation loss is the criteria to save checkpoints
+        # run the model on the validation set every "val_per_epoch" and the last epoch
+        if not ((epoch_index + 1) % val_per_epoch == 0 or epoch_index == num_epochs - 1):
+            continue
 
-            min_val_loss = epoch_val_loss
-            ckpnt_file_name = f'ckpnt_val_loss_{round(min_val_loss, 4)}epoch_{epoch_index}.pt'
+        epoch_val_metrics = validation_per_epoch(model=model, 
+                                        dataloader=val_dl,
+                                        loss_function=loss_obj,
+                                        epoch_index=epoch_index + 1, 
+                                        device=device,
+                                        log_per_batch=0.2,
+                                        use_wandb=use_wandb,
+                                        batch_stats=batch_stats
+                                        )
 
-            if len(os.listdir(ckpnt_dir)) != 0:
-                # keep only one checkpoint             
-                dirf.clear_directory(directory=ckpnt_dir, condition=lambda _: True)
+        # add the 'val' to each key in the 'epoch_val_metrics' dictionary
+        epoch_val_log = epoch_val_metrics.copy()
+        items = list(epoch_val_log.items())
+        
+        for k, val in items:
+            epoch_val_log.pop(k)
+            epoch_val_log[f'val_{k}'] = val
+        
+        print("#" * 25)
+        print(epoch_val_log)
 
-            pu.save_checkpoint(model=model, 
-                                optimizer=optimizer, 
-                                lr_scheduler=lr_scheduler,
-                                path=os.path.join(ckpnt_dir, ckpnt_file_name),
-                                val_loss=epoch_val_loss, 
-                                epoch=epoch_index)
+        # extract the validation loss
+        epoch_val_loss = epoch_val_metrics["loss"]
+
+        if epoch_val_loss > min_val_loss:
+            continue
+
+
+        # at this point epoch_val_loss is the minimal validation loss achieved so far
+        min_val_loss = epoch_val_loss
+        ckpnt_file_name = f'ckpnt_val_loss_{round(min_val_loss, 4)}_epoch_{epoch_index}.pt'
+
+        if len(os.listdir(ckpnt_dir)) != 0:
+            # keep only one checkpoint             
+            dirf.clear_directory(directory=ckpnt_dir, condition=lambda _: True)
+
+        pu.save_checkpoint(model=model, 
+                            optimizer=optimizer, 
+                            lr_scheduler=lr_scheduler,
+                            path=os.path.join(ckpnt_dir, ckpnt_file_name),
+                            val_loss=epoch_val_loss, 
+                            epoch=epoch_index)
 
     # make sure to return the checkpoint 
-    return os.path.join(ckpnt_dir, ckpnt_file_name)
+    final_ckpnt = os.path.join(ckpnt_dir, ckpnt_file_name) 
+
+    if val_dl is not None:
+        return min_train_loss, min_val_loss, final_ckpnt 
+
+    return min_train_loss, final_ckpnt
 
 
 def run_pipeline(model: SimClrModel, 
-          train_data_folder:Union[str, Path],          
-          val_data_folder:Optional[Union[str, Path]],
-          output_shape:Tuple[int, int], 
+        train_data_folder:Union[str, Path],          
+        val_data_folder:Optional[Union[str, Path]],
+        output_shape:Tuple[int, int], 
 
-          num_epochs: int, 
-          batch_size: int,
+        num_epochs: int, 
+        batch_size: int,
 
-        #   initial_lr: float,  
-          learning_rates: Union[Tuple[float, float], float],
-          temperature: float,
+        learning_rates: Union[Tuple[float, float], float],
+        temperature: float,
 
-          ckpnt_dir: Union[str, Path],
-          val_per_epoch: int = 3,
-          seed:int = 69,
-          run_name: str = 'sim_clr_run',
-          use_wandb: bool = True,
-          batch_stats:bool=False
-          ):    
+        ckpnt_dir: Union[str, Path],
+        val_per_epoch: int = 3,
+        seed:int = 69,
+        run_name: str = 'sim_clr_run',
+        use_wandb: bool = True,
+        batch_stats:bool=False,
+        num_train_samples_per_cls: Union[int, float]=None, # the number of training samples per cls
+        num_val_samples_per_cls: Union[int, float]=None, # the number of validation samples per cls
+        ):    
 
     if use_wandb:
         # this argument was added to avoid initializing wandb twice during the tuning process
@@ -327,6 +376,8 @@ def run_pipeline(model: SimClrModel,
                                 val_data_folder=val_data_folder, 
                                 output_shape=output_shape,
                                 batch_size=batch_size, 
+                                num_train_samples_per_cls=num_train_samples_per_cls,
+                                num_val_samples_per_cls=num_val_samples_per_cls,
                                 seed=seed)
 
     # dealing with gradient accumulation

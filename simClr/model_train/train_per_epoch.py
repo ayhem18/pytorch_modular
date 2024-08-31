@@ -20,7 +20,7 @@ def train_per_batch(model: SimClrModel,
                     optimizer_step:bool,
                     device: str,
                     batch_stats: bool=False
-                    ) -> float:
+                    ) -> Union[float, Tuple[float, float]]:
 
     model.to(device=device)
     # make sure to stack the two batches into a single batch 
@@ -35,7 +35,7 @@ def train_per_batch(model: SimClrModel,
 
     # get a deep copy for the batch representation
     if batch_stats:
-        g_x_copy = g_x.detach().clone()
+        g_x_copy = g_x.detach()
         # compute the similarities between the
         similarities = CosineSim().forward(g_x_copy, g_x_copy)
 
@@ -68,9 +68,10 @@ def train_per_batch(model: SimClrModel,
     
     return batch_loss
 
+
 def train_per_epoch(model: SimClrModel, 
                 dataloader: DataLoader,
-                loss_function: nn.Module,
+                loss_function: SimClrLoss,
                 optimizer: torch.optim.Optimizer, 
                 scheduler: Optional[torch.optim.lr_scheduler.LRScheduler], 
                 epoch_index: int,
@@ -79,7 +80,7 @@ def train_per_epoch(model: SimClrModel,
                 accumulate_grads: int = 1,
                 batch_stats:bool=False,
                 use_wandb:bool=True
-                ) -> Tuple[float, float]:
+                ) -> dict[str, float]:
 
     if isinstance(log_per_batch, float):
         num_batches = len(dataloader)
@@ -89,11 +90,11 @@ def train_per_epoch(model: SimClrModel,
     model.to(device=device)
     model.train()
 
-
     # define a function to save the average loss per epoch
     epoch_train_loss = 0
     
     num_batches = len(dataloader)
+
 
     for batch_index, (x1, x2) in tqdm(enumerate(dataloader, start=1), desc=f'training batch at epoch {epoch_index }'): 
         # to make the gradient accumulation work
@@ -118,10 +119,11 @@ def train_per_epoch(model: SimClrModel,
             batch_train_loss = batch_train_res[0]
         else:
             batch_train_loss = batch_train_res
-            
+
+
         # log the batch loss depending on the batch index
         if batch_index % log_per_batch == 0 and use_wandb:
-            log_dict = {"epoch": epoch_index, "train_loss": batch_train_loss, "batch": batch_index} 
+            log_dict = {"train_epoch": epoch_index, "train_loss": batch_train_loss} 
             
             if batch_stats:
                log_dict.update(batch_train_res[1]) 
@@ -139,10 +141,12 @@ def train_per_epoch(model: SimClrModel,
 
     # log the metrics
     if use_wandb:
-        wandb.log({"epoch": epoch_index, 
-                "train_loss": epoch_train_loss})
+        wandb.log({
+                "train_epoch": epoch_index, 
+                "train_loss": epoch_train_loss
+                })
 
-    return epoch_train_loss
+    return {"loss": epoch_train_loss}
 
 def validation_per_batch(model: SimClrModel, 
                         x1_batch: torch.Tensor,
@@ -160,7 +164,7 @@ def validation_per_batch(model: SimClrModel,
 
 
         if batch_stats:
-            g_x_copy = g_x.detach().clone()
+            g_x_copy = g_x.detach() # a copy of the model embeddings without gradients
             # compute the similarities between the
             similarities = CosineSim().forward(g_x_copy, g_x_copy) 
 
@@ -173,16 +177,19 @@ def validation_per_batch(model: SimClrModel,
 
             # save them in a dictionary
             batch_stats = {
-                        "train_avg_mean_sim": avg_mean_sample_sims,
-                        "train_avg_min_sim": avg_min_sample_sims,
-                        "train_avg_max_sim": avg_max_sample_sims,
-                        "train_avg_std_sim": avg_std_sample_sims,
+                        "val_avg_mean_sim": avg_mean_sample_sims,
+                        "val_avg_min_sim": avg_min_sample_sims,
+                        "val_avg_max_sim": avg_max_sample_sims,
+                        "val_avg_std_sim": avg_std_sample_sims,
                         }
 
         batch_loss_obj = loss_function.forward(g_x)
 
         batch_loss = batch_loss_obj.item()
 
+    if batch_stats:
+        return batch_loss, batch_stats
+    
     return batch_loss
 
 def validation_per_epoch(model: SimClrModel,
@@ -192,7 +199,7 @@ def validation_per_epoch(model: SimClrModel,
                         device: str, 
                         log_per_batch: Union[float, int],
                         use_wandb:bool=True,
-                        batch_stats:bool=False) -> Tuple[float, float]:
+                        batch_stats:bool=False) -> dict[str, float]:
 
     if isinstance(log_per_batch, float):
         num_batches = len(dataloader)
@@ -202,6 +209,7 @@ def validation_per_epoch(model: SimClrModel,
 
     model = model.to(device=device)
     model.eval()
+
     for batch_index, (x1, x2) in tqdm(enumerate(dataloader, start=1), desc=f'validation batch for epoch {epoch_index}'):
         batch_val_res = validation_per_batch(model=model, 
                                         x1_batch=x1, 
@@ -215,7 +223,7 @@ def validation_per_epoch(model: SimClrModel,
 
         # log the batch loss depending on the batch index
         if batch_index % log_per_batch == 0 and use_wandb:
-            log_dict = {"epoch": epoch_index, "batch_val_loss": batch_val_loss, "batch": batch_index} 
+            log_dict = {"val_epoch": epoch_index, "batch_val_loss": batch_val_loss} 
             
             if batch_stats:
                log_dict.update(batch_val_res[1]) 
@@ -223,5 +231,10 @@ def validation_per_epoch(model: SimClrModel,
 
         epoch_val_loss += batch_val_loss
 
+    # average the validation loss
+    epoch_val_loss /= len(dataloader)
+
     if use_wandb:
-        wandb.log({"epoch": epoch_index, "val_loss": epoch_val_loss / len(dataloader)})
+        wandb.log({"epoch": epoch_index, "val_loss": epoch_val_loss})
+
+    return {"loss": epoch_val_loss}

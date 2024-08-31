@@ -34,6 +34,50 @@ def sanity_check_tuning(sanity_train: Union[str, Path],
             sweep_count=sweep_count
             )
 
+def val_augmented_sanity_check(train_data_folder: Union[str, Path],
+                        val_data_folder: Union[str, Path],
+                        temperature: float,
+                        lr_options: Dict,
+                        num_layers_options: Dict,
+                        epochs_per_sweeps:int,
+                        sweep_count:int
+                        ):
+    # the idea here is to find a set of hyperparameters enabling the model to overfit to the training data
+    # the model with the lowest training loss will be chosen for further training
+     
+    log_dir = os.path.join(SCRIPT_DIR, 'logs', 'tune_logs')
+    tn.tune(train_data_folder=train_data_folder, 
+            val_data_folder=val_data_folder,
+            log_dir=log_dir,
+            temperature=temperature,
+            lr_options=lr_options,
+            num_layers_options=num_layers_options,
+            objective='train_loss',
+            tune_method='bayes',
+            epochs_per_sweeps=epochs_per_sweeps,
+            sweep_count=sweep_count,
+            num_train_samples_per_cls=100, 
+            num_val_samples_per_cls=None,
+            )
+
+
+
+def val_loss_and_downstream_metric():
+    lr_options = {"max": -1.0, "min":-3.0}
+    num_fc_layers = {"values": list(range(2, 7))}
+
+    sanity_train = os.path.join(SCRIPT_DIR, 'data', 'food101', 'train')
+    sanity_val = os.path.join(SCRIPT_DIR, 'data', 'food101', 'val')
+
+    val_augmented_sanity_check(train_data_folder=sanity_train,
+                               val_data_folder=sanity_val,
+                               lr_options=lr_options,
+                               num_layers_options=num_fc_layers,
+                               epochs_per_sweeps=12,
+                               sweep_count=15, 
+                               temperature=0.5,
+                               )
+    
 
 def set_the_initial_model():
     # let's start with lr_options: 
@@ -41,7 +85,7 @@ def set_the_initial_model():
     lr_options = {"max": -1.0, "min":-3.0}
     num_fc_layers = {"values": list(range(2, 7))}
 
-    sanity_train = os.path.join(SCRIPT_DIR, 'data', 'caltech101', 'train')
+    sanity_train = os.path.join(SCRIPT_DIR, 'data', 'food101', 'train')
     sanity_check_tuning(sanity_train=sanity_train, 
                         lr_options=lr_options, 
                         num_layers_options=num_fc_layers,
@@ -52,5 +96,5 @@ def set_the_initial_model():
 
 if __name__ == '__main__':
     # let's start with something simple
-    set_the_initial_model()
-
+    # set_the_initial_model()
+    pass

@@ -4,7 +4,7 @@ This script contains the implementation of the tuning process
 import os, wandb, json
 
 from pathlib import Path
-from typing import Union, Dict, Optional
+from typing import Union, Dict, Optional, Tuple
 from functools import partial
 
 from mypt.code_utilities import directories_and_files as dirf
@@ -12,22 +12,27 @@ from mypt.models.simClr.simClrModel import AlexnetSimClr, ResnetSimClr
 
 from .training import run_pipeline
 
+
 WANDB_PROJECT_NAME="SimClr"
 
 _BATCH_SIZE = 200
 
 def _sweep_function( 
-          train_data_folder:Union[str, Path],
-          val_data_folder:Optional[Union[str, Path]],
-          sweep_config: Dict,
-          epochs_per_sweep: int, 
-          batch_size: int,
+        train_data_folder:Union[str, Path],
+        val_data_folder:Optional[Union[str, Path]],
+        output_shape:Tuple[int, int],
+        epochs_per_sweep: int, 
+        batch_size: int,
+        
+        temperature: float,
+        log_dir: Union[str, Path],
+        evaluate: bool,
 
-          temperature: float,
-          log_dir: Union[str, Path],
-          val_per_epoch: int = 3,
-          seed:int = 69,        
-         ):
+        val_per_epoch: int = 3,
+        seed:int = 69,
+        num_train_samples_per_cls: Optional[int]=None,
+        num_val_samples_per_cls: Optional[int]=None,
+        ):
     
     wandb.init(project=WANDB_PROJECT_NAME)
         #config=sweep_config)
@@ -36,38 +41,58 @@ def _sweep_function(
     num_fc_layers = wandb.config.num_fc_layers
     lr = 10 ** wandb.config.lr    
 
-    # model = AlexnetSimClr(input_shape=(3, 96, 96), 
-    #                       output_dim=128,  
-    #                       num_fc_layers=num_fc_layers)
 
-    model = ResnetSimClr(input_shape=(3, 200, 200), output_dim=128, num_fc_layers=num_fc_layers, freeze=False)
+    model = ResnetSimClr(input_shape=(3,) + output_shape, output_dim=128, num_fc_layers=num_fc_layers, freeze=False)
 
     # create a directory where to save the checkpoint
     ckpnt_dir = os.path.join(log_dir,  f'sweep_{len(os.listdir(log_dir)) + 1}')
 
-    _ = run_pipeline(model=model, 
-                 train_data_folder=train_data_folder, 
-                 val_data_folder=val_data_folder,   
-                 output_shape=(96, 96),
-                 num_epochs=epochs_per_sweep,
-                 batch_size=batch_size, 
-                 learning_rates=lr,
-                #  initial_lr=lr, 
-                 temperature=temperature,
-                 ckpnt_dir=ckpnt_dir,
-                 val_per_epoch=val_per_epoch,
-                 seed=seed
-                )
+    run_result = run_pipeline(
+            model=model, 
+            train_data_folder=train_data_folder, 
+            val_data_folder=val_data_folder,   
+            output_shape=output_shape,
+            num_epochs=epochs_per_sweep,
+            batch_size=batch_size, 
+            learning_rates=lr,
+            temperature=temperature,
+            ckpnt_dir=ckpnt_dir,
+            val_per_epoch=val_per_epoch,
+            seed=seed,
+            num_train_samples_per_cls=num_train_samples_per_cls,
+            num_val_samples_per_cls=num_val_samples_per_cls,)
+
+    train_loss, val_loss, ckpnt = None, None, None
+
+    if len(run_result) == 2:
+        train_loss, ckpnt = run_result
+    else:
+        train_loss, val_loss, ckpnt = run_result
+
+    model_config = {"num_fc_layers": num_fc_layers, 
+                    "lr": lr,
+                    "train_loss": train_loss}
+
+    if val_loss is not None:
+        model_config['val_loss'] = val_loss
 
     # save the configuration along with the checkpoint
     with open(os.path.join(ckpnt_dir, 'config.json'), 'w') as f:
-        json.dump({"num_fc_layers": num_fc_layers, "lr": lr}, f, indent=2)
+        json.dump({"num_fc_layers": num_fc_layers, 
+                   "lr": lr}, f, indent=4)
+
+    if evaluate:
+
+        pass
 
 
 def tune(train_data_folder: Union[str, Path],
          val_data_folder: Optional[Union[str, Path]],
          log_dir: Union[str, Path],
          temperature: float,
+
+         output_shape:Tuple[int, int],
+
          lr_options: Dict,
          num_layers_options: Dict,
 
@@ -75,7 +100,8 @@ def tune(train_data_folder: Union[str, Path],
          tune_method:str,
 
          epochs_per_sweeps:int,
-         sweep_count:int
+         sweep_count:int,
+         **kwargs
         ):
 
     if objective not in ['train_loss', 'val_loss']:
@@ -107,13 +133,15 @@ def tune(train_data_folder: Union[str, Path],
     sweep_function_object = partial(_sweep_function,
                                     train_data_folder=train_data_folder,
                                     val_data_folder=val_data_folder,
-                                    sweep_config=sweep_config, 
+                                    # sweep_config=sweep_config,
+                                    output_shape=output_shape, 
                                     epochs_per_sweep=epochs_per_sweeps, 
                                     batch_size=_BATCH_SIZE,
                                     temperature=temperature,
                                     log_dir=log_dir,
                                     val_per_epoch=3,
-                                    seed=0
+                                    seed=0,
+                                    **kwargs
                                     )
 
     # define the sweep id
