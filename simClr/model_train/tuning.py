@@ -11,7 +11,7 @@ from mypt.code_utilities import directories_and_files as dirf
 from mypt.models.simClr.simClrModel import AlexnetSimClr, ResnetSimClr
 
 from .training import run_pipeline
-
+from .evaluating import evaluate_model
 
 WANDB_PROJECT_NAME="SimClr"
 
@@ -32,8 +32,12 @@ def _sweep_function(
         seed:int = 69,
         num_train_samples_per_cls: Optional[int]=None,
         num_val_samples_per_cls: Optional[int]=None,
+        num_neighbors:Optional[int]=None
         ):
     
+    if evaluate and num_neighbors is None:
+        raise ValueError(f"the argument 'evaluate' is set to True while the argument 'num_neighbor' is not explicitly passed !!")
+
     wandb.init(project=WANDB_PROJECT_NAME)
         #config=sweep_config)
 
@@ -76,14 +80,23 @@ def _sweep_function(
     if val_loss is not None:
         model_config['val_loss'] = val_loss
 
-    # save the configuration along with the checkpoint
-    with open(os.path.join(ckpnt_dir, 'config.json'), 'w') as f:
-        json.dump({"num_fc_layers": num_fc_layers, 
-                   "lr": lr}, f, indent=4)
 
     if evaluate:
+        accuracy = evaluate_model(model=model, 
+                                  model_ckpnt=ckpnt, 
+                                  train_data_folder=train_data_folder,
+                                  val_data_folder=val_data_folder,
+                                  output_shape=output_shape,
+                                  num_train_samples_per_cls=num_train_samples_per_cls,
+                                  num_val_samples_per_cls=num_val_samples_per_cls)
 
-        pass
+        model_config['val_accuracy'] = accuracy
+
+
+    # save the configuration along with the checkpoint
+    with open(os.path.join(ckpnt_dir, 'config.json'), 'w') as f:
+        json.dump(model_config, indent=4)
+    
 
 
 def tune(train_data_folder: Union[str, Path],

@@ -355,20 +355,18 @@ class KnnClassifier(KNN):
                 inference_device:Optional[str]=None):
 
         super().__init__(
-                        self,
                         train_ds=train_ds,
                         train_ds_inference_batch_size=train_ds_inference_batch_size, 
                         model=model,
 
                         process_sample_ds=process_sample_ds,
-                        process_sample_ds_class=process_sample_ds_class,
                         process_model_output=process_model_output,
 
                         model_ckpnt=model_ckpnt, 
                         inference_device=inference_device)
         
         if process_sample_ds_class is None:
-            warnings.warn("the 'process_sample_ds_class' is not Passed. The class assumes that the dataset is a classification dataset where each item is a couple of image and classification label")
+            warnings.warn("the 'process_sample_ds_class' is not Passed. The class assumes that the dataset is a classification dataset where each item is a tuple of an image and a classification label")
             process_sample_ds_class = lambda ds, index: ds[index][1] #  
 
         self.process_sample_ds_class = process_sample_ds_class
@@ -381,7 +379,7 @@ class KnnClassifier(KNN):
 
         counter = Counter(sample_classes)
         max_freq = max([v for _, v in counter.items()])
-        modes = [k for k, v in counter.items if v == max_freq]
+        modes = [k for k, v in counter.items() if v == max_freq]
 
         if len(modes) == 1:
             return modes[0]
@@ -389,16 +387,18 @@ class KnnClassifier(KNN):
         msr_dict = defaultdict(lambda : [])
 
         if measure_as_similarity:
-            for index,c in sample_classes:
+            for index,c in enumerate(sample_classes):
                 if c in modes:
                     msr_dict[c].append(sample_distances[index])
-            return max(msr_dict, key=lambda x: np.mean(msr_dict[x]))
+            label = max(msr_dict, key=lambda x: np.mean(msr_dict[x]))
+            return label
 
-        for index,c in sample_classes:
+        for index,c in enumerate(sample_classes):
             if c in modes:
                 msr_dict[c].append(sample_distances[index])
-        return min(msr_dict, key=lambda x: np.mean(msr_dict[x]))
 
+        label = min(msr_dict, key=lambda x: np.mean(msr_dict[x]))
+        return label
 
 
     def predict(
@@ -428,6 +428,10 @@ class KnnClassifier(KNN):
 
         classes = np.asarray([[self.process_sample_ds_class(self.train_ds, index) for index in arr_indices] for arr_indices in indices_res])
 
-        predictions = np.asarray([self.__predict_per_sample(distances_res[i, :].tolist(), classes[i, :].tolist()) for i in range(len(classes))])
+        predictions = np.asarray([self.__predict_per_sample(distances_res[i, :].tolist(), 
+                                                            classes[i, :].tolist(), 
+                                                            measure_as_similarity) 
+                                    for i in range(len(classes))
+                                ])
 
         return predictions

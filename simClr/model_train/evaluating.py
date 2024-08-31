@@ -2,21 +2,16 @@
 This script contains the implementation of the downstream evaluation process of the code
 """
 
-import torchvision.transforms as tr
 import numpy as np
 
-from typing import Union, Optional, Tuple, List
+from typing import Union, Optional, Tuple
 from pathlib import Path
 
-from torch.utils.data import DataLoader
-from torchvision.datasets import Food101
 
-
-from mypt.data.dataloaders.standard_dataloaders import initialize_train_dataloader, initialize_val_dataloader
-from mypt.code_utilities import pytorch_utilities as pu, directories_and_files as dirf
-from mypt.models.simClr.simClrModel import SimClrModel, ResnetSimClr
+# from mypt.data.dataloaders.standard_dataloaders import initialize_train_dataloader, initialize_val_dataloader
+from mypt.code_utilities import directories_and_files as dirf
 from mypt.subroutines.neighbors.knn import KnnClassifier
-
+from mypt.models.simClr.simClrModel import SimClrModel
 from .ds_wrapper import Food101Wrapper
 
 
@@ -88,13 +83,16 @@ def evaluate_model(
             model: SimClrModel,
             model_ckpnt: Optional[Union[str, Path]],
             train_data_folder: Union[str, Path],
-            val_data_folder: Optional[Union[str, Path]],
+            val_data_folder: Union[str, Path],
             output_shape: Tuple[int, int],
             num_train_samples_per_cls:Optional[int],
             num_val_samples_per_cls:Optional[int],
             num_neighbors: int,
             inference_batch_size:int=EVAL_BATCH_SIZE
             ) -> float:
+
+    if val_data_folder is None:
+        raise TypeError(f"Make sure to pass the validation dataset")
 
     # get the data
     train_ds, val_ds = _set_data_classification_data(train_data_folder, val_data_folder, 
