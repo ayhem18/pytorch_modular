@@ -60,8 +60,8 @@ def val_augmented_sanity_check(train_data_folder: Union[str, Path],
             tune_method='bayes',
             epochs_per_sweeps=epochs_per_sweeps,
             sweep_count=sweep_count,
-            num_train_samples_per_cls=100, 
-            num_val_samples_per_cls=None,
+            num_train_samples_per_cls=10, 
+            num_val_samples_per_cls=10,
             num_neighbors=EVALUATION_NUM_NEIGHBORS,
             evaluate=True # make sure to pass evaluate to run the KnnClassifier
             )
@@ -75,15 +75,15 @@ def val_loss_and_downstream_metric():
     sanity_train = os.path.join(SCRIPT_DIR, 'data', 'food101', 'train')
     sanity_val = os.path.join(SCRIPT_DIR, 'data', 'food101', 'val')
 
-    output_shape = (200, 2000)
+    output_shape = (200, 200)
 
     val_augmented_sanity_check(train_data_folder=sanity_train,
                                val_data_folder=sanity_val,
                                output_shape=output_shape,
                                lr_options=lr_options,
                                num_layers_options=num_fc_layers,
-                               epochs_per_sweeps=2,
-                               sweep_count=3, 
+                               epochs_per_sweeps=1,
+                               sweep_count=1, 
                                temperature=0.5,
                                )
     

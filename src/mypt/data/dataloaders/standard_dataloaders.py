@@ -15,7 +15,8 @@ def initialize_train_dataloader(dataset_object: Dataset,
                         batch_size: int,
                         num_workers: int,
                         drop_last: bool = True,
-                        warning: bool = True
+                        warning: bool = True,
+                        pin_memory:bool = False
                         ) -> DataLoader:
     """This function initializes a dataloader making sure the data loading is reproducible across runs. 
 
@@ -51,7 +52,7 @@ def initialize_train_dataloader(dataset_object: Dataset,
     # if the number of workers is set to '0', then the parameter 'pin_memory' will be set to True to improve performance
     # make sure to warn the user
     if warning:
-        warn(message=f"the 'num_workers' argument is 0. We will set the 'pin_memory' argument to True to improve performance")
+        warn(message=f"the 'num_workers' argument is set to 0. The dataloader will be run by the main process !!!")
 
     dl_train = DataLoader(dataset=dataset_object, 
                         shuffle=True, # the train dataloader must be shuffled not to hurt performance
@@ -59,7 +60,7 @@ def initialize_train_dataloader(dataset_object: Dataset,
                         batch_size=batch_size, 
                         num_workers=0, 
                         generator=dl_train_gen,
-                        pin_memory=True)
+                        pin_memory=pin_memory)
     
     return dl_train
 
@@ -90,14 +91,14 @@ def initialize_val_dataloader(dataset_object: Dataset,
     # if the number of workers is set to '0', then the parameter 'pin_memory' will be set to True to improve performance
     # make sure to warn the user
     if warning:
-        warn(message=f"the 'num_workers' argument is 0. We will set the 'pin_memory' argument to True to improve performance")
+        warn(message=f"the 'num_workers' argument is 0.")
 
     dl = DataLoader(dataset=dataset_object, 
                         shuffle=False,
                         drop_last=False, 
                         batch_size=batch_size, 
                         num_workers=0,   
-                        pin_memory=True, # this dataloader will be run by the main process.
+                        pin_memory=False,
                         collate_fn=collate_fn) 
     
     return dl

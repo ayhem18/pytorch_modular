@@ -15,7 +15,7 @@ from .evaluating import evaluate_model
 
 WANDB_PROJECT_NAME="SimClr"
 
-_BATCH_SIZE = 200
+_BATCH_SIZE = 512
 
 def _sweep_function( 
         train_data_folder:Union[str, Path],

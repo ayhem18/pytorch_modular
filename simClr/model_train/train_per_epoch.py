@@ -45,7 +45,7 @@ def train_per_batch(model: SimClrModel,
         avg_std_sample_sims = torch.mean(similarities.std(dim=1)).item()
 
         # save them in a dictionary
-        batch_stats = {
+        stats = {
                        "train_avg_mean_sim": avg_mean_sample_sims,
                        "train_avg_min_sim": avg_min_sample_sims,
                        "train_avg_max_sim": avg_max_sample_sims,
@@ -64,7 +64,7 @@ def train_per_batch(model: SimClrModel,
         optimizer.step()
 
     if batch_stats:
-        return batch_loss, batch_stats
+        return batch_loss, stats 
     
     return batch_loss
 
@@ -152,6 +152,7 @@ def validation_per_batch(model: SimClrModel,
                         x1_batch: torch.Tensor,
                         x2_batch: torch.Tensor,
                         loss_function: nn.Module,
+                        batch_stats: bool=False,
                      ):
 
     device = pu.get_module_device(model)
@@ -176,7 +177,7 @@ def validation_per_batch(model: SimClrModel,
             avg_std_sample_sims = torch.mean(similarities.std(dim=1)).item()
 
             # save them in a dictionary
-            batch_stats = {
+            stats = {
                         "val_avg_mean_sim": avg_mean_sample_sims,
                         "val_avg_min_sim": avg_min_sample_sims,
                         "val_avg_max_sim": avg_max_sample_sims,
@@ -188,7 +189,7 @@ def validation_per_batch(model: SimClrModel,
         batch_loss = batch_loss_obj.item()
 
     if batch_stats:
-        return batch_loss, batch_stats
+        return batch_loss, stats
     
     return batch_loss
 
@@ -218,7 +219,7 @@ def validation_per_epoch(model: SimClrModel,
 
         if batch_stats:
             batch_val_loss = batch_val_res[0]
-        else:
+        else: 
             batch_val_loss = batch_val_res
 
         # log the batch loss depending on the batch index

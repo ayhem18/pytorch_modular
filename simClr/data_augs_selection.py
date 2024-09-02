@@ -25,9 +25,9 @@ DATA_FOLDER = os.path.join(current, 'data')
 
 
 _DEFAULT_DATA_AUGS = [ 
-                      tr.RandomHorizontalFlip(p=1), 
+                      tr.RandomHorizontalFlip(p=0.5), 
                       tr.RandomRotation(degrees=10),
-					#   tr.RandomErasing(p=1, scale=(0.05, 0.15)),
+					  tr.RandomErasing(p=1, scale=(0.05, 0.15)),
 					  tr.ColorJitter(brightness=0.05, contrast=0.05, hue=0.05),
                       tr.GaussianBlur(kernel_size=(5, 5)),
                       ]

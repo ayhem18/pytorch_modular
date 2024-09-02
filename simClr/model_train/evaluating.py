@@ -101,7 +101,7 @@ def evaluate_model(
                                             num_val_samples_per_cls=num_val_samples_per_cls)
 
     classifier = KnnClassifier(train_ds=train_ds, 
-                                val_ds=val_ds,
+                               train_ds_inference_batch_size=inference_batch_size,
                                 process_model_output=lambda m, x: m(x)[0], # the forward call returns a tuple 
                                 model=model,
                                 model_ckpnt=model_ckpnt,
@@ -111,7 +111,7 @@ def evaluate_model(
     predictions = classifier.predict(val_ds=val_ds, 
                                      inference_batch_size=inference_batch_size, 
                                      num_neighbors=num_neighbors, 
-                                     measure='cosine', 
+                                     measure='cosine_sim', 
                                      measure_as_similarity=True, 
                                      num_workers=2)
 

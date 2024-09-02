@@ -13,7 +13,6 @@ from torch.utils.data import DataLoader
 # from torchlars import LARS # the authors of the paper used this optimizer
 
 from mypt.losses.simClrLoss import SimClrLoss
-from mypt.data.datasets.parallel_augmentation.parallel_aug_ds import ParallelAugDs
 from mypt.data.dataloaders.standard_dataloaders import initialize_train_dataloader, initialize_val_dataloader
 from mypt.code_utilities import pytorch_utilities as pu, directories_and_files as dirf
 from mypt.schedulers.annealing_lr import AnnealingLR
@@ -24,9 +23,10 @@ from .ds_wrapper import Food101Wrapper
 
 
 _DEFAULT_DATA_AUGS = [
-    tr.RandomHorizontalFlip(p=1), 
+    tr.RandomHorizontalFlip(p=0.5), 
     tr.RandomResizedCrop((200, 200), scale=(0.5, 1)),
     
+    tr.RandomErasing(p=1, scale=(0.05, 0.15)),
     tr.RandomGrayscale(p=0.2),
     tr.GaussianBlur(kernel_size=(5, 5)),
     tr.ColorJitter(brightness=0.5, contrast=0.5)
@@ -41,7 +41,7 @@ _UNIFORM_DATA_AUGS = [tr.Normalize(mean=[0.485, 0.456, 0.406],
 _WANDB_PROJECT_NAME = "SimClr"
 
 
-PREFERABLE_BATCH_SIZE = 1024
+PREFERABLE_BATCH_SIZE = 512
 
 # let's split the training pipeline into several functions
 # def _set_data(train_data_folder: Union[str, Path],
@@ -154,7 +154,7 @@ def _set_data(train_data_folder: Union[str, Path],
         val_dl = initialize_val_dataloader(dataset_object=train_ds, 
                                             seed=seed,
                                             batch_size=batch_size,
-                                            num_workers=0,
+                                            num_workers=2,
                                             )
     else:
         val_dl = None
@@ -281,7 +281,7 @@ def _run(
 
             continue
 
-        # at this point we know that val_dl is None and hence the validation loss is the criteria to save checkpoints
+        # at this point we know that val_dl is not None and hence the validation loss is the criteria to save checkpoints
         # run the model on the validation set every "val_per_epoch" and the last epoch
         if not ((epoch_index + 1) % val_per_epoch == 0 or epoch_index == num_epochs - 1):
             continue
@@ -418,6 +418,7 @@ def run_pipeline(model: SimClrModel,
     # this piece of code is taken from the fairSeq repo (by the Facebook AI research team) as recommmended on the Pytorch forum:
     except RuntimeError as e:
         if 'out of memory' not in str(e):
+            print(e)
             raise e
         
         # at this point, the error is known to be an out of memory error
