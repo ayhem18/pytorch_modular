@@ -1,4 +1,4 @@
-import random, torch
+import torch, numpy as np
 
 
 import torchvision.transforms as tr
@@ -11,7 +11,6 @@ from tqdm import tqdm
 from torchvision.datasets import Food101
 
 from mypt.data.datasets.parallel_augmentation.parallel_aug_abstract import AbstractParallelAugsDs
-
 
 class Food101Wrapper(AbstractParallelAugsDs):
     def __init__(self, 
@@ -31,7 +30,7 @@ class Food101Wrapper(AbstractParallelAugsDs):
         
         self._ds = Food101(root=root_dir,     
                          split='train' if train else 'test',
-                         transform=tr.ToTensor(), 
+                         transform=None, # return a PIL.image for both modes
                          download=True)
 
         self.samples_per_cls_map = None
@@ -94,12 +93,15 @@ class Food101Wrapper(AbstractParallelAugsDs):
 
             sample_image:torch.Tensor = self._ds[self.samples_per_cls_map[sp] + index - sp][0]
         else:
-            sample_image = self._ds[index][0]
+            sample_image = self._ds[index][0]   
+
+        # convert the image to numpy array
+        sample_image= np.asarray(sample_image).copy() # make sure to call the copy method since the original array is, for some reason, read-only
 
         if sample_image.shape[0] == 1:
             sample_image = torch.concat([sample_image for _ in range(3)], dim=0)
 
-        augs1, augs2 = self.__set_augmentations()
+        augs1, augs2 = self._set_augmentations()
         s1, s2 = augs1(sample_image), augs2(sample_image) 
 
         return s1, s2

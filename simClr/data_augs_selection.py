@@ -9,7 +9,7 @@ from PIL import Image
 from pathlib import Path
 
 from mypt.data.datasets.parallel_augmentation.parallel_aug_ds import ParallelAugDs
-from ds_wrapper import CALTECH101Wrapper
+from model_train.ds_wrapper import Food101Wrapper
 
 from mypt.code_utilities import pytorch_utilities as pu
 from mypt.data.dataloaders.standard_dataloaders import initialize_train_dataloader
@@ -84,7 +84,6 @@ class Wrapper(Dataset):
         
         s1, s2 = augs1(sample_image), augs2(sample_image) 
         # these variables are created for debugging purposes
-        n1, n2 = s1.numpy(), s2.numpy()
 
         return s1, s2
 
@@ -93,14 +92,18 @@ class Wrapper(Dataset):
         return self._len
         
 
+from model_train.training import _DEFAULT_DATA_AUGS, _UNIFORM_DATA_AUGS
+
 
 def check_data_aug(data_folder):
 
-    train_ds = Wrapper(root_dir=data_folder, 
-                                output_shape=(200, 200),
-                                augs_per_sample=2, 
-                                sampled_data_augs=_DEFAULT_DATA_AUGS,
-                                uniform_data_augs=_UNIFORM_DATA_AUGS)
+    # train_ds = Wrapper(root_dir=data_folder, 
+    #                             output_shape=(200, 200),
+    #                             augs_per_sample=2, 
+    #                             sampled_data_augs=_DEFAULT_DATA_AUGS,
+    #                             uniform_data_augs=_UNIFORM_DATA_AUGS)
+
+    train_ds = Food101Wrapper(root_dir=data_folder,output_shape=(200, 200), augs_per_sample=2, sampled_data_augs=_DEFAULT_DATA_AUGS, uniform_data_augs=_UNIFORM_DATA_AUGS)
 
     # create a dataloader
     dl = initialize_train_dataloader(train_ds, seed=0, batch_size=10, num_workers=1)
@@ -127,24 +130,26 @@ def check_data_aug(data_folder):
     #     #     plt.show()
 
     for i in range(5):
-        # im = train_ds.load_sample(train_ds.idx2path[i])
+        im = train_ds._ds[i][0]
+        im = np.array(im)
+
         x1, x2 = train_ds[i]
 
-        # im = np.array(im)
         x1, x2 = x1.numpy(), x2.numpy()
 
         # transpose the image 
         x1, x2 = np.moveaxis(x1, 0,-1), np.moveaxis(x2, 0, -1)
         fig = plt.figure() 
-        # fig.add_subplot(1, 2, 1) 
-        # plt.imshow(im) 
-        # plt.title("original image") 
 
-        fig.add_subplot(1, 2, 1) 
+        fig.add_subplot(1, 3, 1) 
+        plt.imshow(im) 
+        plt.title("original image") 
+
+        fig.add_subplot(1, 3, 2) 
         plt.imshow(x1) 
         plt.title("augmented image 1") 
 
-        fig.add_subplot(1, 2, 2) 
+        fig.add_subplot(1, 3, 3) 
         plt.imshow(x2) 
         plt.title("augmented image 2") 
 
@@ -153,5 +158,5 @@ def check_data_aug(data_folder):
 
 
 if __name__ == '__main__':
-    train_data_folder = os.path.join(DATA_FOLDER, 'caltech101', 'train', 'data')#os.path.join(DATA_FOLDER, 'caltech101', 'train')
+    train_data_folder = os.path.join(DATA_FOLDER, 'food101', 'train')#os.path.join(DATA_FOLDER, 'caltech101', 'train')
     check_data_aug(train_data_folder)

@@ -8,7 +8,7 @@ from typing import Union, Dict, Optional, Tuple
 from functools import partial
 
 from mypt.code_utilities import directories_and_files as dirf
-from mypt.models.simClr.simClrModel import AlexnetSimClr, ResnetSimClr
+from mypt.models.simClr.simClrModel import ResnetSimClr
 
 from .training import run_pipeline
 from .evaluating import evaluate_model
@@ -26,12 +26,12 @@ def _sweep_function(
         
         temperature: float,
         log_dir: Union[str, Path],
-        evaluate: bool,
 
         val_per_epoch: int = 3,
         seed:int = 69,
         num_train_samples_per_cls: Optional[int]=None,
         num_val_samples_per_cls: Optional[int]=None,
+        evaluate: bool=False,
         num_neighbors:Optional[int]=None
         ):
     
@@ -88,7 +88,8 @@ def _sweep_function(
                                   val_data_folder=val_data_folder,
                                   output_shape=output_shape,
                                   num_train_samples_per_cls=num_train_samples_per_cls,
-                                  num_val_samples_per_cls=num_val_samples_per_cls)
+                                  num_val_samples_per_cls=num_val_samples_per_cls,
+                                  num_neighbors=num_neighbors)
 
         model_config['val_accuracy'] = accuracy
 

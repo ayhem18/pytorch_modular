@@ -6,11 +6,11 @@ import os, random
 
 import torchvision.transforms as tr
 from torch.utils.data import Dataset
-from typing import Union, List, Dict, Tuple, Optional
+from typing import Union, List, Dict, Tuple
 from pathlib import Path
 from PIL import Image
 
-from ....code_utilities import directories_and_files as dirf
+# from ....code_utilities import directories_and_files as dirf
 from ....code_utilities import pytorch_utilities as pu
 
 from abc import ABC, abstractmethod
@@ -47,7 +47,7 @@ class AbstractParallelAugsDs(Dataset, ABC):
         self.augs_per_sample = min(augs_per_sample, len(self.sampled_data_augs))
 
 
-    def __set_augmentations(self) -> Tuple[tr.Compose, tr.Compose]:
+    def _set_augmentations(self) -> Tuple[tr.Compose, tr.Compose]:
         augs1, augs2 = random.sample(self.sampled_data_augs, self.augs_per_sample), random.sample(self.sampled_data_augs, self.augs_per_sample)
 
         # convert to a tensor

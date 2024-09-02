@@ -3,12 +3,14 @@
 
 import os
 
-from typing import Union, Dict
+from typing import Union, Dict, Tuple
 from pathlib import Path
 
-from model_train import tuning as tn
+from model_train import tuning as tn, ds_wrapper as dsw
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
+
+EVALUATION_NUM_NEIGHBORS = 7
 
 
 def sanity_check_tuning(sanity_train: Union[str, Path],
@@ -37,6 +39,7 @@ def sanity_check_tuning(sanity_train: Union[str, Path],
 def val_augmented_sanity_check(train_data_folder: Union[str, Path],
                         val_data_folder: Union[str, Path],
                         temperature: float,
+                        output_shape: Tuple[int],
                         lr_options: Dict,
                         num_layers_options: Dict,
                         epochs_per_sweeps:int,
@@ -50,6 +53,7 @@ def val_augmented_sanity_check(train_data_folder: Union[str, Path],
             val_data_folder=val_data_folder,
             log_dir=log_dir,
             temperature=temperature,
+            output_shape=output_shape,
             lr_options=lr_options,
             num_layers_options=num_layers_options,
             objective='train_loss',
@@ -58,6 +62,8 @@ def val_augmented_sanity_check(train_data_folder: Union[str, Path],
             sweep_count=sweep_count,
             num_train_samples_per_cls=100, 
             num_val_samples_per_cls=None,
+            num_neighbors=EVALUATION_NUM_NEIGHBORS,
+            evaluate=True # make sure to pass evaluate to run the KnnClassifier
             )
 
 
@@ -69,12 +75,15 @@ def val_loss_and_downstream_metric():
     sanity_train = os.path.join(SCRIPT_DIR, 'data', 'food101', 'train')
     sanity_val = os.path.join(SCRIPT_DIR, 'data', 'food101', 'val')
 
+    output_shape = (200, 2000)
+
     val_augmented_sanity_check(train_data_folder=sanity_train,
                                val_data_folder=sanity_val,
+                               output_shape=output_shape,
                                lr_options=lr_options,
                                num_layers_options=num_fc_layers,
-                               epochs_per_sweeps=12,
-                               sweep_count=15, 
+                               epochs_per_sweeps=2,
+                               sweep_count=3, 
                                temperature=0.5,
                                )
     
@@ -97,4 +106,5 @@ def set_the_initial_model():
 if __name__ == '__main__':
     # let's start with something simple
     # set_the_initial_model()
-    pass
+    val_loss_and_downstream_metric()
+
