@@ -89,7 +89,7 @@ class KNN:
                 train_ds_inference_batch_size:Union[int, float], 
                 model: torch.nn.Module,
                 
-                process_sample_ds: Optional[callable]=None,
+                process_item_ds: Optional[callable]=None,
                 process_model_output: Optional[callable]=None,
 
                 model_ckpnt: Optional[Union[str, Path, callable]]=None, 
@@ -116,10 +116,10 @@ class KNN:
 
 
         # processing a sample before passing it to the model
-        if process_sample_ds is None:
-            process_sample_ds = lambda x: x
+        if process_item_ds is None:
+            process_item_ds = lambda item: item
         
-        self.process_sample_ds = process_sample_ds
+        self.process_item_ds = process_item_ds
 
         # processing the output of a model
         if process_model_output is None:
@@ -147,7 +147,7 @@ class KNN:
                           num_neighbors:int,
                           msr: callable,
                           measure_as_similarity:bool,
-                          val_process_sample_ds: callable,
+                          val_process_item_ds: callable,
                           ) -> Tuple[dict, dict]:
 
         nearest_neighbors_distances = {}
@@ -157,21 +157,24 @@ class KNN:
 
         for _, ref_b in tqdm(enumerate(train_dl), desc="iterating over train_ds for inference"):
             # the model is already loaded and ready for inference
-            ref_b = self.process_sample_ds(ref_b)
+            ref_b = self.process_item_ds(ref_b)
             with torch.no_grad():
                 ref_b_embs = self.process_model_output(self.model, ref_b.to(self.inference_device))
 
             inf_count = 0
 
-            for batch_val_index , inf_b in enumerate(val_dl):           
-                inf_b = val_process_sample_ds(inf_b)
+            for _ , inf_b in enumerate(val_dl):           
+                inf_b = val_process_item_ds(inf_b)
                 with torch.no_grad():
                     inf_b_embs = self.process_model_output(self.model, inf_b.to(self.inference_device))
 
                     distances2ref = msr(inf_b_embs, ref_b_embs)
 
                 # find the closest samples for the current batch
-                values, local_indices  = torch.topk(distances2ref, k=num_neighbors, dim=-1, largest=measure_as_similarity)
+                values, local_indices  = torch.topk(distances2ref, 
+                                                    k=min(num_neighbors, len(distances2ref[0])), 
+                                                    dim=-1, 
+                                                    largest=measure_as_similarity)
                 # the indices should be convert to global indices with respect to the training dataset
                 global_indices = (local_indices + ref_count).cpu().numpy()
 
@@ -254,7 +257,7 @@ class KNN:
                         num_neighbors:int,
                         msr: callable,
                         measure_as_similarity:bool,
-                        val_process_sample_ds: callable,
+                        val_process_item_ds: callable,
                         val_batch_size:int,
                         num_workers:int=2
                         ):
@@ -279,7 +282,7 @@ class KNN:
                                                                                          num_neighbors=num_neighbors, 
                                                                                          msr=msr, 
                                                                                          measure_as_similarity=measure_as_similarity, 
-                                                                                         val_process_sample_ds=val_process_sample_ds,
+                                                                                         val_process_item_ds=val_process_item_ds,
                                                                                         )
         
         values_res, indices_res = self.__filter_candidates(nearest_neighbors_distances=nearest_neighbors_distances,
@@ -306,7 +309,7 @@ class KNN:
                 measure_as_similarity,
                 measure_init_kargs: dict = None,
 
-                process_sample_ds: Optional[callable]=None,
+                process_item_ds: Optional[callable]=None,
                 process_model_output: Optional[callable]=None,
                 num_workers:int=2,
                 ) -> Tuple[np.ndarray, np.ndarray]:
@@ -316,8 +319,8 @@ class KNN:
         # process the batch size
         ibs = self._batch_sizes(inference_batch_size, val_ds)
         
-        if process_sample_ds is None:
-            process_sample_ds = tr.ToTensor()
+        if process_item_ds is None:
+            process_item_ds = tr.ToTensor()
         
         # processing the output of a model
         if process_model_output is None:
@@ -330,7 +333,7 @@ class KNN:
                         num_neighbors=num_neighbors,
                         msr=msr,
                         measure_as_similarity=measure_as_similarity,
-                        val_process_sample_ds=process_sample_ds,
+                        val_process_item_ds=process_item_ds,
                         val_batch_size=ibs,
                         num_workers=num_workers,
                         )
@@ -347,8 +350,8 @@ class KnnClassifier(KNN):
                 train_ds_inference_batch_size:Union[int, float], 
                 model: torch.nn.Module,
                 
-                process_sample_ds: Optional[callable]=None, 
-                process_sample_ds_class: Optional[callable]=None,
+                process_item_ds: Optional[callable]=None, 
+                process_item_ds_class: Optional[callable]=None,
                 process_model_output: Optional[callable]=None,
 
                 model_ckpnt: Optional[Union[str, Path, callable]]=None, 
@@ -359,17 +362,17 @@ class KnnClassifier(KNN):
                         train_ds_inference_batch_size=train_ds_inference_batch_size, 
                         model=model,
 
-                        process_sample_ds=process_sample_ds,
+                        process_item_ds=process_item_ds,
                         process_model_output=process_model_output,
 
                         model_ckpnt=model_ckpnt, 
                         inference_device=inference_device)
         
-        if process_sample_ds_class is None:
-            warnings.warn("the 'process_sample_ds_class' is not Passed. The class assumes that the dataset is a classification dataset where each item is a tuple of an image and a classification label")
-            process_sample_ds_class = lambda ds, index: ds[index][1] #  
+        if process_item_ds_class is None:
+            warnings.warn("the 'process_item_ds_class' is not Passed. The class assumes that the dataset is a classification dataset where each item is a tuple of an image and a classification label")
+            process_item_ds_class = lambda ds, index: ds[index][1] #  
 
-        self.process_sample_ds_class = process_sample_ds_class
+        self.process_item_ds_class = process_item_ds_class
 
 
     def __predict_per_sample(self, 
@@ -411,7 +414,7 @@ class KnnClassifier(KNN):
             measure_as_similarity: bool,
             measure_init_kargs: dict = None,
 
-            process_sample_ds: Optional[callable]=None,
+            process_item_ds: Optional[callable]=None,
             process_model_output: Optional[callable]=None,
             num_workers:int=2) -> np.ndarray:
         # let's see how it goes
@@ -421,12 +424,12 @@ class KnnClassifier(KNN):
                                                 measure=measure,
                                                 measure_as_similarity=measure_as_similarity,
                                                 measure_init_kargs=measure_init_kargs,
-                                                process_sample_ds=process_sample_ds,
+                                                process_item_ds=process_item_ds,
                                                 process_model_output=process_model_output,
                                                 num_workers=num_workers                        
                                                 )   
 
-        classes = np.asarray([[self.process_sample_ds_class(self.train_ds, index) for index in arr_indices] for arr_indices in indices_res])
+        classes = np.asarray([[self.process_item_ds_class(self.train_ds, index) for index in arr_indices] for arr_indices in indices_res])
 
         predictions = np.asarray([self.__predict_per_sample(distances_res[i, :].tolist(), 
                                                             classes[i, :].tolist(), 

@@ -108,3 +108,37 @@ if __name__ == '__main__':
     # set_the_initial_model()
     val_loss_and_downstream_metric()
 
+    sanity_train = os.path.join(SCRIPT_DIR, 'data', 'food101', 'train')
+    sanity_val = os.path.join(SCRIPT_DIR, 'data', 'food101', 'val')
+
+    # from model_train.ds_wrapper import Food101Wrapper
+    # from model_train.training import _UNIFORM_DATA_AUGS
+
+    # train_ds = Food101Wrapper(root_dir=sanity_train, 
+    #                             output_shape=(200, 200),
+    #                             augs_per_sample=2, 
+    #                             sampled_data_augs=[],
+    #                             uniform_data_augs=_UNIFORM_DATA_AUGS,
+    #                             train=True,
+    #                             samples_per_cls=10,
+    #                             classification_mode=True,
+    #                             )
+    
+    # for i in range(10):
+    #     im = train_ds[i][0]
+    #     print(im.shape)
+
+    # from model_train.evaluating import evaluate_model
+    # from mypt.models.simClr.simClrModel import ResnetSimClr
+    # model = ResnetSimClr(input_shape=(3,200,200), output_dim=128, num_fc_layers=2, freeze=False)
+    
+    # evaluate_model(model=model, model_ckpnt=None, 
+    #                train_data_folder=sanity_train, 
+    #                val_data_folder=sanity_val, 
+    #                output_shape=(200, 200), 
+    #                num_train_samples_per_cls=2, 
+    #                num_val_samples_per_cls=2, 
+    #                num_neighbors=5, 
+    #                inference_batch_size=8)
+
+

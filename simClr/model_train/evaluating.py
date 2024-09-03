@@ -13,6 +13,7 @@ from mypt.code_utilities import directories_and_files as dirf
 from mypt.subroutines.neighbors.knn import KnnClassifier
 from mypt.models.simClr.simClrModel import SimClrModel
 from .ds_wrapper import Food101Wrapper
+from .training import _UNIFORM_DATA_AUGS
 
 
 def _set_data_classification_data(train_data_folder: Union[str, Path],
@@ -33,7 +34,7 @@ def _set_data_classification_data(train_data_folder: Union[str, Path],
                                 output_shape=output_shape,
                                 augs_per_sample=2, 
                                 sampled_data_augs=[],
-                                uniform_data_augs=[],
+                                uniform_data_augs=_UNIFORM_DATA_AUGS,
                                 train=True,
                                 samples_per_cls=num_train_samples_per_cls,
                                 classification_mode=True,
@@ -49,7 +50,7 @@ def _set_data_classification_data(train_data_folder: Union[str, Path],
                                 output_shape=output_shape,
                                 augs_per_sample=2, 
                                 sampled_data_augs=[],
-                                uniform_data_augs=[],
+                                uniform_data_augs=_UNIFORM_DATA_AUGS,
                                 train=False,
                                 samples_per_cls=num_val_samples_per_cls,
                                 classification_mode=True)
@@ -105,18 +106,21 @@ def evaluate_model(
                                 process_model_output=lambda m, x: m(x)[0], # the forward call returns a tuple 
                                 model=model,
                                 model_ckpnt=model_ckpnt,
+                                process_item_ds=lambda i:i[0], # ignore the class label from the dataset during training
                                )        
 
     # use the classifier to predict
     predictions = classifier.predict(val_ds=val_ds, 
-                                     inference_batch_size=inference_batch_size, 
-                                     num_neighbors=num_neighbors, 
-                                     measure='cosine_sim', 
-                                     measure_as_similarity=True, 
-                                     num_workers=2)
+                                    inference_batch_size=inference_batch_size, 
+                                    num_neighbors=num_neighbors, 
+                                    measure='cosine_sim', 
+                                    measure_as_similarity=True, 
+                                    num_workers=2,
+                                    process_item_ds=lambda i:i[0], # ignore the class label from the dataset during training
+                                    )
 
     # extract the correct labels
-    labels = np.asarray([val_ds[i] for i in range(len(val_ds))])
+    labels = np.asarray([val_ds[i][1] for i in range(len(val_ds))])
 
     # calculate the accuracy
     acc = np.mean((predictions == labels).astype(int))

@@ -15,7 +15,7 @@ from .evaluating import evaluate_model
 
 WANDB_PROJECT_NAME="SimClr"
 
-_BATCH_SIZE = 512
+_BATCH_SIZE = 8
 
 def _sweep_function( 
         train_data_folder:Union[str, Path],
@@ -64,7 +64,7 @@ def _sweep_function(
             val_per_epoch=val_per_epoch,
             seed=seed,
             num_train_samples_per_cls=num_train_samples_per_cls,
-            num_val_samples_per_cls=num_val_samples_per_cls,)
+            num_val_samples_per_cls=num_val_samples_per_cls)
 
     train_loss, val_loss, ckpnt = None, None, None
 

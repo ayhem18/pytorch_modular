@@ -23,14 +23,20 @@ class Food101Wrapper(AbstractParallelAugsDs):
                 samples_per_cls: Optional[int] = None,
                 classification_mode: bool=False) -> None:
         
+        if classification_mode and len(sampled_data_augs) > 0:
+            raise ValueError(f"In classification mode, there should be sampled data augmentations...")
+
         super().__init__(output_shape=output_shape, 
                          augs_per_sample=augs_per_sample,
                          sampled_data_augs=sampled_data_augs,
                          uniform_data_augs=uniform_data_augs)
         
+        # make sure to add the uniform data augmentations for the classification
+        ds_transform = [tr.ToTensor(), tr.Resize(size=output_shape)] + uniform_data_augs
+
         self._ds = Food101(root=root_dir,     
                          split='train' if train else 'test',
-                         transform=None, # return a PIL.image for both modes
+                         transform=tr.Compose(ds_transform) if classification_mode else None, 
                          download=True)
 
         self.samples_per_cls_map = None
@@ -95,19 +101,13 @@ class Food101Wrapper(AbstractParallelAugsDs):
         else:
             sample_image = self._ds[index][0]   
 
-        # convert the image to numpy array
-        sample_image= np.asarray(sample_image).copy() # make sure to call the copy method since the original array is, for some reason, read-only
-
-        if sample_image.shape[0] == 1:
-            sample_image = torch.concat([sample_image for _ in range(3)], dim=0)
-
         augs1, augs2 = self._set_augmentations()
         s1, s2 = augs1(sample_image), augs2(sample_image) 
 
         return s1, s2
 
 
-    def __get_item_cls_(self, index:int) -> Tuple[torch.Tensor, List[int]]:
+    def __get_item_cls_(self, index:int) -> Tuple[torch.Tensor, int]:
         # extract the path to the sample (using the map between the index and the sample path !!!)
         if self.samples_per_cls_map is not None:
             stop_points = sorted(list(self.samples_per_cls_map.keys()))
@@ -119,9 +119,11 @@ class Food101Wrapper(AbstractParallelAugsDs):
 
             sp = stop_points[index]
 
-            return self._ds[self.samples_per_cls_map[sp] + index - sp]
-
-        return self._ds[index]
+            item = self._ds[self.samples_per_cls_map[sp] + index - sp]
+            return item  
+        
+        item = self._ds[index]
+        return item
 
     def __getitem__(self, index: int) -> Union[Tuple[torch.Tensor, torch.Tensor], 
                                                Tuple[torch.Tensor, List[int]]
