@@ -15,7 +15,7 @@ from .evaluating import evaluate_model
 
 WANDB_PROJECT_NAME="SimClr"
 
-_BATCH_SIZE = 8
+_BATCH_SIZE = 512 
 
 def _sweep_function( 
         train_data_folder:Union[str, Path],
@@ -96,7 +96,7 @@ def _sweep_function(
 
     # save the configuration along with the checkpoint
     with open(os.path.join(ckpnt_dir, 'config.json'), 'w') as f:
-        json.dump(model_config, indent=4)
+        json.dump(model_config, f, indent=4)
     
 
 

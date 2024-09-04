@@ -43,65 +43,6 @@ _WANDB_PROJECT_NAME = "SimClr"
 
 PREFERABLE_BATCH_SIZE = 512
 
-# let's split the training pipeline into several functions
-# def _set_data(train_data_folder: Union[str, Path],
-#              val_data_folder: Optional[Union[str, Path]],
-#              batch_size:int,
-#              output_shape: Tuple[int, int] = None,
-#              seed:int=69) -> Tuple[DataLoader, Optional[DataLoader]]:
-    
-#     if output_shape is None:
-#         output_shape = (224, 224)
-
-#     train_data_folder = dirf.process_path(train_data_folder, 
-#                                           dir_ok=True, 
-#                                           file_ok=False, 
-#                                           condition=dirf.image_directory,
-#                                           error_message="The data diretory is expected to contain only image data"
-#                                           )
-
-#     train_ds = ParallelAugDs(root=train_data_folder, 
-#                        output_shape=output_shape, 
-#                        augs_per_sample=2, 
-#                        sampled_data_augs=_DEFAULT_DATA_AUGS,
-#                        uniform_data_augs=_UNIFORM_DATA_AUGS)
-
-#     if val_data_folder is not None:
-#         val_data_folder = dirf.process_path(val_data_folder, 
-#                                           dir_ok=True, 
-#                                           file_ok=False, 
-#                                           condition=dirf.image_directory,
-#                                           error_message="The data diretory is expected to contain only image data"
-#                                           )
-
-
-#         val_ds = ParallelAugDs(root=val_data_folder, 
-#                         output_shape=output_shape, 
-#                         augs_per_sample=2, 
-#                         data_augs=_DEFAULT_DATA_AUGS,
-#                         uniform_data_augs=_UNIFORM_DATA_AUGS)
-#     else:
-#         val_ds = None
-
-#     ## data loaders
-#     train_dl = initialize_train_dataloader(dataset_object=train_ds, 
-#                                          seed=seed,
-#                                          batch_size=batch_size,
-#                                          num_workers=0,
-#                                          warning=False # the num_workers=0 is deliberately set to 0  
-#                                          )
-
-#     if val_ds is not None:
-#         val_dl = initialize_val_dataloader(dataset_object=train_ds, 
-#                                             seed=seed,
-#                                             batch_size=batch_size,
-#                                             num_workers=0,
-#                                             )
-#     else:
-#         val_dl = None
-
-#     return train_dl, val_dl
-
 
 def _set_data(train_data_folder: Union[str, Path],
             val_data_folder: Optional[Union[str, Path]],
@@ -232,7 +173,8 @@ def _run(
     min_train_loss, min_val_loss = float('inf'), float('inf')
 
     for epoch_index in tqdm(range(num_epochs), desc=f'training the model'):
-
+        
+        # train the model for one epoch
         epoch_train_metrics = train_per_epoch(model=model, 
                         dataloader=train_dl,
                         loss_function=loss_obj,
@@ -245,8 +187,10 @@ def _run(
                         batch_stats=batch_stats,
                         accumulate_grads=accumulate_grad)
 
+        ################### Logging ###################
         epoch_train_log = epoch_train_metrics.copy()
         
+
         # the dict object cls not allow altering the keys while iterating through the object
         items = list(epoch_train_log.items())
 
@@ -260,6 +204,7 @@ def _run(
         # extract the epoch_train_loss
         epoch_train_loss = epoch_train_metrics["loss"]
 
+        ######################## Train Loss Checkpointing ########################        
 
         if val_dl is None: # meaning we are saving checkpoints according to the trainloss
             if min_train_loss < epoch_train_loss:
@@ -280,6 +225,10 @@ def _run(
                                 train_loss=epoch_train_loss, epoch=epoch_index)
 
             continue
+
+        
+        # make sure to update the minimum training loss
+        min_train_loss = min(min_train_loss, epoch_train_loss)
 
         # at this point we know that val_dl is not None and hence the validation loss is the criteria to save checkpoints
         # run the model on the validation set every "val_per_epoch" and the last epoch
