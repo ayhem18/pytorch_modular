@@ -7,10 +7,10 @@ import torch
 from torch import nn
 from typing import Union, Tuple, Optional, Iterator
 
-from mypt.backbones import alexnetFeatureExtractor as afe
-from mypt.backbones import resnetFeatureExtractor as rfe
-from mypt.linearBlocks import classification_head as ch
-from mypt.dimensions_analysis import dimension_analyser as da
+from ...backbones import alexnetFeatureExtractor as afe
+from ...backbones import resnetFeatureExtractor as rfe
+from ...linearBlocks import classification_head as ch
+from ...dimensions_analysis import dimension_analyser as da
 
 
 class SimClrModel(nn.Module):

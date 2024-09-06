@@ -6,11 +6,10 @@ import os, random
 
 import torchvision.transforms as tr
 from torch.utils.data import Dataset
-from typing import Union, List, Dict, Tuple
+from typing import Union, List, Tuple
 from pathlib import Path
 from PIL import Image
 
-# from ....code_utilities import directories_and_files as dirf
 from ....code_utilities import pytorch_utilities as pu
 
 from abc import ABC, abstractmethod
@@ -31,8 +30,9 @@ class AbstractParallelAugsDs(Dataset, ABC):
     def __init__(self, 
                 output_shape: Tuple[int, int],
                 augs_per_sample: int,
+                uniform_augs_before: List,
+                uniform_augs_after:List,
                 sampled_data_augs:List,
-                uniform_data_augs: List,
                 seed: int=0):
 
         # reproducibiliy provides a much better idea about the performance
@@ -43,7 +43,9 @@ class AbstractParallelAugsDs(Dataset, ABC):
 
         # make sure each transformation starts by resizing the image to the correct size
         self.sampled_data_augs = sampled_data_augs
-        self.uniform_data_augs = uniform_data_augs
+        self.uniform_augs_before = uniform_augs_before 
+        self.uniform_augs_after = uniform_augs_after
+
         self.augs_per_sample = min(augs_per_sample, len(self.sampled_data_augs))
 
 
@@ -51,16 +53,15 @@ class AbstractParallelAugsDs(Dataset, ABC):
         augs1, augs2 = random.sample(self.sampled_data_augs, self.augs_per_sample), random.sample(self.sampled_data_augs, self.augs_per_sample)
 
         # convert to a tensor
-        augs1.insert(0, tr.ToTensor())
-        augs2.insert(0, tr.ToTensor())
+        augs_before = [tr.ToTensor()] + self.uniform_augs_before
 
-        # resize before any specific transformations
-        augs1.insert(1, tr.Resize(size=self.output_shape))
-        augs2.insert(1, tr.Resize(size=self.output_shape))
+        augs1 = augs_before + augs1  
+        augs2 = augs_before + augs2  
     
-        # add all the uniform augmentations: applied regardless of the model 
-        augs1.extend(self.uniform_data_augs)
-        augs2.extend(self.uniform_data_augs)
+        # add all the uniform after augmentations 
+    
+        augs1.extend(self.uniform_augs_after)
+        augs2.extend(self.uniform_augs_after)
 
         # resize after all transformations:
         augs1.append(tr.Resize(size=self.output_shape))
@@ -75,6 +76,3 @@ class AbstractParallelAugsDs(Dataset, ABC):
     @abstractmethod
     def __getitem__(self, index: int):
         pass
-
-
-

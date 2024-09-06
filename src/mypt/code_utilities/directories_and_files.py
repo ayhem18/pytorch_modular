@@ -265,6 +265,17 @@ def image_dataset_directory(path: Union[Path, str],
 def image_dataset_directory_error(path: Union[Path, str]) -> str: 
     return f"Please make sure the path: {path} contains only directories for classes and each class directory contains image files."
 
+
+def dir_contains_only_types(directory:Union[str, Path], valid_extensions: List[str]) -> bool:
+    directory = process_path(directory, dir_ok=True, file_ok=False)
+    for r, _, files in os.walk(directory):
+        for f in files:
+            file_path = os.path.join(r, f)
+            if os.path.splitext(file_path)[-1] not in valid_extensions:
+                return False
+    return True
+
+
 def clear_directory(directory: Union[str, Path], 
                  condition: callable):
     """This function removes any file (or directory) that satisfies a given condition in a given directory
