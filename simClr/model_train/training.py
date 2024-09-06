@@ -10,7 +10,7 @@ from tqdm import tqdm
 from torch.optim.sgd import SGD
 from torch.utils.data import DataLoader
 
-# from torchlars import LARS # the authors of the paper used this optimizer
+from torchlars import LARS # the authors of the paper used this optimizer
 
 from mypt.losses.simClrLoss import SimClrLoss
 from mypt.data.dataloaders.standard_dataloaders import initialize_train_dataloader, initialize_val_dataloader
@@ -131,16 +131,16 @@ def _set_optimizer(model: SimClrModel,
 
     return optimizer, lr_scheduler
 
-# def _set_optimizer(model: SimClrModel,
-#                    learning_rate: float) -> LARS:
-#     # create the base optimizer 
-#     base_optimizer = SGD(model.parameters(), 
-#                          lr=learning_rate, 
-#                          weight_decay=10**-6 # as per the paper's recommendations
-#                         )
+def _set_optimizer(model: SimClrModel,
+                   learning_rate: float) -> LARS:
+    # create the base optimizer 
+    base_optimizer = SGD(model.parameters(), 
+                         lr=learning_rate, 
+                         weight_decay=10**-6 # as per the paper's recommendations
+                        )
 
-#     optimizer = LARS(optimizer=base_optimizer, eps=10**-8, trust_coef=10**-3)
-#     return optimizer
+    optimizer = LARS(optimizer=base_optimizer, eps=10**-8, trust_coef=10**-3)
+    return optimizer
 
 def _run(
         model:SimClrModel,
@@ -295,7 +295,7 @@ def run_pipeline(model: SimClrModel,
         num_epochs: int, 
         batch_size: int,
 
-        learning_rates: Union[Tuple[float, float], float],
+        # learning_rates: Union[Tuple[float, float], float],
         temperature: float,
 
         ckpnt_dir: Union[str, Path],
@@ -329,20 +329,26 @@ def run_pipeline(model: SimClrModel,
                                 num_val_samples_per_cls=num_val_samples_per_cls,
                                 seed=seed)
 
-    # dealing with gradient accumulation
-    accumulate_grads_factor = PREFERABLE_BATCH_SIZE / batch_size 
+    # # dealing with gradient accumulation
+    # accumulate_grads_factor = PREFERABLE_BATCH_SIZE / batch_size 
 
-    # scale the learning rate by the gradient accumulation factor
-    if isinstance(learning_rates, (Tuple, List)):
-        learning_rates = [lr / accumulate_grads_factor for lr in learning_rates]
-    else:
-        learning_rates /= accumulate_grads_factor
+    # # scale the learning rate by the gradient accumulation factor
+    # if isinstance(learning_rates, (Tuple, List)):
+    #     learning_rates = [lr / accumulate_grads_factor for lr in learning_rates]
+    # else:
+    #     learning_rates /= accumulate_grads_factor
     
     # make sure to convert it to an integer
     accumulate_grads_factor = int(math.ceil(accumulate_grads_factor))
 
-    # optimizer = _set_optimizer(model=model, learning_rate=initial_lr)
-    optimizer, lr_scheduler = _set_optimizer(model=model, lrs=learning_rates, num_epochs=num_epochs)
+    # # optimizer = _set_optimizer(model=model, learning_rate=initial_lr)
+    # optimizer, lr_scheduler = _set_optimizer(model=model, lrs=learning_rates, num_epochs=num_epochs)
+
+    lr = 0.3 * batch_size / 256 # according to the paper formula
+
+    optimizer = _set_optimizer(model=model, 
+                               learning_rate=lr  
+                               )
 
     res = None
     try:
@@ -352,7 +358,7 @@ def run_pipeline(model: SimClrModel,
 
                 loss_obj=loss_obj, 
                 optimizer=optimizer,
-                lr_scheduler=lr_scheduler,
+                lr_scheduler=None,
                 
                 accumulate_grad=accumulate_grads_factor, # make sure to add the gradient accumulation factor
 
@@ -390,7 +396,7 @@ def run_pipeline(model: SimClrModel,
             batch_size=batch_size,
 
             # initial_lr=initial_lr,  
-            learning_rates=learning_rates,
+            # learning_rates=learning_rates,
             temperature=temperature,
 
             ckpnt_dir=ckpnt_dir,

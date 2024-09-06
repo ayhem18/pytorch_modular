@@ -60,3 +60,10 @@ The loss is still relatively high which leaves a lot of room for improvement.
 * Trying to scale images: using the same scaling transformation as the original Resnet50 architecture
 * Using the Lars Optimizer
 
+
+
+## Iteration 3
+* debug KnnClassifier
+* use Resnet101
+* use the Lars Optimizer
+* break down the loss and

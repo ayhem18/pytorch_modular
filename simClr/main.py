@@ -69,7 +69,7 @@ def train_main(model):
         learning_rates=0.01,
         output_shape=(200, 200),
         ckpnt_dir=os.path.join(ckpnt_dir_parent, f'iteration_{len(os.listdir(ckpnt_dir_parent)) + 1}'),
-        num_epochs=64, 
+        num_epochs=3, 
         batch_size=_BATCH_SIZE, 
         temperature=0.5, 
         seed=0, 
@@ -81,38 +81,9 @@ def train_main(model):
 if __name__ == '__main__':
     data = os.path.join(SCRIPT_DIR, 'data', 'food101', 'train')
 
-    # model = ResnetSimClr(input_shape=(3, 200, 200), output_dim=128, num_fc_layers=4, freeze=False)
-    # train_main(model)
+    model = ResnetSimClr(input_shape=(3, 200, 200), output_dim=128, num_fc_layers=4, freeze=False, architecture=101)
+    train_main(model)
+    
     # ckpnt = os.path.join(SCRIPT_DIR, 'logs', 'train_logs', 'ckpnt_train_loss-4.0917_epoch-123.pt')
     # evaluate_ckpnt(model, ckpnt)
     # visualize_neighbors(res=os.path.join(SCRIPT_DIR, 'eval_res', 'ckpnt_train_loss-4.0917_epoch-123_results.obj'), num_images=25)
-
-
-    # ds = Food101Wrapper(root_dir=data, 
-    #                     output_shape=224,
-    #                     augs_per_sample=2, 
-    #                     sampled_data_augs=_DEFAULT_DATA_AUGS,
-    #                     uniform_data_augs=_UNIFORM_DATA_AUGS,
-    #                     train=True, 
-    #                     samples_per_cls=1000)    
-
-    # from bisect import bisect
-    # from collections import Counter
-
-    # occs = Counter()
-
-    # for i in range(3150):
-    #     stop_points = sorted(list(ds.samples_per_cls_map.keys()))
-
-    #     index = bisect(stop_points, i)
-        
-    #     if index == len(stop_points):
-    #         index -= 1
-
-    #     sp = stop_points[index]
-
-    #     _, c = ds._ds[ds.samples_per_cls_map[sp] + i - sp]
-
-    #     occs[c] += 1
-    
-    # print(occs)
