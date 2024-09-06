@@ -36,6 +36,7 @@ def sanity_check_tuning(sanity_train: Union[str, Path],
             sweep_count=sweep_count
             )
 
+
 def val_augmented_sanity_check(train_data_folder: Union[str, Path],
                         val_data_folder: Union[str, Path],
                         temperature: float,
@@ -45,9 +46,7 @@ def val_augmented_sanity_check(train_data_folder: Union[str, Path],
                         epochs_per_sweeps:int,
                         sweep_count:int
                         ):
-    # the idea here is to find a set of hyperparameters enabling the model to overfit to the training data
-    # the model with the lowest training loss will be chosen for further training
-     
+    
     log_dir = os.path.join(SCRIPT_DIR, 'logs', 'tune_logs')
     tn.tune(train_data_folder=train_data_folder, 
             val_data_folder=val_data_folder,
@@ -60,12 +59,26 @@ def val_augmented_sanity_check(train_data_folder: Union[str, Path],
             tune_method='bayes',
             epochs_per_sweeps=epochs_per_sweeps,
             sweep_count=sweep_count,
-            num_train_samples_per_cls=10, 
-            num_val_samples_per_cls=10,
+            num_train_samples_per_cls=100, # USING 100 samples per class: 100 /750 ~ 14% of the dataset
+            num_val_samples_per_cls=None, # use the entire validation dataset
             num_neighbors=EVALUATION_NUM_NEIGHBORS,
             evaluate=True # make sure to pass evaluate to run the KnnClassifier
             )
+    
 
+def set_the_initial_model():
+    # let's start with lr_options: 
+    # the learning rate of the feature extractor will be between 10 ** -3 and 10 ** -1
+    lr_options = {"max": -1.0, "min":-3.0}
+    num_fc_layers = {"values": list(range(2, 7))}
+
+    sanity_train = os.path.join(SCRIPT_DIR, 'data', 'food101', 'train')
+    sanity_check_tuning(sanity_train=sanity_train, 
+                        lr_options=lr_options, 
+                        num_layers_options=num_fc_layers,
+                        epochs_per_sweeps=50, 
+                        sweep_count=20, 
+                        temperature=0.5)
 
 
 def val_loss_and_downstream_metric():
@@ -82,63 +95,14 @@ def val_loss_and_downstream_metric():
                                output_shape=output_shape,
                                lr_options=lr_options,
                                num_layers_options=num_fc_layers,
-                               epochs_per_sweeps=1,
-                               sweep_count=1, 
+                               epochs_per_sweeps=25,
+                               sweep_count=20, 
                                temperature=0.5,
                                )
-    
 
-def set_the_initial_model():
-    # let's start with lr_options: 
-    # the learning rate of the feature extractor will be between 10 ** -3 and 10 ** -1
-    lr_options = {"max": -1.0, "min":-3.0}
-    num_fc_layers = {"values": list(range(2, 7))}
-
-    sanity_train = os.path.join(SCRIPT_DIR, 'data', 'food101', 'train')
-    sanity_check_tuning(sanity_train=sanity_train, 
-                        lr_options=lr_options, 
-                        num_layers_options=num_fc_layers,
-                        epochs_per_sweeps=50, 
-                        sweep_count=20, 
-                        temperature=0.5)
-    
 
 if __name__ == '__main__':
     # let's start with something simple
     # set_the_initial_model()
     val_loss_and_downstream_metric()
-
-    sanity_train = os.path.join(SCRIPT_DIR, 'data', 'food101', 'train')
-    sanity_val = os.path.join(SCRIPT_DIR, 'data', 'food101', 'val')
-
-    # from model_train.ds_wrapper import Food101Wrapper
-    # from model_train.training import _UNIFORM_DATA_AUGS
-
-    # train_ds = Food101Wrapper(root_dir=sanity_train, 
-    #                             output_shape=(200, 200),
-    #                             augs_per_sample=2, 
-    #                             sampled_data_augs=[],
-    #                             uniform_data_augs=_UNIFORM_DATA_AUGS,
-    #                             train=True,
-    #                             samples_per_cls=10,
-    #                             classification_mode=True,
-    #                             )
-    
-    # for i in range(10):
-    #     im = train_ds[i][0]
-    #     print(im.shape)
-
-    # from model_train.evaluating import evaluate_model
-    # from mypt.models.simClr.simClrModel import ResnetSimClr
-    # model = ResnetSimClr(input_shape=(3,200,200), output_dim=128, num_fc_layers=2, freeze=False)
-    
-    # evaluate_model(model=model, model_ckpnt=None, 
-    #                train_data_folder=sanity_train, 
-    #                val_data_folder=sanity_val, 
-    #                output_shape=(200, 200), 
-    #                num_train_samples_per_cls=2, 
-    #                num_val_samples_per_cls=2, 
-    #                num_neighbors=5, 
-    #                inference_batch_size=8)
-
 

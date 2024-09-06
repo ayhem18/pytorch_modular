@@ -58,23 +58,6 @@ def _set_data_classification_data(train_data_folder: Union[str, Path],
     else:
         val_ds = None
 
-    # ## data loaders
-    # train_dl = initialize_train_dataloader(dataset_object=train_ds, 
-    #                                      seed=seed,
-    #                                      batch_size=batch_size,
-    #                                      num_workers=2,
-    #                                      warning=False # the num_workers=0 is deliberately set to 0  
-    #                                      )
-
-    # if val_ds is not None:
-    #     val_dl = initialize_val_dataloader(dataset_object=train_ds, 
-    #                                         seed=seed,
-    #                                         batch_size=batch_size,
-    #                                         num_workers=0,
-    #                                         )
-    # else:
-    #     val_dl = None
-
     return train_ds, val_ds
 
 
@@ -123,6 +106,6 @@ def evaluate_model(
     labels = np.asarray([val_ds[i][1] for i in range(len(val_ds))])
 
     # calculate the accuracy
-    acc = np.mean((predictions == labels).astype(int))
+    acc = float(round(np.mean((predictions == labels).astype(int)), 4))
 
     return acc

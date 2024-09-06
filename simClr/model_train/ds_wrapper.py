@@ -59,8 +59,8 @@ class Food101Wrapper(AbstractParallelAugsDs):
 
         mapping = {0: 0}
         
-        # for i in tqdm(range(len(self._ds)), desc="iterating through the dataset to set the samples per each class"):
-        for i in tqdm(range(3150), desc="iterating through the dataset to set the samples per each class"):
+        for i in tqdm(range(len(self._ds)), desc="iterating through the dataset to set the samples per each class"):
+        # for i in tqdm(range(3150), desc="iterating through the dataset to set the samples per each class"):
             _, c = self._ds[i]
             
             if current_cls is None:
