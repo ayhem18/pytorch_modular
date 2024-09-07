@@ -34,6 +34,15 @@ class SimClrLoss(nn.Module):
         else:
             self._build_indices = build_indices
 
+
+    def _set_exp_sims(self, x: torch.Tensor) -> torch.Tensor:
+        if self.sim == self._sims[0]:
+            return torch.exp(CosineSim().forward(x, x) / self.temp)
+        # sims = (x @ x.T) 
+        # sims = sims - torch.min(sims, dim=0)[0]
+        return torch.exp((x @ x.T) / self.temp)        
+
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # let's first check a couple of things: 
         if x.ndim != 2:
@@ -47,7 +56,8 @@ class SimClrLoss(nn.Module):
         
         # step1: calculate the similarities between the different samples
         # the entry [i, j] of 'exp_sims' variable contains the exp(sim(z_i, z_j)) / t
-        exp_sims = torch.exp(CosineSim().forward(x, x) / self.temp) 
+        # exp_sims = torch.exp(CosineSim().forward(x, x) / self.temp) 
+        exp_sims = self._set_exp_sims(x)
 
         p1, p2 = self._build_indices(N)
         # the i-th entry contains exp(sim(x_i, x_{i + N})): the similarity between the two augmentations
@@ -62,7 +72,8 @@ class SimClrLoss(nn.Module):
 
 
         # the i-th entry contains sum(exp(sim(x_i, x_k))) for k in [1, 2N] k != i
-        exp_sims_sums = torch.sum(exp_sims, dim=1, keepdim=True) - torch.exp(torch.ones(size=(2 * N, 1)) / self.temp).to(pu.get_module_device(exp_sims))
+        exp_sims_sums = torch.sum(exp_sims, dim=1, keepdim=True) - torch.unsqueeze(torch.diag(exp_sims, diagonal=0), dim=1) 
+        # torch.exp(torch.ones(size=(2 * N, 1)) / self.temp).to(pu.get_module_device(exp_sims))
         
         loss = torch.mean(-torch.log(positive_pairs_exp_sims / exp_sims_sums))
 
@@ -84,6 +95,13 @@ class _SimClrLossNaive(nn.Module):
         self.temp = temperature
         
 
+    def _set_exp_sims(self, x: torch.Tensor) -> torch.Tensor:
+        if self.sim == self._sims[0]:
+            return torch.exp(CosineSim().forward(x, x) / self.temp)
+
+        return torch.exp(x @ x.T / self.temp)        
+
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # let's first check a couple of things: 
         if x.ndim != 2:
@@ -97,7 +115,7 @@ class _SimClrLossNaive(nn.Module):
         
         # step1: calculate the similarities between the different samples
         # the entry [i, j] of 'exp_sims' variable contains the exp(sim(z_i, z_j)) / t
-        exp_sims = torch.exp(CosineSim().forward(x, x) / self.temp) 
+        exp_sims = self._set_exp_sims(x) 
 
         loss = 0
         for i in range(2 * N):
