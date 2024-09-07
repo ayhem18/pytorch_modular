@@ -18,21 +18,23 @@ class Food101Wrapper(AbstractParallelAugsDs):
                 output_shape: Tuple[int, int],
                 augs_per_sample: int,
                 sampled_data_augs:List,
-                uniform_data_augs: List,
+                uniform_augs_before: List,
+                uniform_augs_after: List,
                 train:bool=True,
                 samples_per_cls: Optional[int] = None,
                 classification_mode: bool=False) -> None:
         
         if classification_mode and len(sampled_data_augs) > 0:
-            raise ValueError(f"In classification mode, there should be sampled data augmentations...")
+            raise ValueError(f"In classification mode, there should be no sampled data augmentations...")
 
         super().__init__(output_shape=output_shape, 
                          augs_per_sample=augs_per_sample,
-                         sampled_data_augs=sampled_data_augs,
-                         uniform_data_augs=uniform_data_augs)
+                         sampled_data_augs=sampled_data_augs,                         
+                         uniform_augs_before=uniform_augs_before,
+                         uniform_augs_after=uniform_augs_after)
         
-        # make sure to add the uniform data augmentations for the classification
-        ds_transform = [tr.ToTensor(), tr.Resize(size=output_shape)] + uniform_data_augs
+        # add all of the uniform data augmentations
+        ds_transform = [tr.ToTensor(), tr.Resize(size=output_shape)] + uniform_augs_before + uniform_augs_after
 
         self._ds = Food101(root=root_dir,     
                          split='train' if train else 'test',

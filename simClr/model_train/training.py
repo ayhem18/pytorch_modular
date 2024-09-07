@@ -10,7 +10,6 @@ from tqdm import tqdm
 from torch.optim.sgd import SGD
 from torch.utils.data import DataLoader
 
-from torchlars import LARS # the authors of the paper used this optimizer
 
 from mypt.losses.simClrLoss import SimClrLoss
 from mypt.data.dataloaders.standard_dataloaders import initialize_train_dataloader, initialize_val_dataloader
@@ -21,10 +20,16 @@ from mypt.models.simClr.simClrModel import SimClrModel
 from .train_per_epoch import train_per_epoch, validation_per_epoch
 from .ds_wrapper import Food101Wrapper
 
+from flash.core.optimizers import LARS
+
+_WANDB_PROJECT_NAME = "SimClr"
+PREFERABLE_BATCH_SIZE = 512
+OUTPUT_SHAPE = (3, 200, 200)
+
 
 _DEFAULT_DATA_AUGS = [
     tr.RandomHorizontalFlip(p=0.5), 
-    tr.RandomResizedCrop((200, 200), scale=(0.5, 1)),
+    tr.RandomResizedCrop(OUTPUT_SHAPE[1:], scale=(0.5, 1)),
     
     tr.RandomErasing(p=1, scale=(0.05, 0.15)),
     tr.RandomGrayscale(p=0.2),
@@ -37,11 +42,6 @@ _DEFAULT_DATA_AUGS = [
 _UNIFORM_DATA_AUGS = [tr.Normalize(mean=[0.485, 0.456, 0.406], 
                                    std=[0.229, 0.224, 0.225])] 
                     
-
-_WANDB_PROJECT_NAME = "SimClr"
-
-
-PREFERABLE_BATCH_SIZE = 512
 
 
 def _set_data(train_data_folder: Union[str, Path],
@@ -133,14 +133,8 @@ def _set_optimizer(model: SimClrModel,
 
 def _set_optimizer(model: SimClrModel,
                    learning_rate: float) -> LARS:
-    # create the base optimizer 
-    base_optimizer = SGD(model.parameters(), 
-                         lr=learning_rate, 
-                         weight_decay=10**-6 # as per the paper's recommendations
-                        )
 
-    optimizer = LARS(optimizer=base_optimizer, eps=10**-8, trust_coef=10**-3)
-    return optimizer
+    return LARS(params=model.parameters(), lr=learning_rate, weight_decay=10 ** -6,)
 
 def _run(
         model:SimClrModel,
@@ -338,13 +332,13 @@ def run_pipeline(model: SimClrModel,
     # else:
     #     learning_rates /= accumulate_grads_factor
     
-    # make sure to convert it to an integer
-    accumulate_grads_factor = int(math.ceil(accumulate_grads_factor))
+    # # make sure to convert it to an integer
+    # accumulate_grads_factor = int(math.ceil(accumulate_grads_factor))
 
     # # optimizer = _set_optimizer(model=model, learning_rate=initial_lr)
     # optimizer, lr_scheduler = _set_optimizer(model=model, lrs=learning_rates, num_epochs=num_epochs)
 
-    lr = 0.3 * batch_size / 256 # according to the paper formula
+    lr = int(0.3 * (batch_size / 256)) # according to the paper formula
 
     optimizer = _set_optimizer(model=model, 
                                learning_rate=lr  
@@ -360,7 +354,7 @@ def run_pipeline(model: SimClrModel,
                 optimizer=optimizer,
                 lr_scheduler=None,
                 
-                accumulate_grad=accumulate_grads_factor, # make sure to add the gradient accumulation factor
+                accumulate_grad=1, # keep it simple, no gradient accumulation for now
 
                 ckpnt_dir=ckpnt_dir,
                 num_epochs=num_epochs,

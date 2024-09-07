@@ -42,7 +42,7 @@ class AbstractParallelAugsDs(Dataset, ABC):
         self.output_shape = output_shape
 
         # make sure each transformation starts by resizing the image to the correct size
-        self.sampled_data_augs = sampled_data_augs
+        self.sampled_data_augs = sampled_data_augs        
         self.uniform_augs_before = uniform_augs_before 
         self.uniform_augs_after = uniform_augs_after
 

@@ -60,7 +60,7 @@ def val_augmented_sanity_check(train_data_folder: Union[str, Path],
             epochs_per_sweeps=epochs_per_sweeps,
             sweep_count=sweep_count,
             num_train_samples_per_cls=100, # USING 100 samples per class: 100 /750 ~ 14% of the dataset
-            num_val_samples_per_cls=None, # use the entire validation dataset
+            num_val_samples_per_cls=25, # use only 10% of the validation dataset
             num_neighbors=EVALUATION_NUM_NEIGHBORS,
             evaluate=True # make sure to pass evaluate to run the KnnClassifier
             )
