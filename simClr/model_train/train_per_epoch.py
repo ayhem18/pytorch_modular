@@ -46,11 +46,11 @@ def train_per_batch(model: SimClrModel,
 
         # save them in a dictionary
         stats = {
-                       "train_avg_mean_sim": avg_mean_sample_sims,
-                       "train_avg_min_sim": avg_min_sample_sims,
-                       "train_avg_max_sim": avg_max_sample_sims,
-                       "train_avg_std_sim": avg_std_sample_sims,
-                       }
+                "train_avg_mean_sim": avg_mean_sample_sims,
+                "train_avg_min_sim": avg_min_sample_sims,
+                "train_avg_max_sim": avg_max_sample_sims,
+                "train_avg_std_sim": avg_std_sample_sims,
+                }
 
     batch_loss_obj = loss_function.forward(g_x)
 

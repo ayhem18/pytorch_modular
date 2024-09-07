@@ -29,20 +29,16 @@ OUTPUT_SHAPE = (3, 200, 200)
 
 _DEFAULT_DATA_AUGS = [
     tr.RandomHorizontalFlip(p=0.5), 
-    tr.RandomResizedCrop(OUTPUT_SHAPE[1:], scale=(0.5, 1)),
+    tr.RandomResizedCrop(OUTPUT_SHAPE[1:], scale=(0.4, 1)),
     
-    tr.RandomErasing(p=1, scale=(0.05, 0.15)),
-    tr.RandomGrayscale(p=0.2),
+    tr.RandomErasing(p=0.5, scale=(0.05, 0.15)),
+    tr.RandomGrayscale(p=0.5),
     tr.GaussianBlur(kernel_size=(5, 5)),
     tr.ColorJitter(brightness=0.5, contrast=0.5)
 ]
 
-# one possible reason for the high training loss is the input scale
-# 
-_UNIFORM_DATA_AUGS = [tr.Normalize(mean=[0.485, 0.456, 0.406], 
-                                   std=[0.229, 0.224, 0.225])] 
+_UNIFORM_DATA_AUGS = [] # [tr.Normalize(mean=[0.485, 0.456, 0.406],  std=[0.229, 0.224, 0.225])] : one of the augmentations used with the original Resnet models 
                     
-
 
 def _set_data(train_data_folder: Union[str, Path],
             val_data_folder: Optional[Union[str, Path]],
@@ -61,7 +57,8 @@ def _set_data(train_data_folder: Union[str, Path],
                                 output_shape=output_shape,
                                 augs_per_sample=2, 
                                 sampled_data_augs=_DEFAULT_DATA_AUGS,
-                                uniform_data_augs=_UNIFORM_DATA_AUGS,
+                                uniform_augs_before=[],
+                                uniform_augs_after=_UNIFORM_DATA_AUGS,
                                 train=True,
                                 samples_per_cls=num_train_samples_per_cls
                                 )
@@ -76,9 +73,11 @@ def _set_data(train_data_folder: Union[str, Path],
                                 output_shape=output_shape,
                                 augs_per_sample=2, 
                                 sampled_data_augs=_DEFAULT_DATA_AUGS,
-                                uniform_data_augs=_UNIFORM_DATA_AUGS,
+                                uniform_augs_before=[],
+                                uniform_augs_after=_UNIFORM_DATA_AUGS,
                                 train=False,
-                                samples_per_cls=num_val_samples_per_cls)
+                                samples_per_cls=num_train_samples_per_cls
+                                )
 
     else:
         val_ds = None
