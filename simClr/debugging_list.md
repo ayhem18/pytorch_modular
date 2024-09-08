@@ -67,3 +67,4 @@ The loss is still relatively high which leaves a lot of room for improvement.
 * use Resnet101
 * use the Lars Optimizer
 * break down the loss and
+* check if seeding the dataloaders implies returning the exact same sequence of batches in every epoch
