@@ -22,9 +22,9 @@ def test_sim_clr_loss():
                 dim = random.randint(10, 100)    
 
                 if s == 'dot':
-                    x = torch.randn(n, dim) / 4
+                    x = torch.randn(n, dim) / 4 # using exponential with dot product usually is very numerically unstable... (using x with small norms)
                 else:
-                    x = torch.randint(low=0, high=10, size=(n, dim))
+                    x = torch.randint(low=0, high=10, size=(n, dim)) # using vectors with larger norms for cosine similarity
 
                 l1 = loss1.forward(x)
                 l2 = loss2.forward(x)

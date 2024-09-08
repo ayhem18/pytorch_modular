@@ -1,4 +1,4 @@
-import wandb, torch, os, math
+import wandb, torch, os, warnings
 
 import torchvision.transforms as tr
 
@@ -8,7 +8,7 @@ from pathlib import Path
 
 from tqdm import tqdm
 from torch.optim.sgd import SGD
-from torch.optim.lr_scheduler import LinearLR, SequentialLR
+from torch.optim.lr_scheduler import LinearLR, SequentialLR, CosineAnnealingLR
 from torch.utils.data import DataLoader
 
 
@@ -88,7 +88,7 @@ def _set_data(train_data_folder: Union[str, Path],
                                          seed=seed,
                                          batch_size=batch_size,
                                          num_workers=2,
-                                         warning=False # the num_workers=0 is deliberately set to 0  
+                                         warning=False  
                                          )
 
     if val_ds is not None:
@@ -109,6 +109,12 @@ def _set_optimizer(model: SimClrModel,
                   num_warmup_epochs:int,
                   ) -> Tuple[SGD, AnnealingLR]:
 
+    if num_warmup_epochs >= num_epochs:
+        raise ValueError(f"The number of warmup epochs must be strictly less than the total number of epochs !!. found warmup : {num_warmup_epochs}, and epochs: {num_epochs}")
+
+    if num_warmup_epochs == 0:
+        warnings.warn(message="The number of warmup epochs is set to 0 !!")
+
     if isinstance(lrs, float):
         lr1, lr2 = lrs, 10 * lrs
     elif isinstance(lrs, List) and len(lrs) == 2:
@@ -121,21 +127,44 @@ def _set_optimizer(model: SimClrModel,
 
 
     # set the optimizer
-    optimizer = SGD(params=[{"params": model.fe.parameters(), "lr": lr1}, # using different learning rates with different components of the model 
+    optimizer = LARS(params=[{"params": model.fe.parameters(), "lr": lr1}, # using different learning rates with different components of the model 
                             {"params": model.flatten_layer.parameters(), "lr": lr1},
                             {"params": model.ph.parameters(), "lr": lr2}
-                            ])
+                            ], 
+                            lr=lr1, 
+                            weight_decay=10 ** -6)
+                
+    # optimizer = SGD(params=[{"params": model.fe.parameters(), "lr": lr1}, # using different learning rates with different components of the model 
+    #                         {"params": model.flatten_layer.parameters(), "lr": lr1},
+    #                         {"params": model.ph.parameters(), "lr": lr2}
+    #                         ])
 
-    linear_scheduler = LinearLR(optimizer=optimizer, start_factor=0.01, end_factor=1, total_iters=num_warmup_epochs)
+    if num_warmup_epochs > 0:
+        linear_scheduler = LinearLR(optimizer=optimizer, start_factor=0.01, end_factor=1, total_iters=num_warmup_epochs)
 
-    annealing_scheduler = AnnealingLR(optimizer=optimizer, 
-                               num_epochs=num_epochs - num_warmup_epochs,
-                               alpha=10,
-                               beta= 0.75)
+        # annealing_scheduler = AnnealingLR(optimizer=optimizer, 
+        #                         num_epochs=num_epochs - num_warmup_epochs,
+        #                         alpha=10,
+        #                         beta= 0.75)
 
-    lr_scheduler = SequentialLR(optimizer=optimizer, schedulers=[linear_scheduler, annealing_scheduler], milestones=[num_warmup_epochs])
+        cosine_scheduler = CosineAnnealingLR(optimizer=optimizer, T_max=num_epochs - num_warmup_epochs)
 
-    return optimizer, lr_scheduler
+
+        lr_scheduler = SequentialLR(optimizer=optimizer, 
+                                    schedulers=[linear_scheduler, cosine_scheduler], 
+                                    milestones=[num_warmup_epochs])
+
+        return optimizer, lr_scheduler
+
+    # annealing_scheduler = AnnealingLR(optimizer=optimizer, 
+    #                         num_epochs=num_epochs,
+    #                         alpha=10,
+    #                         beta= 0.75)
+
+    # consider the case where warm up is not needed
+    cosine_scheduler = CosineAnnealingLR(optimizer=optimizer, T_max=num_epochs)
+
+    return optimizer, cosine_scheduler 
 
 # def _set_optimizer(model: SimClrModel,
 #                    learning_rate: float) -> LARS:
@@ -305,6 +334,7 @@ def run_pipeline(model: SimClrModel,
         run_name: str = 'sim_clr_run',
         use_wandb: bool = True,
         batch_stats:bool=False,
+        debug_loss:bool=True,
         num_train_samples_per_cls: Union[int, float]=None, # the number of training samples per cls
         num_val_samples_per_cls: Union[int, float]=None, # the number of validation samples per cls
         ):    
@@ -319,7 +349,7 @@ def run_pipeline(model: SimClrModel,
 
     
     # set the loss object    
-    loss_obj = SimClrLoss(temperature=temperature)
+    loss_obj = SimClrLoss(temperature=temperature, debug=debug_loss)
 
     # DATA: 
     train_dl, val_dl = _set_data(train_data_folder=train_data_folder,

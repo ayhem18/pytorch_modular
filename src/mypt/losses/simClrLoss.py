@@ -6,7 +6,7 @@ This script contains the implementation of the Simclr Loss suggested by the pape
 import torch
 
 from torch import nn
-from typing import List
+from typing import List, Tuple
 
 
 from ..code_utilities import pytorch_utilities as pu
@@ -20,15 +20,18 @@ class SimClrLoss(nn.Module):
         # this implementation assumes that x[i] and x[i + N] represent the same image (under differnet augmentations)
         return [i for i in range(2 * n)], [(i + n) % (2 * n) for i in range(2 * n)]
 
+
     def __init__(self,
                  temperature: float, 
+                 debug:bool=False,
                  similarity: str='cos',
                  build_indices=None) -> None:
         if similarity not in self._sims:
             raise NotImplementedError(f"The current implementation supports only a specific set of similarity measures: {self._sims}. Found: {similarity}")
         self.sim = similarity 
         self.temp = temperature
-        
+        self.debug=debug
+
         if build_indices is None:
             self._build_indices = self._default_build_indices
         else:
@@ -43,7 +46,7 @@ class SimClrLoss(nn.Module):
         return torch.exp((x @ x.T) / self.temp)        
 
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor) -> torch.Tensor | Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         # let's first check a couple of things: 
         if x.ndim != 2:
             raise ValueError(f"The current implementation only accepts 2 dimensional input. Found: {x.ndim} -dimensional input.")
@@ -65,7 +68,7 @@ class SimClrLoss(nn.Module):
 
         # make sure positive_paris_exp_sims is of shape (N, 1)
         if positive_pairs_exp_sims.shape not in [(2 * N,), (2 * N, 1)]:
-            raise ValueError(f"Make sure the indexing for the positive pairs is correct")
+            raise ValueError(f"Make sure indexing for the positive pairs is correct")
 
         if positive_pairs_exp_sims.ndim == 1:
             positive_pairs_exp_sims = torch.unsqueeze(positive_pairs_exp_sims, 1)        
@@ -73,11 +76,13 @@ class SimClrLoss(nn.Module):
 
         # the i-th entry contains sum(exp(sim(x_i, x_k))) for k in [1, 2N] k != i
         exp_sims_sums = torch.sum(exp_sims, dim=1, keepdim=True) - torch.unsqueeze(torch.diag(exp_sims, diagonal=0), dim=1) 
-        # torch.exp(torch.ones(size=(2 * N, 1)) / self.temp).to(pu.get_module_device(exp_sims))
-        
-        loss = torch.mean(-torch.log(positive_pairs_exp_sims / exp_sims_sums))
 
-        return loss
+        if self.debug:
+            # for less headache, apply the log operation to get the actual similarities
+            return torch.mean(-torch.log(positive_pairs_exp_sims / exp_sims_sums)), torch.log(positive_pairs_exp_sims.detach()).cpu(), torch.log(exp_sims_sums.detach()).cpu()
+
+        return torch.mean(-torch.log(positive_pairs_exp_sims / exp_sims_sums))
+
 
 
 # let's write a naive implementation of the code: non-vectorized for loops implementations

@@ -19,7 +19,8 @@ def train_per_batch(model: SimClrModel,
                     optimizer_zero_grad:bool,
                     optimizer_step:bool,
                     device: str,
-                    batch_stats: bool=False
+                    batch_stats: bool=False,
+                    # debug:bool=False
                     ) -> Union[float, Tuple[float, float]]:
 
     model.to(device=device)
@@ -51,8 +52,22 @@ def train_per_batch(model: SimClrModel,
                 "train_avg_max_sim": avg_max_sample_sims,
                 "train_avg_std_sim": avg_std_sample_sims,
                 }
-
+    
     batch_loss_obj = loss_function.forward(g_x)
+
+    if isinstance(batch_loss_obj, Tuple):
+        batch_loss_obj, positive_pairs_sims, negative_pairs_sims = batch_loss_obj
+        
+        if batch_stats:
+            stats.update(
+                {
+                    "train_avg_positive_pair_sim": torch.mean(positive_pairs_sims).item(),
+                    # the exp_negative_pairs_sims represent the sum of exponential similarity between an element and all other elements in the batch
+                    # average first by the number of elements in the batch
+                    "train_avg_negative_pair_sim": torch.mean(negative_pairs_sims / len(x)).item()
+                }
+            )
+
 
     batch_loss = batch_loss_obj.item()
 
@@ -64,7 +79,7 @@ def train_per_batch(model: SimClrModel,
         optimizer.step()
 
     if batch_stats:
-        return batch_loss, stats 
+        return batch_loss, stats
     
     return batch_loss
 
@@ -151,7 +166,7 @@ def train_per_epoch(model: SimClrModel,
 def validation_per_batch(model: SimClrModel, 
                         x1_batch: torch.Tensor,
                         x2_batch: torch.Tensor,
-                        loss_function: nn.Module,
+                        loss_function: SimClrLoss,
                         batch_stats: bool=False,
                      ):
 
@@ -184,7 +199,21 @@ def validation_per_batch(model: SimClrModel,
                         "val_avg_std_sim": avg_std_sample_sims,
                         }
 
+
         batch_loss_obj = loss_function.forward(g_x)
+
+        if isinstance(batch_loss_obj, Tuple):
+            batch_loss_obj, positive_pairs_sims, negative_pairs_sims = batch_loss_obj
+            
+            if batch_stats:
+                stats.update(
+                    {
+                        "val_avg_positive_pair_sim": torch.mean(positive_pairs_sims).item(),
+                        # the exp_negative_pairs_sims represent the sum of exponential similarity between an element and all other elements in the batch
+                        # average first by the number of elements in the batch
+                        "val_avg_negative_pair_sim": torch.mean(negative_pairs_sims / len(x)).item()
+                    }
+                )
 
         batch_loss = batch_loss_obj.item()
 
