@@ -318,13 +318,14 @@ class KNN:
 
         # process the batch size
         ibs = self._batch_sizes(inference_batch_size, val_ds)
-        
+
         if process_item_ds is None:
-            process_item_ds = tr.ToTensor()
+            # use the training function
+            process_item_ds = self.process_item_ds
         
-        # processing the output of a model
         if process_model_output is None:
-            process_model_output = lambda model, x: model(x)
+            # use the training function
+            process_model_output = self.process_model_output
 
         self._load_model()
         
