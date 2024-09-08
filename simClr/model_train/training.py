@@ -8,6 +8,7 @@ from pathlib import Path
 
 from tqdm import tqdm
 from torch.optim.sgd import SGD
+from torch.optim.lr_scheduler import LinearLR, SequentialLR
 from torch.utils.data import DataLoader
 
 
@@ -76,7 +77,7 @@ def _set_data(train_data_folder: Union[str, Path],
                                 uniform_augs_before=[],
                                 uniform_augs_after=_UNIFORM_DATA_AUGS,
                                 train=False,
-                                samples_per_cls=num_train_samples_per_cls
+                                samples_per_cls=num_val_samples_per_cls,    
                                 )
 
     else:
@@ -104,7 +105,9 @@ def _set_data(train_data_folder: Union[str, Path],
 
 def _set_optimizer(model: SimClrModel, 
                   lrs: Union[Tuple[float], float], 
-                  num_epochs: int) -> Tuple[SGD, AnnealingLR]:
+                  num_epochs: int,
+                  num_warmup_epochs:int,
+                  ) -> Tuple[SGD, AnnealingLR]:
 
     if isinstance(lrs, float):
         lr1, lr2 = lrs, 10 * lrs
@@ -123,17 +126,21 @@ def _set_optimizer(model: SimClrModel,
                             {"params": model.ph.parameters(), "lr": lr2}
                             ])
 
-    lr_scheduler = AnnealingLR(optimizer=optimizer, 
-                               num_epochs=num_epochs,
+    linear_scheduler = LinearLR(optimizer=optimizer, start_factor=0.01, end_factor=1, total_iters=num_warmup_epochs)
+
+    annealing_scheduler = AnnealingLR(optimizer=optimizer, 
+                               num_epochs=num_epochs - num_warmup_epochs,
                                alpha=10,
                                beta= 0.75)
 
+    lr_scheduler = SequentialLR(optimizer=optimizer, schedulers=[linear_scheduler, annealing_scheduler], milestones=[num_warmup_epochs])
+
     return optimizer, lr_scheduler
 
-def _set_optimizer(model: SimClrModel,
-                   learning_rate: float) -> LARS:
+# def _set_optimizer(model: SimClrModel,
+#                    learning_rate: float) -> LARS:
 
-    return LARS(params=model.parameters(), lr=learning_rate, weight_decay=10 ** -6,)
+#     return LARS(params=model.parameters(), lr=learning_rate, weight_decay=10 ** -6,)
 
 def _run(
         model:SimClrModel,
@@ -144,7 +151,7 @@ def _run(
         loss_obj: SimClrLoss,
         optimizer: torch.optim.Optimizer, 
         lr_scheduler: Optional[torch.optim.lr_scheduler.LRScheduler], 
-        
+                
         accumulate_grad: int,
 
         ckpnt_dir: Optional[Union[str, Path]],
@@ -292,6 +299,7 @@ def run_pipeline(model: SimClrModel,
         temperature: float,
 
         ckpnt_dir: Union[str, Path],
+        num_warmup_epochs:int=10,
         val_per_epoch: int = 3,
         seed:int = 69,
         run_name: str = 'sim_clr_run',
@@ -334,14 +342,18 @@ def run_pipeline(model: SimClrModel,
     # # make sure to convert it to an integer
     # accumulate_grads_factor = int(math.ceil(accumulate_grads_factor))
 
-    # # optimizer = _set_optimizer(model=model, learning_rate=initial_lr)
-    # optimizer, lr_scheduler = _set_optimizer(model=model, lrs=learning_rates, num_epochs=num_epochs)
+    # optimizer = _set_optimizer(model=model, learning_rate=initial_lr)
 
-    lr = int(0.3 * (batch_size / 256)) # according to the paper formula
+    lr = 0.3 * (batch_size / 256) # according to the paper formula
 
-    optimizer = _set_optimizer(model=model, 
-                               learning_rate=lr  
-                               )
+    optimizer, lr_scheduler = _set_optimizer(model=model, 
+                                             lrs=lr, 
+                                             num_warmup_epochs=num_warmup_epochs,
+                                             num_epochs=num_epochs)
+
+    # optimizer = _set_optimizer(model=model, 
+    #                            learning_rate=lr
+    #                            )
 
     res = None
     try:
@@ -351,8 +363,7 @@ def run_pipeline(model: SimClrModel,
 
                 loss_obj=loss_obj, 
                 optimizer=optimizer,
-                lr_scheduler=None,
-                
+                lr_scheduler=lr_scheduler,
                 accumulate_grad=1, # keep it simple, no gradient accumulation for now
 
                 ckpnt_dir=ckpnt_dir,

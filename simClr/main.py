@@ -71,12 +71,16 @@ def train_main(model):
         # learning_rates=0.01,
         output_shape=OUTPUT_SHAPE[1:],
         ckpnt_dir=os.path.join(ckpnt_dir_parent, f'iteration_{len(os.listdir(ckpnt_dir_parent)) + 1}'),
-        num_epochs=64, 
+        num_epochs=100, 
         batch_size=_BATCH_SIZE, 
         temperature=0.5, 
         seed=0, 
         use_wandb=True,
-        batch_stats=True)
+        batch_stats=True,
+        num_train_samples_per_cls=100,
+        num_val_samples_per_cls=100,
+        # num_warmup_epochs=5,
+        )
 
 
 if __name__ == '__main__':

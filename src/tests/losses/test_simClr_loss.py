@@ -17,7 +17,7 @@ def test_sim_clr_loss():
         for t in tqdm(np.linspace(1, 100, 51), desc=f'testing with different temperatures with the metric: {s}'):
             loss1, loss2 = SimClrLoss(temperature=t, similarity=s), _SimClrLossNaive(temperature=t, similarity=s)
 
-            for _ in range(100):
+            for _ in range(1000):
                 n = 2 * random.randint(10, 100)
                 dim = random.randint(10, 100)    
 

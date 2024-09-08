@@ -4,7 +4,7 @@ This script contains the implementation of the annealing learning rate schedulin
 
 
 import torch
-from typing import Union
+from typing import Union, List
 from torch.optim.lr_scheduler import LambdaLR
 
 from copy import deepcopy
@@ -14,7 +14,8 @@ class AnnealingLR(LambdaLR):
                  optimizer: torch.optim,
                  num_epochs: int, 
                  alpha: Union[float, int],
-                 beta: Union[float, int], 
+                 beta: Union[float, int],
+                 last_epoch:int = -1 
                  ):
         # let's make some checks on the passes arguments
         if num_epochs <= 0:
@@ -27,6 +28,8 @@ class AnnealingLR(LambdaLR):
         self.num_epochs = num_epochs
         self.alpha = alpha
         self.beta = beta    
+
+        self._last_epoch = last_epoch
 
         def _formula(epoch: int): 
             # first calculate 'p'
@@ -48,8 +51,20 @@ class AnnealingLR(LambdaLR):
     def get_lr(self):
         self.scheduler.get_lr()
 
-    def step(self):
-        self.scheduler.step()
+    def step(self, epoch: int = None):
+        self.scheduler.step(epoch)
+
+    def get_last_lr(self) -> List[float]:
+        return self.scheduler.get_last_lr()
+    
+    @property
+    def last_epoch(self):
+        return self._last_epoch
+
+    @last_epoch.setter
+    def last_epoch(self, value: float):
+        self._last_epoch = value
+
 
 from torch import nn
 
