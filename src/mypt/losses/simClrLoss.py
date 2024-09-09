@@ -41,8 +41,7 @@ class SimClrLoss(nn.Module):
     def _set_exp_sims(self, x: torch.Tensor) -> torch.Tensor:
         if self.sim == self._sims[0]:
             return torch.exp(CosineSim().forward(x, x) / self.temp)
-        # sims = (x @ x.T) 
-        # sims = sims - torch.min(sims, dim=0)[0]
+
         return torch.exp((x @ x.T) / self.temp)        
 
 
@@ -59,7 +58,6 @@ class SimClrLoss(nn.Module):
         
         # step1: calculate the similarities between the different samples
         # the entry [i, j] of 'exp_sims' variable contains the exp(sim(z_i, z_j)) / t
-        # exp_sims = torch.exp(CosineSim().forward(x, x) / self.temp) 
         exp_sims = self._set_exp_sims(x)
 
         p1, p2 = self._build_indices(N)
@@ -79,7 +77,15 @@ class SimClrLoss(nn.Module):
 
         if self.debug:
             # for less headache, apply the log operation to get the actual similarities
-            return torch.mean(-torch.log(positive_pairs_exp_sims / exp_sims_sums)), torch.log(positive_pairs_exp_sims.detach()).cpu(), torch.log(exp_sims_sums.detach()).cpu()
+            return (torch.mean(-torch.log(positive_pairs_exp_sims / exp_sims_sums)), 
+                        # positive_pairs_exp_sims contains exp(sim(p1, p2) / temp), to extract the similarity
+                        # apply log, then * self.temp 
+                        (torch.log(positive_pairs_exp_sims.detach()) * self.temp).cpu(), 
+                        
+                        # exp_sims_sums is a bit trickier, as it is a sum of exp(sim(item, neg_sample) / temp)
+                        # average first, apply log, * self.temp
+                        (torch.log(exp_sims_sums.detach() / (2 * N - 1)) * self.temp).cpu()
+                    )
 
         return torch.mean(-torch.log(positive_pairs_exp_sims / exp_sims_sums))
 

@@ -53,44 +53,14 @@ class Food101Wrapper(AbstractParallelAugsDs):
         self.classification_mode = classification_mode
 
 
-    def __set_samples_per_cls(self, samples_per_cls: int):
-        # iterate through the dataset
-        current_cls = None
-        
-        last_pointer = 0
-        cls_count = 0
-
-        
+    def __set_samples_per_cls(self, samples_per_cls: int):        
         # instead of a all rounded function that works for all cases, we will suppose, for the sake of efficiency
-        # that each class has exacty 750 image in the training dataset, and 250 in the validation 
+        # that each class has exacty 750 images in the training dataset, and 250 in the validation 
+        # the other implementation can be found in the "ds_wrapper_.py" script
         if self.train:
             mapping = {samples_per_cls * i: 750 * i for i in range(101)}
         else:
-            mapping = {samples_per_cls * i: 250 * i for i in range(101)}
-
-        # mapping = {0: 0}
-        # for i in tqdm(range(len(self._ds)), desc="iterating through the dataset to set the samples per each class"):
-        # # for i in tqdm(range(3150), desc="iterating through the dataset to set the samples per each class"):
-        #     _, c = self._ds[i]
-            
-        #     if current_cls is None:
-        #         current_cls = c
-            
-        #     if current_cls == c:
-        #         cls_count += 1    
-
-        #         if cls_count == samples_per_cls:
-        #             last_pointer = last_pointer + cls_count
-                    
-
-        #     else:
-        #         if cls_count <= samples_per_cls:
-        #             last_pointer = last_pointer + cls_count
-
-        #         mapping[last_pointer] = i 
-
-        #         cls_count = 1              
-        #         current_cls = c          
+            mapping = {samples_per_cls * i: 250 * i for i in range(101)}         
 
         self.samples_per_cls_map = mapping
 

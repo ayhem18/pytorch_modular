@@ -64,7 +64,7 @@ def train_per_batch(model: SimClrModel,
                     "train_avg_positive_pair_sim": torch.mean(positive_pairs_sims).item(),
                     # the exp_negative_pairs_sims represent the sum of exponential similarity between an element and all other elements in the batch
                     # average first by the number of elements in the batch
-                    "train_avg_negative_pair_sim": torch.mean(negative_pairs_sims / len(x)).item()
+                    "train_avg_negative_pair_sim": torch.mean(negative_pairs_sims).item()
                 }
             )
 
@@ -211,7 +211,7 @@ def validation_per_batch(model: SimClrModel,
                         "val_avg_positive_pair_sim": torch.mean(positive_pairs_sims).item(),
                         # the exp_negative_pairs_sims represent the sum of exponential similarity between an element and all other elements in the batch
                         # average first by the number of elements in the batch
-                        "val_avg_negative_pair_sim": torch.mean(negative_pairs_sims / len(x)).item()
+                        "val_avg_negative_pair_sim": torch.mean(negative_pairs_sims).item()
                     }
                 )
 
@@ -244,7 +244,8 @@ def validation_per_epoch(model: SimClrModel,
         batch_val_res = validation_per_batch(model=model, 
                                         x1_batch=x1, 
                                         x2_batch=x2, 
-                                        loss_function=loss_function)
+                                        loss_function=loss_function,
+                                        batch_stats=batch_stats)
 
         if batch_stats:
             batch_val_loss = batch_val_res[0]

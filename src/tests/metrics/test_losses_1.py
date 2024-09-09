@@ -1,5 +1,8 @@
 """
-# let's test the vectorized implementation against the naive one and make sure the outputs of both functions are close
+This script is written to test losses: 
+So far: 
+
+1. Test the vectorized implementation of Simclr Loss against the naive implementation
 """
 
 import random, torch
