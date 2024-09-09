@@ -13,10 +13,9 @@ from mypt.subroutines.neighbors import model_embs as me
 
 from model_train.training import run_pipeline, OUTPUT_SHAPE 
 from model_train.evaluating import evaluate_model, _set_data_classification_data
+from mypt.subroutines.neighbors.knn import KNN
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
-
-_BATCH_SIZE = 320
 
 _OUTPUT_DIM = 128
 
@@ -49,32 +48,6 @@ _OUTPUT_DIM = 128
 #         plt.show()
 
 
-def train_main(model):
-    train_data_folder = os.path.join(SCRIPT_DIR, 'data', 'food101', 'train')
-
-    ckpnt_dir_parent = dirf.process_path(os.path.join(SCRIPT_DIR, 'logs', 'train_logs'), dir_ok=True, file_ok=False)
-
-    return run_pipeline(model=model, 
-        train_data_folder=train_data_folder, 
-        val_data_folder=None,
-        # initial_lr=0.01,
-        # learning_rates=0.01,
-        output_shape=OUTPUT_SHAPE[1:],
-        ckpnt_dir=os.path.join(ckpnt_dir_parent, f'iteration_{len(os.listdir(ckpnt_dir_parent)) + 1}'),
-        num_epochs=50, 
-        batch_size=_BATCH_SIZE, 
-        temperature=0.5, 
-        seed=0, 
-        use_wandb=True,
-        batch_stats=True,
-        debug_loss=True, # get as much insight on the loss as possible
-        num_train_samples_per_cls=100,
-        num_val_samples_per_cls=100,
-        num_warmup_epochs=10,
-        )
-
-
-from mypt.subroutines.neighbors.knn import KNN
 
 def evaluate(model, 
              model_ckpnt, 
@@ -88,7 +61,7 @@ def evaluate(model,
     train_ds, val_ds = _set_data_classification_data(train_folder, val_folder, OUTPUT_SHAPE[1:], train_per_cls, val_per_cls)
     
     knn = KNN(train_ds=train_ds, 
-                train_ds_inference_batch_size=250,
+                train_ds_inference_batch_size=5000, # change this value depending on the computation resources
                 process_model_output=lambda m, x: m(x)[0], # the forward call returns a tuple 
                 model=model,
                 model_ckpnt=model_ckpnt,
@@ -96,14 +69,14 @@ def evaluate(model,
                 ) 
 
     metrics, indices = knn.predict(val_ds, 
-                                inference_batch_size=250, 
+                                inference_batch_size=5000, # change this value depending on the computation resources  
                                 num_neighbors=5, 
                                 measure='cosine_sim',
                                 measure_as_similarity=True
                                 )
 
     neighbor_labels = np.asarray([
-                                    [train_ds[index][0] for index in indices[i, :]]
+                                    [train_ds[index][1] for index in indices[i, :]]
                                     for i in range(len(indices))
                                    ]
                                   )
@@ -114,8 +87,8 @@ def evaluate(model,
 
     res = {}
     for i in range(len(labels)):
-        res[i] = {"label": labels[i], 
-                  "neighbor_indices": neighbor_labels[i, :].tolist(), 
+        res[i] = {"label": int(labels[i]), 
+                  "neighbor_labels": neighbor_labels[i, :].tolist(), 
                   "neighbor_indices": indices[i, :].tolist(), 
                   "neighbor_metrics": metrics[i, :].tolist()}
 
@@ -147,11 +120,3 @@ if __name__ == '__main__':
              train_per_cls=100, 
              val_per_cls=100)
 
-
-    # data = os.path.join(SCRIPT_DIR, 'data', 'food101', 'train')
-    # model = ResnetSimClr(input_shape=OUTPUT_SHAPE,  
-    #                      output_dim=_OUTPUT_DIM, 
-    #                      num_fc_layers=4, 
-    #                      freeze=False, 
-    #                      architecture=101)
-    # train_main(model)
