@@ -8,6 +8,7 @@ from typing import Union, Optional, List, Dict
 from pathlib import Path
 from datetime import datetime
 from sklearn.model_selection import train_test_split
+from tqdm import tqdm
 
 HOME = os.getcwd()
 
@@ -98,7 +99,7 @@ def copy_directories(src_dir: str,
             return True
 
     # iterate through each file in the src_dir
-    for file_name in sorted(os.listdir(src_dir)):
+    for file_name in tqdm(sorted(os.listdir(src_dir)), desc='copying files'):
         file_path = os.path.join(src_dir, file_name)
         # move / copy
         if filter_directories(file_name):

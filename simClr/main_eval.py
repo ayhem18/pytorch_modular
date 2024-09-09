@@ -21,8 +21,6 @@ SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 
 
 def visualize_neighbors(evaluation_result: P | Dict, 
-                        # train_folder: P,
-                        # val_folder: P,
                         train_per_cls:int|None=None, 
                         val_per_cls:int|None=None,
                         num_images:int=10):
@@ -50,19 +48,19 @@ def visualize_neighbors(evaluation_result: P | Dict,
         x, val_label = val_ds[sample_index]
         x = np.moveaxis(x.numpy(), 0,-1)
 
-        # fig = plt.figure() 
-        # fig.add_subplot(1, 1 + len(n_indices), 1) 
-        # plt.imshow(x)
-        # plt.title(f"original image, label: {val_label}")
+        fig = plt.figure() 
+        fig.add_subplot(1, 1 + len(n_indices), 1) 
+        plt.imshow(x)
+        plt.title(f"original image, label: {val_label}")
 
         for rank, (index, measure) in enumerate(zip(n_indices, n_metrics)):
             n, n_label = train_ds[index] 
             n = np.moveaxis(n.numpy(), 0, -1)
-            # fig.add_subplot(1, 1 + len(n_indices), rank + 2)
-            # plt.imshow(n)
-            # plt.title(f"nearest neighbor: {rank + 1}\nlabel: {n_label}\nsimilarity: {round(measure, 4)}")
+            fig.add_subplot(1, 1 + len(n_indices), rank + 2)
+            plt.imshow(n)
+            plt.title(f"nearest neighbor: {rank + 1}\nlabel: {n_label}\nsimilarity: {round(measure, 4)}")
 
-        # plt.show()
+        plt.show()
 
 
 def evaluate(model, 
@@ -90,21 +88,12 @@ def evaluate(model,
                                 measure_as_similarity=True
                                 )
 
-    # neighbor_labels = np.asarray([
-    #                                 [train_ds[index][1] for index in indices[i, :]]
-    #                                 for i in range(len(indices))
-    #                                ]
-    #                               )
-
-    # find the neighbors and stuff
     labels = np.asarray([val_ds[i][1] for i in range(len(val_ds))])
     
 
     res = {}
     for i in range(len(labels)):
-        res[i] = {"labels": int(labels[i]), 
-                #   "neighbor_labels": neighbor_labels[i, :].tolist(), 
-                  "neighbor_indices": indices[i, :].tolist(), 
+        res[i] = {"neighbor_indices": indices[i, :].tolist(), 
                   "neighbor_metrics": metrics[i, :].tolist()}
 
     results_directory = os.path.join(SCRIPT_DIR, 'eval_res')
@@ -128,13 +117,13 @@ if __name__ == '__main__':
                          freeze=False, 
                          architecture=101)
 
-    ckpnt = os.path.join(SCRIPT_DIR, 'logs', 'train_logs', 'iteration_1', 'ckpnt_train_loss-4.5096_epoch-91.pt')
+    ckpnt = os.path.join(SCRIPT_DIR, 'logs', 'train_logs', 'iteration_8', 'ckpnt_val_loss_4.6184_epoch_49.pt')
 
-    # evaluate(model=model, 
-    #          model_ckpnt=ckpnt, 
-    #          train_per_cls=100, 
-    #          val_per_cls=100)
+    evaluate(model=model, 
+             model_ckpnt=ckpnt, 
+             train_per_cls=100, 
+             val_per_cls=100)
 
-    res = os.path.join(SCRIPT_DIR, 'eval_res', 'ckpnt_train_loss-4.5096_epoch-91_results.obj')
+    # res = os.path.join(SCRIPT_DIR, 'eval_res', 'ckpnt_val_loss_4.6184_epoch_49.pt_results.obj')
 
-    visualize_neighbors(res, train_per_cls=100, val_per_cls=100, num_images=10)
+    # visualize_neighbors(res, train_per_cls=100, val_per_cls=100, num_images=10)
