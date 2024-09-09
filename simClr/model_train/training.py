@@ -21,7 +21,6 @@ from mypt.models.simClr.simClrModel import SimClrModel
 from .train_per_epoch import train_per_epoch, validation_per_epoch
 from .ds_wrapper import Food101Wrapper
 
-from flash.core.optimizers import LARS
 
 _WANDB_PROJECT_NAME = "SimClr"
 PREFERABLE_BATCH_SIZE = 512
@@ -109,6 +108,10 @@ def _set_optimizer(model: SimClrModel,
                   num_warmup_epochs:int,
                   ) -> Tuple[SGD, AnnealingLR]:
 
+    # importing the Lars optimizer insider this function, simply because the "flash" package is noticeably slow to load ....
+    # hence slowing down the entire code base even when I am not training
+    from flash.core.optimizers import LARS
+
     if num_warmup_epochs >= num_epochs:
         raise ValueError(f"The number of warmup epochs must be strictly less than the total number of epochs !!. found warmup : {num_warmup_epochs}, and epochs: {num_epochs}")
 
@@ -165,11 +168,6 @@ def _set_optimizer(model: SimClrModel,
     cosine_scheduler = CosineAnnealingLR(optimizer=optimizer, T_max=num_epochs)
 
     return optimizer, cosine_scheduler 
-
-# def _set_optimizer(model: SimClrModel,
-#                    learning_rate: float) -> LARS:
-
-#     return LARS(params=model.parameters(), lr=learning_rate, weight_decay=10 ** -6,)
 
 def _run(
         model:SimClrModel,

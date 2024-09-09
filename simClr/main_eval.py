@@ -1,4 +1,4 @@
-import os
+import os, random
 import numpy as np
 
 import torchvision.transforms as tr
@@ -9,51 +9,66 @@ from typing import Union, Dict
 
 from mypt.code_utilities import directories_and_files as dirf
 from mypt.models.simClr.simClrModel import ResnetSimClr
-from mypt.subroutines.neighbors import model_embs as me
 
-from model_train.training import run_pipeline, OUTPUT_SHAPE 
-from model_train.evaluating import evaluate_model, _set_data_classification_data
+from model_train.training import OUTPUT_SHAPE 
+from model_train.evaluating import _set_data_classification_data
 from mypt.subroutines.neighbors.knn import KNN
+from mypt.shortcuts import P
+
+from main_train import _OUTPUT_DIM
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 
-_OUTPUT_DIM = 128
+
+def visualize_neighbors(evaluation_result: P | Dict, 
+                        # train_folder: P,
+                        # val_folder: P,
+                        train_per_cls:int|None=None, 
+                        val_per_cls:int|None=None,
+                        num_images:int=10):
+
+    train_folder = os.path.join(SCRIPT_DIR, 'data', 'food101', 'train')
+    val_folder = os.path.join(SCRIPT_DIR, 'data', 'food101', 'val')
 
 
-# def visualize_neighbors(res: Union[str, Path, Dict], num_images: int = 5):
-#     ds = STL10(root=os.path.join(SCRIPT_DIR ,'data', 'stl10', 'train'), 
-#                transform=tr.ToTensor(), )
+    if isinstance(evaluation_result, (str, Path)):
+        import pickle
+        with open(evaluation_result, 'rb') as f:
+            evaluation_result = pickle.load(f)        
 
-#     if isinstance(res, (str, Path)):
-#         import pickle
-#         with open(res, 'rb') as f:
-#             res = pickle.load(f)        
 
-#     for i, ilist in list(res.items())[:num_images]:
-#         x, y = ds[i]
-#         x = np.moveaxis(x.numpy(), 0,-1)
+    train_ds, val_ds = _set_data_classification_data(train_folder, 
+                                                     val_folder, 
+                                                     OUTPUT_SHAPE[1:], 
+                                                     train_per_cls, 
+                                                     val_per_cls)
 
-#         fig = plt.figure() 
-#         fig.add_subplot(1, 1 + len(ilist), 1) 
-#         plt.imshow(x)
-#         plt.title("original image")
+    results_sample = random.sample(list(evaluation_result.items()), num_images)
 
-#         for rank, (index, measure) in enumerate(ilist):
-#             n, _ = ds[index] 
-#             n = np.moveaxis(n.numpy(), 0, -1)
-#             fig.add_subplot(1, 1 + len(ilist), 2 + rank)
-#             plt.imshow(n)
-#             plt.title(f"nearest neighbor: {rank + 1}\nsimilarity: {round(measure, 4)}")
+    for sample_index, info in results_sample:
+        n_indices, n_metrics = info['neighbor_indices'], info['neighbor_metrics']
+        x, val_label = val_ds[sample_index]
+        x = np.moveaxis(x.numpy(), 0,-1)
 
-#         plt.show()
+        # fig = plt.figure() 
+        # fig.add_subplot(1, 1 + len(n_indices), 1) 
+        # plt.imshow(x)
+        # plt.title(f"original image, label: {val_label}")
 
+        for rank, (index, measure) in enumerate(zip(n_indices, n_metrics)):
+            n, n_label = train_ds[index] 
+            n = np.moveaxis(n.numpy(), 0, -1)
+            # fig.add_subplot(1, 1 + len(n_indices), rank + 2)
+            # plt.imshow(n)
+            # plt.title(f"nearest neighbor: {rank + 1}\nlabel: {n_label}\nsimilarity: {round(measure, 4)}")
+
+        # plt.show()
 
 
 def evaluate(model, 
              model_ckpnt, 
              train_per_cls:int, 
              val_per_cls: int,
-
              ):
     train_folder = os.path.join(SCRIPT_DIR, 'data', 'food101', 'train')
     val_folder = os.path.join(SCRIPT_DIR, 'data', 'food101', 'val')
@@ -61,7 +76,7 @@ def evaluate(model,
     train_ds, val_ds = _set_data_classification_data(train_folder, val_folder, OUTPUT_SHAPE[1:], train_per_cls, val_per_cls)
     
     knn = KNN(train_ds=train_ds, 
-                train_ds_inference_batch_size=5000, # change this value depending on the computation resources
+                train_ds_inference_batch_size=5000, # change this value depending on the computational resources
                 process_model_output=lambda m, x: m(x)[0], # the forward call returns a tuple 
                 model=model,
                 model_ckpnt=model_ckpnt,
@@ -69,17 +84,17 @@ def evaluate(model,
                 ) 
 
     metrics, indices = knn.predict(val_ds, 
-                                inference_batch_size=5000, # change this value depending on the computation resources  
+                                inference_batch_size=5000, # change this value depending on the computational resources  
                                 num_neighbors=5, 
                                 measure='cosine_sim',
                                 measure_as_similarity=True
                                 )
 
-    neighbor_labels = np.asarray([
-                                    [train_ds[index][1] for index in indices[i, :]]
-                                    for i in range(len(indices))
-                                   ]
-                                  )
+    # neighbor_labels = np.asarray([
+    #                                 [train_ds[index][1] for index in indices[i, :]]
+    #                                 for i in range(len(indices))
+    #                                ]
+    #                               )
 
     # find the neighbors and stuff
     labels = np.asarray([val_ds[i][1] for i in range(len(val_ds))])
@@ -87,8 +102,8 @@ def evaluate(model,
 
     res = {}
     for i in range(len(labels)):
-        res[i] = {"label": int(labels[i]), 
-                  "neighbor_labels": neighbor_labels[i, :].tolist(), 
+        res[i] = {"labels": int(labels[i]), 
+                #   "neighbor_labels": neighbor_labels[i, :].tolist(), 
                   "neighbor_indices": indices[i, :].tolist(), 
                   "neighbor_metrics": metrics[i, :].tolist()}
 
@@ -115,8 +130,11 @@ if __name__ == '__main__':
 
     ckpnt = os.path.join(SCRIPT_DIR, 'logs', 'train_logs', 'iteration_1', 'ckpnt_train_loss-4.5096_epoch-91.pt')
 
-    evaluate(model=model, 
-             model_ckpnt=ckpnt, 
-             train_per_cls=100, 
-             val_per_cls=100)
+    # evaluate(model=model, 
+    #          model_ckpnt=ckpnt, 
+    #          train_per_cls=100, 
+    #          val_per_cls=100)
 
+    res = os.path.join(SCRIPT_DIR, 'eval_res', 'ckpnt_train_loss-4.5096_epoch-91_results.obj')
+
+    visualize_neighbors(res, train_per_cls=100, val_per_cls=100, num_images=10)
