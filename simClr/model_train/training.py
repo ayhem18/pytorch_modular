@@ -13,93 +13,64 @@ from torch.utils.data import DataLoader
 
 
 from mypt.losses.simClrLoss import SimClrLoss
-from mypt.data.dataloaders.standard_dataloaders import initialize_train_dataloader, initialize_val_dataloader
 from mypt.code_utilities import pytorch_utilities as pu, directories_and_files as dirf
 from mypt.schedulers.annealing_lr import AnnealingLR
 from mypt.models.simClr.simClrModel import SimClrModel
+from mypt.data.datasets.parallel_augmentation.parallel_aug_ds_wrapper import Food101Wrapper
+from mypt.shortcuts import P
 
 from .train_per_epoch import train_per_epoch, validation_per_epoch
-from .ds_wrapper import Food101Wrapper
-
+from ._set_ds import _set_data
 
 _WANDB_PROJECT_NAME = "SimClr"
 PREFERABLE_BATCH_SIZE = 512
-OUTPUT_SHAPE = (3, 200, 200)
 
 
-_DEFAULT_DATA_AUGS = [
-    tr.RandomHorizontalFlip(p=0.5), 
-    tr.RandomResizedCrop(OUTPUT_SHAPE[1:], scale=(0.4, 1)),
+# def _set_data(train_data_folder: Union[str, Path],
+#             val_data_folder: Optional[Union[str, Path]],
+#             dataset:str,
+#             batch_size:int,
+#             output_shape: Tuple[int, int],
+#             num_train_samples_per_cls:Optional[int],
+#             num_val_samples_per_cls:Optional[int],    
+#             seed:int=69) -> Tuple[DataLoader, Optional[DataLoader]]:
     
-    tr.RandomErasing(p=0.5, scale=(0.05, 0.15)),
-    tr.RandomGrayscale(p=0.5),
-    tr.GaussianBlur(kernel_size=(5, 5)),
-    tr.ColorJitter(brightness=0.5, contrast=0.5)
-]
 
-_UNIFORM_DATA_AUGS = [] # [tr.Normalize(mean=[0.485, 0.456, 0.406],  std=[0.229, 0.224, 0.225])] : one of the augmentations used with the original Resnet models 
-                    
 
-def _set_data(train_data_folder: Union[str, Path],
-            val_data_folder: Optional[Union[str, Path]],
-            batch_size:int,
-            output_shape: Tuple[int, int],
-            num_train_samples_per_cls:Optional[int],
-            num_val_samples_per_cls:Optional[int],    
-            seed:int=69) -> Tuple[DataLoader, Optional[DataLoader]]:
+#     train_data_folder = dirf.process_path(train_data_folder, 
+#                                           dir_ok=True, 
+#                                           file_ok=False, 
+#                                           )
     
-    train_data_folder = dirf.process_path(train_data_folder, 
-                                          dir_ok=True, 
-                                          file_ok=False, 
-                                          )
+#     train_ds = Food101Wrapper(root_dir=train_data_folder, 
+#                                 output_shape=output_shape,
+#                                 augs_per_sample=2, 
+#                                 sampled_data_augs=_DEFAULT_DATA_AUGS,
+#                                 uniform_augs_before=[],
+#                                 uniform_augs_after=_UNIFORM_DATA_AUGS,
+#                                 train=True,
+#                                 samples_per_cls=num_train_samples_per_cls
+#                                 )
 
-    train_ds = Food101Wrapper(root_dir=train_data_folder, 
-                                output_shape=output_shape,
-                                augs_per_sample=2, 
-                                sampled_data_augs=_DEFAULT_DATA_AUGS,
-                                uniform_augs_before=[],
-                                uniform_augs_after=_UNIFORM_DATA_AUGS,
-                                train=True,
-                                samples_per_cls=num_train_samples_per_cls
-                                )
+#     if val_data_folder is not None:
+#         val_data_folder = dirf.process_path(val_data_folder, 
+#                                           dir_ok=True, 
+#                                           file_ok=False, 
+#                                           )
 
-    if val_data_folder is not None:
-        val_data_folder = dirf.process_path(val_data_folder, 
-                                          dir_ok=True, 
-                                          file_ok=False, 
-                                          )
+#         val_ds = Food101Wrapper(root_dir=val_data_folder, 
+#                                 output_shape=output_shape,
+#                                 augs_per_sample=2, 
+#                                 sampled_data_augs=_DEFAULT_DATA_AUGS,
+#                                 uniform_augs_before=[],
+#                                 uniform_augs_after=_UNIFORM_DATA_AUGS,
+#                                 train=False,
+#                                 samples_per_cls=num_val_samples_per_cls,    
+#                                 )
 
-        val_ds = Food101Wrapper(root_dir=val_data_folder, 
-                                output_shape=output_shape,
-                                augs_per_sample=2, 
-                                sampled_data_augs=_DEFAULT_DATA_AUGS,
-                                uniform_augs_before=[],
-                                uniform_augs_after=_UNIFORM_DATA_AUGS,
-                                train=False,
-                                samples_per_cls=num_val_samples_per_cls,    
-                                )
+#     else:
+#         val_ds = None
 
-    else:
-        val_ds = None
-
-    ## data loaders
-    train_dl = initialize_train_dataloader(dataset_object=train_ds, 
-                                         seed=seed,
-                                         batch_size=batch_size,
-                                         num_workers=2,
-                                         warning=False  
-                                         )
-
-    if val_ds is not None:
-        val_dl = initialize_val_dataloader(dataset_object=train_ds, 
-                                            seed=seed,
-                                            batch_size=batch_size,
-                                            num_workers=2,
-                                            )
-    else:
-        val_dl = None
-
-    return train_dl, val_dl
 
 
 def _set_optimizer(model: SimClrModel, 
@@ -318,7 +289,7 @@ def run_pipeline(model: SimClrModel,
         train_data_folder:Union[str, Path],          
         val_data_folder:Optional[Union[str, Path]],
         output_shape:Tuple[int, int], 
-
+        dataset: str,
         num_epochs: int, 
         batch_size: int,
 
@@ -336,7 +307,7 @@ def run_pipeline(model: SimClrModel,
         num_train_samples_per_cls: Union[int, float]=None, # the number of training samples per cls
         num_val_samples_per_cls: Union[int, float]=None, # the number of validation samples per cls
         ):    
-
+    
     if use_wandb:
         # this argument was added to avoid initializing wandb twice during the tuning process
         wandb.init(project=_WANDB_PROJECT_NAME, 
@@ -352,6 +323,7 @@ def run_pipeline(model: SimClrModel,
     # DATA: 
     train_dl, val_dl = _set_data(train_data_folder=train_data_folder,
                                 val_data_folder=val_data_folder, 
+                                dataset=dataset,
                                 output_shape=output_shape,
                                 batch_size=batch_size, 
                                 num_train_samples_per_cls=num_train_samples_per_cls,
@@ -379,11 +351,8 @@ def run_pipeline(model: SimClrModel,
                                              num_warmup_epochs=num_warmup_epochs,
                                              num_epochs=num_epochs)
 
-    # optimizer = _set_optimizer(model=model, 
-    #                            learning_rate=lr
-    #                            )
-
     res = None
+
     try:
         res = _run(model=model, 
                 train_dl=train_dl, 

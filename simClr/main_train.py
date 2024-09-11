@@ -21,25 +21,27 @@ def train_main(model):
     return run_pipeline(model=model, 
         train_data_folder=train_data_folder, 
         val_data_folder=val_data_folder,
+        dataset='imagenette',
         output_shape=OUTPUT_SHAPE[1:],
         ckpnt_dir=os.path.join(ckpnt_dir_parent, f'iteration_{len(os.listdir(ckpnt_dir_parent)) + 1}'),
-        num_epochs=50, 
+        num_epochs=3, 
         batch_size=_BATCH_SIZE, 
         temperature=0.5, 
         seed=0, 
-        use_wandb=True,
-        batch_stats=True,
+        use_wandb=False,
+        batch_stats=False,
         debug_loss=True, # get as much insight on the loss as possible
-        num_train_samples_per_cls=100,
-        num_val_samples_per_cls=100,
-        num_warmup_epochs=10,
+        num_train_samples_per_cls=10,
+        num_val_samples_per_cls=10,
+        num_warmup_epochs=0,
         )
 
 
 if __name__ == '__main__':
+
     model = ResnetSimClr(input_shape=OUTPUT_SHAPE,  
                          output_dim=_OUTPUT_DIM, 
                          num_fc_layers=4, 
                          freeze=False, 
-                         architecture=101)
+                         architecture=50)
     train_main(model)
