@@ -59,7 +59,7 @@ class LinearBlock(nn.Module):
     @block.setter
     def block(self, new_block: Union[nn.Sequential, nn.Module]):
         # make sure the new block is either 
-        if isinstance(new_block, (nn.Sequential, nn.Module)):
+        if not isinstance(new_block, (nn.Sequential, nn.Module)):
             raise TypeError((f"The block is expected to be either of type {nn.Module} or {nn.Sequential}\n"
                              f"Found: {type(new_block)}"))
 
@@ -71,6 +71,7 @@ class LinearBlock(nn.Module):
 
     def modules(self) -> Iterator[Module]:
         return self.block.modules()
+
 
 class ClassificationHead(ABC, nn.Module):
     # all classifiers should have the 'num_classes' and 'in_features' attributes
@@ -84,7 +85,7 @@ class ClassificationHead(ABC, nn.Module):
         self._in_features = in_features
         self._activation = activation
         # the actual model that does the heavy lifting
-        self.classifier = None
+        self.classifier: nn.Module = None
 
     @property
     def num_classes(self):
@@ -171,8 +172,6 @@ class ExponentialClassifier(ClassificationHead):
             else:    
                 powers = np.linspace(start=base_power, stop=int(np.log2(self.output)) + 1, num=self.num_layers - 1)
                 # # first we build n - 1 layers starting from the highest power of 2 less than in_features
-                # powers = np.linspace(start=int(np.log2(self.output)) + 1 , stop=base_power, num=self.num_layers - 1)
-                # make sure to convert to integers
                 num_units = [int(2 ** p) for p in powers]
                 # set the last element to the actual output
                 num_units = [self.in_features] + num_units
@@ -198,3 +197,68 @@ class ExponentialClassifier(ClassificationHead):
 
         self.classifier = nn.Sequential(blocks)
         
+
+class ResidualMixin:
+    # this Mixin assumes the child class has the following 
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        if not (hasattr(self, 'layers_per_residual_block') 
+                and hasattr(self, 'classifier')
+                and hasattr(self, 'adative_layers')
+                ):
+            raise ValueError(f"The ResidualMixin class expects the child class to contain the following attributes: self.layers_per_residual_block")
+
+        block_count = 0
+        adaptive_layer_count = 0
+
+        y = x # 
+
+        for block in self.children():
+            x = block.forward(x)
+            block_count += 1
+            
+            if block_count == self.layers_per_residual_block:
+                block_count = 0
+                x = x + self.adaptive_layers[adaptive_layer_count].forward(y)
+                adaptive_layer_count += 1
+        
+        return x
+    
+    def __build_adaptive_layers(self):
+        if not (hasattr(self, 'layers_per_residual_block') 
+                and hasattr(self, 'classifier')
+                ):
+            raise ValueError(f"The ResidualMixin class expects the child class to contain the following attributes: self.layers_per_residual_block")
+
+        self.adaptive_layers = []
+
+        in_feats = block.in_features
+        out_feats = None
+
+        counter = 0
+        for block in self.children():
+            counter += 1
+            if 
+
+
+class ResidualExponentialClassifier(ResidualMixin, ExponentialClassifier):
+    def __init__(self,
+                 num_classes: int,
+                 in_features: int,
+                 num_layers: int,
+                 layers_per_residual_block:int,
+                 dropout: Optional[Union[List[float], float]]=None,
+                 activation: str = 'relu'):
+
+        if layers_per_residual_block > num_layers:
+            raise ValueError(f"The total number of layers must be larger than the number of layers per residual block")
+
+        # the super class initialization
+        super().__init__(num_classes=num_classes,
+                        in_features=in_features,
+                        num_layers=num_layers,
+                        dropout=dropout,
+                        activation=activation)
+
+        # make sure to set the fields necessary for the ResidualMixin
+        self.layers_per_residual_block = layers_per_residual_block
+

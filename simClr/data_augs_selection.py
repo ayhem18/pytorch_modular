@@ -6,11 +6,10 @@ import matplotlib.pyplot as plt
 
 from pathlib import Path
 
-from model_train.ds_wrapper import Food101Wrapper
-
 from mypt.data.dataloaders.standard_dataloaders import initialize_train_dataloader
+from mypt.data.datasets.parallel_augmentation.parallel_aug_ds_wrapper import Food101Wrapper, ImagenetterWrapper
 
-from model_train.training import _DEFAULT_DATA_AUGS, _UNIFORM_DATA_AUGS
+from model_train._set_ds import _DEFAULT_DATA_AUGS, _UNIFORM_DATA_AUGS
 
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
@@ -22,14 +21,28 @@ while 'data' not in os.listdir(current):
 DATA_FOLDER = os.path.join(current, 'data')
 
 
-def check_data_aug(data_folder):
+def check_data_aug(data_folder, dataset: str):
+    
+    if dataset not in ['food101', 'imagenette']:
+        raise NotImplementedError()
+    
+    if dataset == 'food101':
+        train_ds = Food101Wrapper(root_dir=data_folder,
+                                output_shape=(200, 200), 
+                                augs_per_sample=2, 
+                                sampled_data_augs=_DEFAULT_DATA_AUGS, 
+                                uniform_augs_after=_UNIFORM_DATA_AUGS,
+                                uniform_augs_before=[])
 
-    train_ds = Food101Wrapper(root_dir=data_folder,
-                              output_shape=(200, 200), 
-                              augs_per_sample=2, 
-                              sampled_data_augs=_DEFAULT_DATA_AUGS, 
-                              uniform_augs_after=_UNIFORM_DATA_AUGS,
-                              uniform_augs_before=[])
+    else:
+        train_ds = ImagenetterWrapper(root_dir=data_folder,
+                                  output_shape=(200, 200), 
+                                  augs_per_sample=2, 
+                                  sampled_data_augs=_DEFAULT_DATA_AUGS, 
+                                  uniform_augs_after=_UNIFORM_DATA_AUGS,
+                                  uniform_augs_before=[])
+    
+
     # create a dataloader
     dl = initialize_train_dataloader(train_ds, seed=0, batch_size=10, num_workers=1)
 
@@ -53,8 +66,7 @@ def check_data_aug(data_folder):
 
             plt.show()
 
-        if i > 5:
-            break
+        break
 
 
     for i in range(5):
@@ -86,5 +98,8 @@ def check_data_aug(data_folder):
 
 
 if __name__ == '__main__':
-    train_data_folder = os.path.join(DATA_FOLDER, 'food101', 'train')
-    check_data_aug(train_data_folder)
+    # dataset = 'food101'
+    dataset = 'imagenette'
+
+    train_data_folder = os.path.join(DATA_FOLDER, dataset, 'train')
+    check_data_aug(train_data_folder, dataset)

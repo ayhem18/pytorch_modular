@@ -25,53 +25,7 @@ from ._set_ds import _set_data
 _WANDB_PROJECT_NAME = "SimClr"
 PREFERABLE_BATCH_SIZE = 512
 
-
-# def _set_data(train_data_folder: Union[str, Path],
-#             val_data_folder: Optional[Union[str, Path]],
-#             dataset:str,
-#             batch_size:int,
-#             output_shape: Tuple[int, int],
-#             num_train_samples_per_cls:Optional[int],
-#             num_val_samples_per_cls:Optional[int],    
-#             seed:int=69) -> Tuple[DataLoader, Optional[DataLoader]]:
-    
-
-
-#     train_data_folder = dirf.process_path(train_data_folder, 
-#                                           dir_ok=True, 
-#                                           file_ok=False, 
-#                                           )
-    
-#     train_ds = Food101Wrapper(root_dir=train_data_folder, 
-#                                 output_shape=output_shape,
-#                                 augs_per_sample=2, 
-#                                 sampled_data_augs=_DEFAULT_DATA_AUGS,
-#                                 uniform_augs_before=[],
-#                                 uniform_augs_after=_UNIFORM_DATA_AUGS,
-#                                 train=True,
-#                                 samples_per_cls=num_train_samples_per_cls
-#                                 )
-
-#     if val_data_folder is not None:
-#         val_data_folder = dirf.process_path(val_data_folder, 
-#                                           dir_ok=True, 
-#                                           file_ok=False, 
-#                                           )
-
-#         val_ds = Food101Wrapper(root_dir=val_data_folder, 
-#                                 output_shape=output_shape,
-#                                 augs_per_sample=2, 
-#                                 sampled_data_augs=_DEFAULT_DATA_AUGS,
-#                                 uniform_augs_before=[],
-#                                 uniform_augs_after=_UNIFORM_DATA_AUGS,
-#                                 train=False,
-#                                 samples_per_cls=num_val_samples_per_cls,    
-#                                 )
-
-#     else:
-#         val_ds = None
-
-
+OUTPUT_SHAPE = (200, 200)
 
 def _set_optimizer(model: SimClrModel, 
                   lrs: Union[Tuple[float], float], 
@@ -79,7 +33,7 @@ def _set_optimizer(model: SimClrModel,
                   num_warmup_epochs:int,
                   ) -> Tuple[SGD, AnnealingLR]:
 
-    # importing the Lars optimizer insider this function, simply because the "flash" package is noticeably slow to load ....
+    # importing the Lars optimizer inside this function, simply because the "flash" package is noticeably slow to load ....
     # hence slowing down the entire code base even when I am not training
     from flash.core.optimizers import LARS
 

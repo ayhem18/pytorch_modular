@@ -3,14 +3,13 @@ import numpy as np
 
 import torchvision.transforms as tr
 import matplotlib.pyplot as plt
-
+from typing import Dict
 from pathlib import Path
-from typing import Union, Dict
 
 from mypt.code_utilities import directories_and_files as dirf
 from mypt.models.simClr.simClrModel import ResnetSimClr
 
-from model_train.training import OUTPUT_SHAPE 
+from model_train.training import OUTPUT_SHAPE
 from model_train.evaluating import _set_data_classification_data
 from mypt.subroutines.neighbors.knn import KNN
 from mypt.shortcuts import P
@@ -119,11 +118,11 @@ if __name__ == '__main__':
 
     ckpnt = os.path.join(SCRIPT_DIR, 'logs', 'train_logs', 'iteration_8', 'ckpnt_val_loss_4.6184_epoch_49.pt')
 
-    evaluate(model=model, 
-             model_ckpnt=ckpnt, 
-             train_per_cls=100, 
-             val_per_cls=100)
+    # evaluate(model=model, 
+    #          model_ckpnt=ckpnt, 
+    #          train_per_cls=100, 
+    #          val_per_cls=100)
 
-    # res = os.path.join(SCRIPT_DIR, 'eval_res', 'ckpnt_val_loss_4.6184_epoch_49.pt_results.obj')
+    res = os.path.join(SCRIPT_DIR, 'eval_res', 'ckpnt_val_loss_4.6184_epoch_49_results.obj')
 
-    # visualize_neighbors(res, train_per_cls=100, val_per_cls=100, num_images=10)
+    visualize_neighbors(res, train_per_cls=100, val_per_cls=100, num_images=25)

@@ -19,8 +19,8 @@ _DEFAULT_DATA_AUGS = [
     tr.RandomHorizontalFlip(p=0.5), 
     tr.RandomResizedCrop((200, 200), scale=(0.4, 1)),
     
-    tr.RandomErasing(p=0.5, scale=(0.05, 0.15)),
-    tr.RandomGrayscale(p=0.5),
+    tr.RandomErasing(p=0.8, scale=(0.05, 0.15)),
+    tr.RandomGrayscale(p=0.8),
     tr.GaussianBlur(kernel_size=(5, 5)),
     tr.ColorJitter(brightness=0.5, contrast=0.5)
 ]
@@ -30,12 +30,12 @@ _UNIFORM_DATA_AUGS = [] # [tr.Normalize(mean=[0.485, 0.456, 0.406],  std=[0.229,
 
 
 def _process_paths(train_path: P, val_path: Optional[P]) -> Tuple[P, Optional[P]]:
-    train_data_folder = dirf.process_path(train_data_folder, 
+    train_data_folder = dirf.process_path(train_path, 
                                           dir_ok=True, 
                                           file_ok=False, 
                                           )
     
-    val_data_folder = dirf.process_path(val_data_folder, 
+    val_data_folder = dirf.process_path(val_path, 
                                         dir_ok=True, 
                                         file_ok=False, 
                                         )
@@ -71,11 +71,9 @@ def _set_dataloaders(train_ds: Dataset,
 def _set_food101_ds(
             train_data_folder: P,
             val_data_folder: Optional[P],
-            batch_size:int,
             output_shape: Tuple[int, int],
             num_train_samples_per_cls:Optional[int],
-            num_val_samples_per_cls:Optional[int],    
-            seed:int=69):
+            num_val_samples_per_cls:Optional[int]):
     
     # train_path, val_path = _process_paths(train_data_folder, val_data_folder)
     train_ds = Food101Wrapper(root_dir=train_data_folder, 
@@ -166,7 +164,7 @@ def _set_data(train_data_folder: P,
     sampled_aus = _DEFAULT_DATA_AUGS.copy()
 
     for a in sampled_aus:
-        if 'resize' or 'size' in str(type(a)):
+        if 'resize' or 'size' in str(type(a)) and hasattr(a, 'size'):
             # set any intermediate augmentation that invovles resizing to the correct size
             a.size = output_shape
 

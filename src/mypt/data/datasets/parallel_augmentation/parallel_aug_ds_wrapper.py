@@ -12,9 +12,7 @@ from bisect import bisect
 from tqdm import tqdm
 
 from torch.utils.data import Dataset
-
 from torchvision.datasets import Food101, Imagenette
-from abc import abstractmethod
 
 from mypt.data.datasets.parallel_augmentation.parallel_aug_abstract import AbstractParallelAugsDs
 
@@ -46,11 +44,6 @@ class ParallelAugWrapperDS(AbstractParallelAugsDs):
         self.samples_per_cls_map = None
         self.classification_mode = classification_mode
 
-
-        if samples_per_cls is None:
-            self._len = len(self._ds)
-        else:
-            self._len = 0
 
     # @abstractmethod
     def _set_samples_per_cls(self, samples_per_cls: int):
@@ -184,6 +177,8 @@ class Food101Wrapper(ParallelAugWrapperDS):
         
         if samples_per_cls is not None:
             self._len = 101 * samples_per_cls
+        else:
+            self._len = len(self._ds)
         
     def _set_samples_per_cls(self, samples_per_cls: int):        
         # instead of a all rounded function that works for all cases, we will suppose, for the sake of efficiency
@@ -232,19 +227,9 @@ class ImagenetterWrapper(ParallelAugWrapperDS):
                          size='full')
         
         if samples_per_cls is not None:
-            self._len = 101 * samples_per_cls
-
+            self._len = 10 * samples_per_cls
+        else:
+            self._len = len(self._ds)
     
     # the number of samples varies per class, we we will use the parent function
-
-    # def _set_samples_per_cls(self, samples_per_cls: int):        
-    #     # instead of a all rounded function that works for all cases, we will suppose, for the sake of efficiency
-    #     # that each class has exacty 750 images in the training dataset, and 250 in the validation 
-    #     # the other implementation can be found in the "ds_wrapper_.py" script
-    #     if self.train:
-    #         mapping = {samples_per_cls * i: 750 * i for i in range(101)}
-    #     else:
-    #         mapping = {samples_per_cls * i: 250 * i for i in range(101)}         
-
-    #     self.samples_per_cls_map = mapping
-
+    
