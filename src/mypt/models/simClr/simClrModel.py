@@ -9,7 +9,7 @@ from typing import Union, Tuple, Optional, Iterator
 
 from ...backbones import alexnetFeatureExtractor as afe
 from ...backbones import resnetFeatureExtractor as rfe
-from ...linearBlocks import classification_head as ch
+from ...linearBlocks import fully_connected_blocks as fcb
 from ...dimensions_analysis import dimension_analyser as da
 
 
@@ -83,7 +83,7 @@ class ResnetSimClr(SimClrModel):
         _, in_features = dim_analyser.analyse_dimensions(input_shape=(10,) + input_shape, net=nn.Sequential(self.fe, nn.Flatten()))
 
         # calculate the output of the
-        self.ph = ch.ExponentialClassifier(num_classes=output_dim, 
+        self.ph = fcb.ExponentialFCBlock(num_classes=output_dim, 
                                            in_features=in_features, 
                                            num_layers=num_fc_layers, 
                                            dropout=dropout)
@@ -110,7 +110,7 @@ class AlexnetSimClr(SimClrModel):
         _, in_features = dim_analyser.analyse_dimensions(input_shape=(10,) + input_shape, net=nn.Sequential(self.fe, nn.Flatten()))
 
         # calculate the output of the
-        self.ph = ch.ExponentialClassifier(num_classes=output_dim, 
+        self.ph = fcb.ExponentialFCBlock(num_classes=output_dim, 
                                            in_features=in_features, 
                                            num_layers=num_fc_layers, 
                                            dropout=dropout)

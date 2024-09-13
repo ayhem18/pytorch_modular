@@ -7,7 +7,7 @@ from typing import Tuple, Iterator, Optional
 
 from mypt.backbones import alexnetFeatureExtractor as afe
 from mypt.backbones import resnetFeatureExtractor as rfe
-from mypt.linearBlocks import classification_head as ch
+from mypt.linearBlocks import fully_connected_blocks as ch
 from mypt.dimensions_analysis import dimension_analyser as da
 
 
