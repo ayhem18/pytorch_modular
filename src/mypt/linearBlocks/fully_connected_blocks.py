@@ -6,11 +6,10 @@ design or inspired from other sources.
 import math, torch
 import numpy as np
 
-from torch import nn
 from typing import Union, List, Optional
 from collections import OrderedDict
 
-from .fc_block_components import FullyConnectedBlock, LinearBlock, ResidualFullyConnectedBlock
+from .fc_block_components import FullyConnectedBlock, LinearBlock, ResidualLinearBlock
 
 
 class GenericBuildMixin:   
@@ -87,7 +86,7 @@ class ExponentialMixin:
                 and hasattr(self, 'output') 
                 and hasattr(self, 'in_features')):
             
-            raise AttributeError(f"The child class extending the 'ExponentialMinin' class must have the following attributes: {['num_layers''output', 'in_features']}")
+            raise AttributeError(f"The child class extending the 'ExponentialMinin' class must have the following attributes: {['num_layers', 'output', 'in_features']}")
             
         # let's start with making sure the child class has the necessary attribute
         if self.num_layers > 1:            
@@ -168,7 +167,7 @@ class ResidualMixin:
             residual_range = (num_layers // self.layers_per_residual_block) * self.layers_per_residual_block
 
         blocks = [
-            ResidualFullyConnectedBlock(output=self.units[i + self.layers_per_residual_block],
+            ResidualLinearBlock(output=self.units[i + self.layers_per_residual_block],
                                         in_features=self.units[i],
                                         units=self.units[i: i + self.layers_per_residual_block + 1],
                                         num_layer=self.layers_per_residual_block,
