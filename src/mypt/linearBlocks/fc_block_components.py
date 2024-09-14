@@ -6,7 +6,7 @@ from torch import nn
 from typing import Iterator, Union, Optional, List, Tuple
 from torch.nn import Module
 from abc import ABC, abstractmethod
-
+from collections import OrderedDict
 
 class LinearBlock(torch.nn.Module):
     _RELU = 'relu'
@@ -23,22 +23,45 @@ class LinearBlock(torch.nn.Module):
                  out_features: int,
                  activation: str = _LEAKY_RELU,
                  dropout: Optional[float] = None,
-                 is_final: bool = True,
+                 is_final: bool = False,
                  add_activation: bool = True,
                  *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
 
-        # the idea here is quite simple. 
-        components = [nn.Linear(in_features=in_features, out_features=out_features)]
-        # depending on the value of 'is_final' 
+        # the order of components mainly follows the guidelines offered in this paper: https://proceedings.mlr.press/v216/kim23a.html
+        # guideline 1: dropout vs Relu does not matter. In the original paper, dropout was applied before activation: formula in page 1993 (https://www.cs.toronto.edu/~hinton/absps/JMLRdropout.pdf)
+        # guideline 2: dropout after norm layer
+        
+        linear_layer = nn.Linear(in_features=in_features, out_features=out_features)
+
         if not is_final:
             norm_layer = nn.BatchNorm1d(num_features=out_features)
             activation_layer = self._ACTIVATION_MAP[activation]
-            
+
+            components = [norm_layer] 
             if dropout is not None:
-                components.extend([norm_layer, activation_layer, nn.Dropout(p=dropout)])
-            else:
-                components.extend([norm_layer, activation_layer])            
+                components.append(nn.Dropout(p=dropout))
+            
+            # add the linear layer
+            components.append(linear_layer)
+
+            # add activation
+            if add_activation:
+                components.append(activation_layer)
+        else:
+            components = [linear_layer]
+
+        # # the idea here is quite simple. 
+        # components = [nn.Linear(in_features=in_features, out_features=out_features)]
+        # # depending on the value of 'is_final' 
+        # if not is_final:
+        #     norm_layer = nn.BatchNorm1d(num_features=out_features)
+        #     activation_layer = self._ACTIVATION_MAP[activation]
+            
+        #     if dropout is not None:
+        #         components.extend([norm_layer, activation_layer, nn.Dropout(p=dropout)])
+        #     else:
+        #         components.extend([norm_layer, activation_layer])            
 
         self._block = nn.Sequential(*components)
 
@@ -80,8 +103,8 @@ class FullyConnectedBlock(ABC, nn.Module):
 
         # make sure dropout works 
         if not (isinstance(dropout, float) or dropout is None):
-            if isinstance(dropout, (List, Tuple)) and len(dropout) != num_layers:
-                raise ValueError(f"The number of dropouts should be the same as the number of layers")
+            if isinstance(dropout, (List, Tuple)) and len(dropout) != num_layers - 1:
+                raise ValueError(f"The number of dropouts should be the same as the number of layers minus one")
 
         else:
             dropout = [dropout for _ in range(num_layers - 1)] # using both a list of Nones or floats is acceptable
@@ -95,7 +118,7 @@ class FullyConnectedBlock(ABC, nn.Module):
         self._dropout = dropout
 
         # the actual model that does the heavy lifting
-        self.classifier: nn.Module = None
+        self.classifier: Union[nn.Module, nn.ModuleList, nn.Sequential] = None
 
     @property
     def output(self):
@@ -171,16 +194,47 @@ class ResidualFullyConnectedBlock(FullyConnectedBlock):
                                         out_features=units[-2]) 
 
     def _build_classifier(self):
-        blocks = [LinearBlock(in_features=self.units[i], 
-                              out_features=self.units[i + 1], 
-                              activation=self.activation,
-                              dropout=self.dropout[i],
-                              is_final=False
-                              )
-                for i in range(len(self.units) - 2)
-                ]
+        # implementation using nn.Sequential
 
-        # append another block
+        # blocks = [      (f'block_{i}', 
+        #                     LinearBlock(
+        #                     in_features=self.units[i], 
+        #                     out_features=self.units[i + 1], 
+        #                     activation=self.activation,
+        #                     dropout=self.dropout[i],
+        #                     is_final=False)
+        #                 )                 
+        #             for i in range(1, len(self.units) - 1)
+        #         ]
+        
+        # # append another block without the activation function
+        # blocks.append(
+        #                 (f'block_{len(self.units) - 1}', LinearBlock(
+        #                                                 in_features=self.units[-2], 
+        #                                                 out_features=self.units[-1], 
+        #                                                 activation=self.activation,
+        #                                                 dropout=self.dropout[-1],
+        #                                                 is_final=False,
+        #                                                 add_activation=False)
+        #                                             )
+        #             )
+
+        # # add the final activation function seperately
+        # blocks.append(('final_activation', LinearBlock._ACTIVATION_MAP[self.activation]()))
+        # self.classifier = nn.Sequential(OrderedDict(blocks))
+
+        # implementation using ModuleList
+
+        blocks = [LinearBlock(
+                            in_features=self.units[i], 
+                            out_features=self.units[i + 1], 
+                            activation=self.activation,
+                            dropout=self.dropout[i],
+                            is_final=False)
+                    for i in range(1, len(self.units) - 1)
+                ]
+        
+        # append another block without the activation function
         blocks.append(LinearBlock(
                             in_features=self.units[-2], 
                             out_features=self.units[-1], 
@@ -190,7 +244,24 @@ class ResidualFullyConnectedBlock(FullyConnectedBlock):
                             add_activation=False)
                     )
 
-
+        # add the final activation function seperately
+        blocks.append(LinearBlock._ACTIVATION_MAP[self.activation]())
+        self.classifier = nn.ModuleList(blocks)
 
     def forward(self, x:torch.Tensor) -> torch.Tensor:
-        pass
+        # make a copy of the input
+        y = x
+        for layer in self.classifier[:-1]:
+            x = layer.forward(x)
+
+        # the residual connection right before the last activation layer
+        return self.classifier[-1].forward(x + self.adaptive_layer.forward(y))
+
+    def to(self, *args, **kwargs):
+        # apply the 'to' method both to the classifier and the adaptive layer
+        self.classifier.to(*args, **kwargs)
+        self.adaptive_layer.to(*args, **kwargs)
+        return self
+
+
+        
