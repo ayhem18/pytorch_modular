@@ -83,10 +83,10 @@ class ResnetSimClr(SimClrModel):
         _, in_features = dim_analyser.analyse_dimensions(input_shape=(10,) + input_shape, net=nn.Sequential(self.fe, nn.Flatten()))
 
         # calculate the output of the
-        self.ph = fcb.ExponentialFCBlock(num_classes=output_dim, 
-                                           in_features=in_features, 
-                                           num_layers=num_fc_layers, 
-                                           dropout=dropout)
+        self.ph = fcb.ExponentialFCBlock(output=output_dim, 
+                                        in_features=in_features, 
+                                        num_layers=num_fc_layers, 
+                                        dropout=dropout)
 
 
 
@@ -110,7 +110,7 @@ class AlexnetSimClr(SimClrModel):
         _, in_features = dim_analyser.analyse_dimensions(input_shape=(10,) + input_shape, net=nn.Sequential(self.fe, nn.Flatten()))
 
         # calculate the output of the
-        self.ph = fcb.ExponentialFCBlock(num_classes=output_dim, 
-                                           in_features=in_features, 
-                                           num_layers=num_fc_layers, 
-                                           dropout=dropout)
+        self.ph = fcb.ExponentialFCBlock(output=output_dim, 
+                                        in_features=in_features, 
+                                        num_layers=num_fc_layers, 
+                                        dropout=dropout)

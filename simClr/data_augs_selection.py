@@ -40,42 +40,46 @@ def check_data_aug(data_folder, dataset: str):
                                   augs_per_sample=2, 
                                   sampled_data_augs=_DEFAULT_DATA_AUGS, 
                                   uniform_augs_after=_UNIFORM_DATA_AUGS,
-                                  uniform_augs_before=[])
+                                  uniform_augs_before=[],
+                                  samples_per_cls=5, 
+                                  classification_mode=False)
     
 
     # create a dataloader
     dl = initialize_train_dataloader(train_ds, seed=0, batch_size=10, num_workers=1)
 
-    for i, (x1, x2) in enumerate(dl):
-        x = torch.cat([x1, x2])
+    # for i, (x1, x2) in enumerate(dl):
+    #     x = torch.cat([x1, x2])
 
-        n = len(x1)
+    #     n = len(x1)
 
-        for j in range(n):
-            fig = plt.figure() 
-            p1, p2 = x[j].squeeze(), x[(j + n) % (2 * n)].squeeze()
-            p1, p2 = np.moveaxis(p1.numpy(), 0,-1), np.moveaxis(p2.numpy(), 0, -1)
+    #     for j in range(n):
+    #         fig = plt.figure() 
+    #         p1, p2 = x[j].squeeze(), x[(j + n) % (2 * n)].squeeze()
+    #         p1, p2 = np.moveaxis(p1.numpy(), 0,-1), np.moveaxis(p2.numpy(), 0, -1)
 
-            fig.add_subplot(1, 2, 1) 
-            plt.imshow(p1) 
-            plt.title("augmented image 1") 
+    #         fig.add_subplot(1, 2, 1) 
+    #         plt.imshow(p1) 
+    #         plt.title("augmented image 1") 
 
-            fig.add_subplot(1, 2, 2) 
-            plt.imshow(p2) 
-            plt.title("augmented image 2") 
+    #         fig.add_subplot(1, 2, 2) 
+    #         plt.imshow(p2) 
+    #         plt.title("augmented image 2") 
 
-            plt.show()
+    #         plt.show()
 
-        break
+    #     break
 
 
-    for i in range(5):
+    for i in range(25):
         im = train_ds._ds[i][0]
         im = np.array(im)
 
         x1, x2 = train_ds[i]
 
         x1, x2 = x1.numpy(), x2.numpy()
+
+        assert x1.shape == (3, 200, 200) and x2.shape == (3, 200, 200), "Shapes are not as expected"
 
         # transpose the image 
         x1, x2 = np.moveaxis(x1, 0,-1), np.moveaxis(x2, 0, -1)
@@ -100,6 +104,5 @@ def check_data_aug(data_folder, dataset: str):
 if __name__ == '__main__':
     # dataset = 'food101'
     dataset = 'imagenette'
-
     train_data_folder = os.path.join(DATA_FOLDER, dataset, 'train')
     check_data_aug(train_data_folder, dataset)

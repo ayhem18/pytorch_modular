@@ -50,6 +50,7 @@ class AbstractParallelAugsDs(Dataset, ABC):
 
 
     def _set_augmentations(self) -> Tuple[tr.Compose, tr.Compose]:
+        # sample from the passed augmentations
         augs1, augs2 = random.sample(self.sampled_data_augs, self.augs_per_sample), random.sample(self.sampled_data_augs, self.augs_per_sample)
 
         # convert to a tensor
@@ -58,7 +59,7 @@ class AbstractParallelAugsDs(Dataset, ABC):
         augs1 = augs_before + augs1  
         augs2 = augs_before + augs2  
     
-        # add all the uniform after augmentations 
+        # add all the uniform_after augmentations 
     
         augs1.extend(self.uniform_augs_after)
         augs2.extend(self.uniform_augs_after)
@@ -67,7 +68,7 @@ class AbstractParallelAugsDs(Dataset, ABC):
         augs1.append(tr.Resize(size=self.output_shape))
         augs2.append(tr.Resize(size=self.output_shape))
 
-        # no need to convert to tensors,
+        # no need to convert to tensors
         augs1, augs2 = tr.Compose(augs1), tr.Compose(augs2)
 
         return augs1, augs2

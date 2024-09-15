@@ -28,6 +28,8 @@ _DEFAULT_DATA_AUGS = [
 _UNIFORM_DATA_AUGS = [] # [tr.Normalize(mean=[0.485, 0.456, 0.406],  std=[0.229, 0.224, 0.225])] : one of the augmentations used with the original Resnet models 
 
 
+_SUPPORTED_DATASETS = ['imagenette', 'food101']
+
 
 def _process_paths(train_path: P, val_path: Optional[P]) -> Tuple[P, Optional[P]]:
     train_data_folder = dirf.process_path(train_path, 
@@ -114,7 +116,7 @@ def _set_imagenette_ds(
             ):
     
     # train_path, val_path = _process_paths(train_data_folder, val_data_folder)
-    train_ds = Food101Wrapper(root_dir=train_data_folder, 
+    train_ds = ImagenetterWrapper(root_dir=train_data_folder, 
                                 output_shape=output_shape,
                                 augs_per_sample=2, 
                                 sampled_data_augs=_DEFAULT_DATA_AUGS,
@@ -130,7 +132,7 @@ def _set_imagenette_ds(
                                           file_ok=False, 
                                           )
 
-        val_ds = Food101Wrapper(root_dir=val_data_folder, 
+        val_ds = ImagenetterWrapper(root_dir=val_data_folder, 
                                 output_shape=output_shape,
                                 augs_per_sample=2, 
                                 sampled_data_augs=_DEFAULT_DATA_AUGS,
@@ -155,10 +157,21 @@ def _set_data(train_data_folder: P,
             num_val_samples_per_cls:Optional[int],    
             seed:int=69):
 
-    if dataset not in ['imagenette', 'food101']:
-        raise NotImplementedError(f"The current implementation only works for the following datasets: {['imagenette', 'food101']}")
+    if dataset not in _SUPPORTED_DATASETS:
+        raise NotImplementedError(f"The current implementation only works for the following datasets: {_SUPPORTED_DATASETS}")
 
     train_path, val_path = _process_paths(train_data_folder, val_data_folder)
+
+    # make sure the dataset name aligns with the path to the dataset 
+    # (passing a 'dataset' argument as imagenette but passing a path to the path where the Food101 dataset is downloaded might raise unexpected errors (or even worse act as a silent bug...))
+
+    for d in _SUPPORTED_DATASETS:
+        if d == dataset:
+            if not (d in str(train_path) and d in str(val_path)):
+                raise ValueError(f"The dataset name {dataset} must be present in the train and validation paths !!")
+        else:
+            if d in str(train_path) or d in str(val_path):
+                raise ValueError(f"Only the selected dataset name can be present in either the train and validation paths")
 
     # copy the default data augmentations
     sampled_aus = _DEFAULT_DATA_AUGS.copy()

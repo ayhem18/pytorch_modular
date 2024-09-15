@@ -1,7 +1,6 @@
 import wandb, torch, os, warnings
 
-import torchvision.transforms as tr
-
+from clearml import Task, Logger
 from time import sleep
 from typing import Union, Optional, Tuple, List
 from pathlib import Path
@@ -16,15 +15,12 @@ from mypt.losses.simClrLoss import SimClrLoss
 from mypt.code_utilities import pytorch_utilities as pu, directories_and_files as dirf
 from mypt.schedulers.annealing_lr import AnnealingLR
 from mypt.models.simClr.simClrModel import SimClrModel
-from mypt.data.datasets.parallel_augmentation.parallel_aug_ds_wrapper import Food101Wrapper
-from mypt.shortcuts import P
 
 from .train_per_epoch import train_per_epoch, validation_per_epoch
 from ._set_ds import _set_data
 
-_WANDB_PROJECT_NAME = "SimClr"
+_TRACK_PROJECT_NAME = "SimClr"
 PREFERABLE_BATCH_SIZE = 512
-
 OUTPUT_SHAPE = (200, 200)
 
 def _set_optimizer(model: SimClrModel, 
@@ -45,10 +41,10 @@ def _set_optimizer(model: SimClrModel,
 
     if isinstance(lrs, float):
         lr1, lr2 = lrs, 10 * lrs
-    elif isinstance(lrs, List) and len(lrs) == 2:
+    elif isinstance(lrs, (Tuple,List)) and len(lrs) == 2:
         lr1, lr2 = lrs
 
-    elif isinstance(lrs, List) and len(lrs) == 1:
+    elif isinstance(lrs, (Tuple,List)) and len(lrs) == 1:
         return _set_optimizer(model, lrs[0])
     else:
         raise ValueError(f"The current implementation supports at most 2 learning rates. Found: {len(lrs)} learning rates")
@@ -94,6 +90,7 @@ def _set_optimizer(model: SimClrModel,
 
     return optimizer, cosine_scheduler 
 
+
 def _run(
         model:SimClrModel,
         
@@ -112,7 +109,7 @@ def _run(
         val_per_epoch: int,
         device: str,
 
-        use_wandb:bool=True,
+        logger:Logger=None,
         batch_stats:bool=False
         ):
 
@@ -135,7 +132,7 @@ def _run(
                         log_per_batch=0.1, 
                         optimizer=optimizer,
                         scheduler=lr_scheduler,
-                        use_wandb=use_wandb,
+                        logger=logger,
                         batch_stats=batch_stats,
                         accumulate_grads=accumulate_grad)
 
@@ -193,7 +190,7 @@ def _run(
                                         epoch_index=epoch_index + 1, 
                                         device=device,
                                         log_per_batch=0.2,
-                                        use_wandb=use_wandb,
+                                        logger=logger,
                                         batch_stats=batch_stats
                                         )
 
@@ -254,18 +251,26 @@ def run_pipeline(model: SimClrModel,
         num_warmup_epochs:int=10,
         val_per_epoch: int = 3,
         seed:int = 69,
+
         run_name: str = 'sim_clr_run',
-        use_wandb: bool = True,
+        use_logging: bool = True,
         batch_stats:bool=False,
         debug_loss:bool=True,
+
         num_train_samples_per_cls: Union[int, float]=None, # the number of training samples per cls
         num_val_samples_per_cls: Union[int, float]=None, # the number of validation samples per cls
         ):    
     
-    if use_wandb:
-        # this argument was added to avoid initializing wandb twice during the tuning process
-        wandb.init(project=_WANDB_PROJECT_NAME, 
-                name=run_name)
+    if use_logging:
+        # wandb.init(project=_WANDB_PROJECT_NAME, 
+        #         name=run_name)
+        # create a clearml task object
+        task = Task.init(project_name=_TRACK_PROJECT_NAME,
+                         task_name=run_name,
+                         )
+        logger = task.get_logger()
+    else:
+        logger = None
 
     # get the default device
     device = pu.get_default_device()
@@ -284,21 +289,7 @@ def run_pipeline(model: SimClrModel,
                                 num_val_samples_per_cls=num_val_samples_per_cls,
                                 seed=seed)
 
-    # # dealing with gradient accumulation
-    # accumulate_grads_factor = PREFERABLE_BATCH_SIZE / batch_size 
-
-    # # scale the learning rate by the gradient accumulation factor
-    # if isinstance(learning_rates, (Tuple, List)):
-    #     learning_rates = [lr / accumulate_grads_factor for lr in learning_rates]
-    # else:
-    #     learning_rates /= accumulate_grads_factor
-    
-    # # make sure to convert it to an integer
-    # accumulate_grads_factor = int(math.ceil(accumulate_grads_factor))
-
-    # optimizer = _set_optimizer(model=model, learning_rate=initial_lr)
-
-    lr = 0.3 * (batch_size / 256) # according to the paper formula
+    lr = 0.3 * (batch_size / 256) # according to the paper's formula
 
     optimizer, lr_scheduler = _set_optimizer(model=model, 
                                              lrs=lr, 
@@ -321,7 +312,7 @@ def run_pipeline(model: SimClrModel,
                 num_epochs=num_epochs,
                 val_per_epoch=val_per_epoch,
                 device=device,
-                use_wandb=use_wandb, 
+                logger=logger, 
                 batch_stats=batch_stats
                 )
 
@@ -350,15 +341,13 @@ def run_pipeline(model: SimClrModel,
             num_epochs=num_epochs, 
             batch_size=batch_size,
 
-            # initial_lr=initial_lr,  
-            # learning_rates=learning_rates,
             temperature=temperature,
 
             ckpnt_dir=ckpnt_dir,
             val_per_epoch=val_per_epoch,
             seed=seed,
             run_name=run_name, 
-            use_wandb=use_wandb, 
+            logger=logger, 
             batch_stats=batch_stats           
             )
 

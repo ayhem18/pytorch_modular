@@ -1,4 +1,6 @@
-import torch, wandb, math
+import torch, math
+
+from clearml import Logger
 
 from torch import nn
 from torch.utils.data import DataLoader
@@ -20,7 +22,6 @@ def train_per_batch(model: SimClrModel,
                     optimizer_step:bool,
                     device: str,
                     batch_stats: bool=False,
-                    # debug:bool=False
                     ) -> Union[float, Tuple[float, float]]:
 
     model.to(device=device)
@@ -62,8 +63,6 @@ def train_per_batch(model: SimClrModel,
             stats.update(
                 {
                     "train_avg_positive_pair_sim": torch.mean(positive_pairs_sims).item(),
-                    # the exp_negative_pairs_sims represent the sum of exponential similarity between an element and all other elements in the batch
-                    # average first by the number of elements in the batch
                     "train_avg_negative_pair_sim": torch.mean(negative_pairs_sims).item()
                 }
             )
@@ -94,7 +93,7 @@ def train_per_epoch(model: SimClrModel,
                 log_per_batch: Union[int, float],
                 accumulate_grads: int = 1,
                 batch_stats:bool=False,
-                use_wandb:bool=True
+                logger:Logger=None
                 ) -> dict[str, float]:
 
     if isinstance(log_per_batch, float):
@@ -136,16 +135,25 @@ def train_per_epoch(model: SimClrModel,
             batch_train_loss = batch_train_res
 
 
+        # save the total loss accumulated across training
+        epoch_train_loss += batch_train_loss
+
+
         # log the batch loss depending on the batch index
-        if batch_index % log_per_batch == 0 and use_wandb:
-            log_dict = {"train_epoch": epoch_index, "train_loss": batch_train_loss} 
+        if batch_index % log_per_batch == 0 and logger is not None:
+            log_dict = {"batch_train_loss": batch_train_loss} 
             
             if batch_stats:
                log_dict.update(batch_train_res[1]) 
-            
-            wandb.log(log_dict)                
 
-        epoch_train_loss += batch_train_loss
+            for key, value in log_dict.items():
+                logger.report_scalar(title=key, 
+                                     series=key, 
+                                     value=value, 
+                                     iteration=epoch_index * num_batches + batch_index # count the total number of batches
+                                     )
+        
+
 
     # make sure to call the scheduler to update the learning rate
     if scheduler is not None:
@@ -155,11 +163,11 @@ def train_per_epoch(model: SimClrModel,
     epoch_train_loss = epoch_train_loss / len(dataloader)
 
     # log the metrics
-    if use_wandb:
-        wandb.log({
-                "train_epoch": epoch_index, 
-                "train_loss": epoch_train_loss
-                })
+    if logger is not None:
+        logger.report_scalar(title='epoch_train_loss', 
+                             series='epoch_train_loss', 
+                             value=epoch_train_loss, 
+                             iteration=epoch_index)
 
     return {"loss": epoch_train_loss}
 
@@ -209,8 +217,6 @@ def validation_per_batch(model: SimClrModel,
                 stats.update(
                     {
                         "val_avg_positive_pair_sim": torch.mean(positive_pairs_sims).item(),
-                        # the exp_negative_pairs_sims represent the sum of exponential similarity between an element and all other elements in the batch
-                        # average first by the number of elements in the batch
                         "val_avg_negative_pair_sim": torch.mean(negative_pairs_sims).item()
                     }
                 )
@@ -228,7 +234,7 @@ def validation_per_epoch(model: SimClrModel,
                         epoch_index: int,
                         device: str, 
                         log_per_batch: Union[float, int],
-                        use_wandb:bool=True,
+                        logger:Logger=None,
                         batch_stats:bool=False) -> dict[str, float]:
 
     if isinstance(log_per_batch, float):
@@ -252,20 +258,30 @@ def validation_per_epoch(model: SimClrModel,
         else: 
             batch_val_loss = batch_val_res
 
-        # log the batch loss depending on the batch index
-        if batch_index % log_per_batch == 0 and use_wandb:
-            log_dict = {"val_epoch": epoch_index, "batch_val_loss": batch_val_loss} 
+        epoch_val_loss += batch_val_loss
+
+        if batch_index % log_per_batch == 0 and logger is not None:
+            log_dict = {"batch_val_loss": batch_val_loss} 
             
             if batch_stats:
-               log_dict.update(batch_val_res[1]) 
-            wandb.log(log_dict)                
+               log_dict.update(batch_val_loss[1]) 
 
-        epoch_val_loss += batch_val_loss
+            for key, value in log_dict.items():
+                logger.report_scalar(title=key, 
+                                     series=key, 
+                                     value=value, 
+                                     iteration=epoch_index * num_batches + batch_index
+                                     )
+
 
     # average the validation loss
     epoch_val_loss /= len(dataloader)
 
-    if use_wandb:
-        wandb.log({"epoch": epoch_index, "val_loss": epoch_val_loss})
+
+    if logger is not None:
+        logger.report_scalar(title='epoch_val_loss', 
+                             series='epoch_val_loss', 
+                             value=epoch_val_loss, 
+                             iteration=epoch_index)
 
     return {"loss": epoch_val_loss}
