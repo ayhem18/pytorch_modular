@@ -173,8 +173,6 @@ class FullyConnectedBlock(ExtendedLinearBlock):
                          activation=activation)
         
         self._dropout = dropout
-        
-        self._build_classifier()
 
     @property
     def dropout(self):
