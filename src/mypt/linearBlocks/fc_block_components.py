@@ -140,8 +140,9 @@ class ExtendedLinearBlock(ABC, nn.Module):
     def modules(self) -> Iterator[nn.Module]:
         return self.classifier.modules()
 
-    def to(self, *args, **kwargs):
-        self.classifier.to(*args, **kwargs)
+    def to(self, *args, **kwargs):                
+        # from ..code_utilities import pytorch_utilities as pu 
+        self.classifier = self.classifier.to(*args, **kwargs)  # apply the changes to the classifier (don't forget the assignment operator)
         return self 
 
     @abstractmethod
@@ -255,6 +256,7 @@ class ResidualLinearBlock(ExtendedLinearBlock):
 
 
     def forward(self, x:torch.Tensor) -> torch.Tensor:
+        from ..code_utilities import pytorch_utilities as pu
         # make a copy of the input
         y = x
         for layer in self.classifier[:-1]:
@@ -266,7 +268,35 @@ class ResidualLinearBlock(ExtendedLinearBlock):
 
     def to(self, *args, **kwargs):
         # apply the 'to' method both to the classifier and the adaptive layer
-        self.classifier.to(*args, **kwargs)
-        self.adaptive_layer.to(*args, **kwargs)
+        # make sure to assign the output of 'to' to the self fields
+        self.classifier = self.classifier.to(*args, **kwargs)
+        self.adaptive_layer = self.adaptive_layer.to(*args, **kwargs)
         return self
 
+
+class ModuleListMixin:
+    def _verify_instance(self):
+        if not hasattr(self, 'classifier'):
+            raise AttributeError(f"the child class is expected to have the attribute 'classifier'")
+        
+        if not isinstance(self.classifier, torch.nn.ModuleList):
+            raise TypeError(f"The SequentialModuleListMixin expects the self.classifier attribute to be of type {torch.nn.ModuleList}. Found: {type(self.classifier)}")
+
+    def module_list_to(self, *args, **kwargs):
+        self._verify_instance()
+
+        # call the '.to' method for each Module in the ModuleList
+        for i in range(len(self.classifier)):
+            self.classifier[i] = self.classifier[i].to(*args, **kwargs)
+        
+        # always return self
+        return self
+
+
+class SequentialModuleListMixin(ModuleListMixin):    
+    def module_list_forward(self, x: torch.Tensor) -> torch.Tensor:
+        self._verify_instance()
+        # call each module sequentially
+        for m in self.classifier:
+            x = m.forward(x)
+        return x

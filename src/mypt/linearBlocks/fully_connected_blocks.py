@@ -9,7 +9,7 @@ import numpy as np
 from typing import Union, List, Optional
 from collections import OrderedDict
 
-from .fc_block_components import FullyConnectedBlock, LinearBlock, ResidualLinearBlock
+from .fc_block_components import FullyConnectedBlock, LinearBlock, ResidualLinearBlock, SequentialModuleListMixin
 
 
 class GenericBuildMixin:   
@@ -150,7 +150,7 @@ class ExponentialFCBlock(
 
 
 class ResidualMixin:
-    def _build_classifier_blocks(self) -> List[torch.nn.Module]:
+    def _build_classifier_blocks(self) -> torch.nn.ModuleList:
         attrs = ['layers_per_residual_block', 'units', 'activation', 'dropout']
         for att in attrs:
             if not hasattr(self, att):
@@ -168,12 +168,12 @@ class ResidualMixin:
 
         blocks = [
             ResidualLinearBlock(output=self.units[i + self.layers_per_residual_block],
-                                        in_features=self.units[i],
-                                        units=self.units[i: i + self.layers_per_residual_block + 1],
-                                        num_layer=self.layers_per_residual_block,
-                                        dropout=self.dropout[i: i + self.layers_per_residual_block],
-                                        activation=self.activation
-                                        )
+                                in_features=self.units[i],
+                                units=self.units[i: i + self.layers_per_residual_block + 1],
+                                num_layers=self.layers_per_residual_block,
+                                dropout=self.dropout[i: i + self.layers_per_residual_block],
+                                activation=self.activation
+                                )
             for i in range(0, residual_range, self.layers_per_residual_block)
         ]
 
@@ -181,17 +181,30 @@ class ResidualMixin:
         blocks.append(GenericFCBlock(in_features=self.units[residual_range + 1], 
                                     output=self.units[-1], 
                                     num_layers=num_layers - residual_range, 
-                                    units=self.units[residual_range + 1:],
-                                    dropout=self.dropout[residual_range + 1:],
+                                    units=self.units[residual_range:],
+                                    dropout=self.dropout[residual_range:],
                                     activation=self.activation,
                                     )
                     )
+        
+        return torch.nn.ModuleList(blocks)
 
 
 class ExponentialResidualFCBlock(
-                        ResidualMixin, 
+                        ResidualMixin,  
                         ExponentialMixin, 
-                        FullyConnectedBlock):
+                        SequentialModuleListMixin,
+                        FullyConnectedBlock
+                        ):
+    """
+    This class inherits the following classes to cover different functionalities:
+
+        FullyConnectedBlock : the base class for any fully connected block with a final layer (no activation / dropout at the last layer)
+        ResidualMixin: build the classifier as a sequence of Residual linear blocks
+        ExponentialMixin : set the number of hidden units in each layer using in an exponential distribution
+        SequentialModuleListMixin : correctly set the classifier field as a ModuleList object  
+
+    """
     def __init__(self,
                  output: int,
                  in_features: int,
@@ -215,6 +228,9 @@ class ExponentialResidualFCBlock(
                              f"smallest dimension: {min_dim}. Largest dimension: {max_dim}")
         
         self.layers_per_residual_block = layers_per_residual_block
+
+        self.units: List[int] = None
+
         self._build_classifier()
 
 
@@ -223,3 +239,8 @@ class ExponentialResidualFCBlock(
         self.units = self._set_units()
         self.classifier = self._build_classifier_blocks()
 
+    def to(self, *args, **kwargs):
+        return self.module_list_to(*args, **kwargs)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.module_list_forward(x)

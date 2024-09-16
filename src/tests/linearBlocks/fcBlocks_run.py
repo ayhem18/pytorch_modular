@@ -167,89 +167,7 @@ def test_exponential_fc_block(num_tests:int = 10 ** 3):
 
 
 #################### Residual ####################
-
-def _residual_network_pass(
-                  in_features:int, 
-                  out_features: int,
-                  rfc: fcbc.ResidualLinearBlock):
-    
-    rfc.train()
-
-    classifier_layers, adaptive_layer = pu.iterate(rfc.classifier), pu.iterate(rfc.adaptive_layer)
-
-    initial_w_main, initial_w_al = (
-                                    [l.weight.detach() if hasattr(l, 'weight')  else None for l in classifier_layers], 
-                                    [l.weight.detach() if hasattr(l, 'weight') else None for l in adaptive_layer]
-                                )
-
-    batch_size = 10
-
-    x = torch.randn(batch_size, in_features, requires_grad=True)
-    loss_obj = torch.nn.MSELoss(reduction='sum')
-
-    output = rfc.forward(x)
-
-    loss = loss_obj.forward(output, torch.zeros(batch_size, out_features))
-    loss.backward()
-
-    # make sure the residual fitting is indeed included in the backwards pass
-    classifier_layers, adaptive_layer= pu.iterate(rfc.classifier), pu.iterate(rfc.adaptive_layer)
-    w_main, w_al = (
-                    [l.weight.detach() if hasattr(l, 'weight')  else None for l in classifier_layers], 
-                    [l.weight.detach() if hasattr(l, 'weight') else None for l in adaptive_layer]
-                    )
-
-    # the main path: self.classifier
-
-    c_same_count = 0
-    c_total_count = 0
-
-    for index, (i_l, l) in enumerate(zip(initial_w_main, w_main)):
-        i_w, w = i_l, l
-        
-        if isinstance(classifier_layers[index], torch.nn.BatchNorm1d) or i_w is None:
-            continue
-
-        # if i_w is None:
-        #     continue
-
-        c_same_count += (torch.allclose(i_w, w))
-
-        c_total_count += 1
-            # raise ValueError(f"the backward pass did not affect the following weight")
-
-    al_same_count = 0
-    al_total_count = 0
-    # the skip connection
-    for i_l, l in zip(initial_w_al, w_al):
-        i_w, w = i_l, l
-
-        # if isinstance(adaptive_layer[index], torch.nn.BatchNorm1d) or i_w is None:
-        #     continue
-        if i_w is None:
-            continue
-
-        al_same_count += (torch.allclose(i_w, w)) 
-        al_total_count += 1
-
-    device = pu.get_default_device()
-
-    if 'cuda' not in device:
-        # there is no point in repeating the code above on cpu...
-        return
-    
-    x = torch.randn(batch_size, in_features)
-
-    x = x.to(device)
-    rfc = rfc.to(device)    
-    loss_obj = loss_obj.to(device)
-
-    output = rfc.forward(x)
-    loss =torch.sum(loss_obj.forward(output, torch.zeros(batch_size, out_features).to(device)))
-    loss.backward()
-
-
-def _test_residual_fc_block(num_tests:int = 10 ** 3):
+def test_residual_linear_block(num_tests:int = 10 ** 3):
     for _ in tqdm(range(num_tests)):
         n = random.randint(2, 20)        
 
@@ -284,7 +202,7 @@ def _test_residual_fc_block(num_tests:int = 10 ** 3):
         assert dropout_count == n, f"Expecting {n - 1} dropout layers. Found: {dropout_count}"
 
         # let's make sure the forward pass and backward passes work as expected
-        _residual_network_pass(in_features=units[0], out_features=units[-1], rfc=rfc)
+        _network_pass(in_features=units[0], out_features=units[-1], rfc=rfc)
 
         # without dropout
         rfc = fcbc.ResidualLinearBlock(output=units[-1], 
@@ -313,12 +231,73 @@ def _test_residual_fc_block(num_tests:int = 10 ** 3):
         _network_pass(in_features=units[0], out_features=units[-1], fc=rfc)
 
 
-    pass
+def test_residual_fc_block(num_tests: int = 10 ** 3):
+    pu.seed_everything(0)
+    for _ in tqdm(range(num_tests)):
+        n = random.randint(2, 20)        
+        
+        # test with dropout 
+        dr = [random.random() for j in range(n - 1)]
+
+        out_f = random.randint(25, 50)
+        in_f =out_f * 100
+
+        rfc = fcb.ExponentialResidualFCBlock(output=out_f, 
+                                in_features=in_f,
+                                num_layers=n,
+                                layers_per_residual_block=2,
+                                activation='relu',
+                                dropout=dr)
+
+        # make sure there are exacty n linear layers and n - 1 Relu Layers
+        layers = pu.iterate(rfc)
+        
+        fc_count = 0
+        relu_count = 0
+        dropout_count = 0
+
+        for lr in layers:
+            fc_count += int(isinstance(lr, torch.nn.Linear))
+            relu_count += int(isinstance(lr, torch.nn.ReLU))
+            dropout_count += int(isinstance(lr, torch.nn.Dropout))
+
+        assert fc_count == n, f"Expecting {n} linear layers. Found: {fc_count}"
+        assert relu_count == n - 1, f"Expecting {n} Relu layers. Found: {relu_count}"
+        assert dropout_count == n - 1, f"Expecting {n - 1} dropout layers. Found: {dropout_count}"
+
+        # let's make sure the forward pass and backward passes work as expected
+        _network_pass(in_features=in_f, out_features=out_f, fc=rfc)
 
 
+        rfc = fcb.ExponentialResidualFCBlock(output=in_f, 
+                                in_features=out_f,
+                                num_layers=n,
+                                layers_per_residual_block=2,
+                                activation='tanh',
+                                dropout=None)
+
+        # make sure there are exacty n linear layers and n - 1 Relu Layers
+        layers = pu.iterate(rfc)
+        
+        fc_count = 0
+        act_count = 0
+        dropout_count = 0
+
+        for lr in layers:
+            fc_count += int(isinstance(lr, torch.nn.Linear))
+            act_count += int(isinstance(lr, torch.nn.Tanh))
+            dropout_count += int(isinstance(lr, torch.nn.Dropout))
+
+        assert fc_count == n, f"Expecting {n} linear layers. Found: {fc_count}"
+        assert act_count == n - 1, f"Expecting {n} Relu layers. Found: {act_count}"
+        assert dropout_count == 0, f"Expecting {0} dropout layers. Found: {dropout_count}"
+
+        _network_pass(in_features=in_f, out_features=out_f, fc=rfc)
 
 
 if __name__ == '__main__':
-    test_generic_fc_block()
-    test_exponential_fc_block()
-    _test_residual_fc_block()
+    # test_generic_fc_block()
+    # test_exponential_fc_block()
+    # test_residual_fc_block()
+    test_residual_fc_block(num_tests=10)
+    pass
