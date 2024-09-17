@@ -1,4 +1,4 @@
-import wandb, torch, os, warnings
+import torch, os, warnings
 
 from clearml import Task, Logger
 from time import sleep
@@ -58,18 +58,9 @@ def _set_optimizer(model: SimClrModel,
                             lr=lr1, 
                             weight_decay=10 ** -6)
                 
-    # optimizer = SGD(params=[{"params": model.fe.parameters(), "lr": lr1}, # using different learning rates with different components of the model 
-    #                         {"params": model.flatten_layer.parameters(), "lr": lr1},
-    #                         {"params": model.ph.parameters(), "lr": lr2}
-    #                         ])
 
     if num_warmup_epochs > 0:
         linear_scheduler = LinearLR(optimizer=optimizer, start_factor=0.01, end_factor=1, total_iters=num_warmup_epochs)
-
-        # annealing_scheduler = AnnealingLR(optimizer=optimizer, 
-        #                         num_epochs=num_epochs - num_warmup_epochs,
-        #                         alpha=10,
-        #                         beta= 0.75)
 
         cosine_scheduler = CosineAnnealingLR(optimizer=optimizer, T_max=num_epochs - num_warmup_epochs)
 
@@ -79,11 +70,6 @@ def _set_optimizer(model: SimClrModel,
                                     milestones=[num_warmup_epochs])
 
         return optimizer, lr_scheduler
-
-    # annealing_scheduler = AnnealingLR(optimizer=optimizer, 
-    #                         num_epochs=num_epochs,
-    #                         alpha=10,
-    #                         beta= 0.75)
 
     # consider the case where warm up is not needed
     cosine_scheduler = CosineAnnealingLR(optimizer=optimizer, T_max=num_epochs)
@@ -262,8 +248,6 @@ def run_pipeline(model: SimClrModel,
         ):    
     
     if use_logging:
-        # wandb.init(project=_WANDB_PROJECT_NAME, 
-        #         name=run_name)
         # create a clearml task object
         task = Task.init(project_name=_TRACK_PROJECT_NAME,
                          task_name=run_name,
@@ -318,39 +302,8 @@ def run_pipeline(model: SimClrModel,
 
     # this piece of code is taken from the fairSeq repo (by the Facebook AI research team) as recommmended on the Pytorch forum:
     except RuntimeError as e:
-        if 'out of memory' not in str(e):
-            print(e)
-            raise e
-        
+        print(e)
         # at this point, the error is known to be an out of memory error
         pu.cleanup()
-        # make sure to close the wandb log
-        wandb.finish()
-        # stop the program for 30 seconds for the cleaning to take effect
-        sleep(30)
 
-        batch_size = int(batch_size / 1.2)
-        res = run_pipeline(model=model, 
-                                     
-            train_data_folder=train_data_folder,
-
-            val_data_folder=val_data_folder,
-
-            output_shape=output_shape, 
-
-            num_epochs=num_epochs, 
-            batch_size=batch_size,
-
-            temperature=temperature,
-
-            ckpnt_dir=ckpnt_dir,
-            val_per_epoch=val_per_epoch,
-            seed=seed,
-            run_name=run_name, 
-            logger=logger, 
-            batch_stats=batch_stats           
-            )
-
-    
-    wandb.finish()
     return res
