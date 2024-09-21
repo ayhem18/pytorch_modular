@@ -6,9 +6,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from mypt.shortcuts import P
-from model_train.ds_wrapper import Food101Wrapper
-from model_train.training import OUTPUT_SHAPE, _UNIFORM_DATA_AUGS
+from mypt.data.datasets.parallel_augmentation.parallel_aug_ds_wrapper import Food101Wrapper
 
+OUTPUT_SHAPE = (200, 200)
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 
@@ -17,13 +17,13 @@ def check_ds_wrapper(folder: P,
                      train: bool, 
                      classification_mode:bool,
                     num_samples_per_cls: int):
-    # define the dataset
+
     ds = Food101Wrapper(root_dir=folder, 
                         output_shape=OUTPUT_SHAPE[1:],
                         augs_per_sample=2, 
                         sampled_data_augs=[],
                         uniform_augs_before=[],
-                        uniform_augs_after=_UNIFORM_DATA_AUGS,
+                        uniform_augs_after=[],
                         train=train,
                         samples_per_cls=num_samples_per_cls,
                         classification_mode=classification_mode,
@@ -56,7 +56,9 @@ def check_ds_wrapper(folder: P,
             
             plt.show()
 
-if __name__ == '__main__':
+
+def check_ds_different_modes():
+    # this function is visual inspection rather than an actual test
     t = os.path.join(SCRIPT_DIR, 'data', 'food101', 'train')
     v = os.path.join(SCRIPT_DIR, 'data', 'food101', 'val')
 
@@ -81,3 +83,5 @@ if __name__ == '__main__':
                      num_samples_per_cls=10)    
 
 
+if __name__ == '__main__':
+    check_ds_different_modes()
