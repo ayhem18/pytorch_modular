@@ -59,14 +59,14 @@ class SimClrModel(nn.Module):
 
 class ResnetSimClr(SimClrModel):
     def __init__(self, 
-                    input_shape: Tuple[int, int, int],
-                    output_dim: int,
-                    num_fc_layers: int,
-                    dropout: Optional[float] = None,
-                    fe_num_blocks: int=-1, # use all the layer blocks of the Resnet feature extractor
-                    architecture: int = 50, # use Resnet50
-                    freeze: Union[int, bool]=False, # do not freeze any of the  layers of the pretrained model, 
-                    freeze_layers: bool=True) -> None:
+                input_shape: Tuple[int, int, int],
+                output_dim: int,
+                num_fc_layers: int,
+                dropout: Optional[float] = None,
+                fe_num_blocks: int=-1, # use all the layer blocks of the Resnet feature extractor
+                architecture: int = 50, # use Resnet50
+                freeze: Union[int, bool]=False, # do not freeze any of the  layers of the pretrained model, 
+                freeze_layers: bool=True) -> None:
 
         super().__init__()
 

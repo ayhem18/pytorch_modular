@@ -6,7 +6,7 @@ import os
 from typing import Union, Dict, Tuple
 from pathlib import Path
 
-from model_train import tuning as tn, ds_wrapper as dsw
+from model_train import tuning as tn
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 

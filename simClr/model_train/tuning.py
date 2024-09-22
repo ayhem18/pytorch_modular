@@ -102,6 +102,7 @@ def _sweep_function(
 
 def tune(train_data_folder: Union[str, Path],
          val_data_folder: Optional[Union[str, Path]],
+
          log_dir: Union[str, Path],
          temperature: float,
 
