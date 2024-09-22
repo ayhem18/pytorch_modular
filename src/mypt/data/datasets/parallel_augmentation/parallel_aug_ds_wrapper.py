@@ -44,7 +44,6 @@ class ParallelAugWrapperDS(AbstractParallelAugsDs):
         self.samples_per_cls_map = None
         self.classification_mode = classification_mode
 
-    # @abstractmethod
     def _set_samples_per_cls(self, samples_per_cls: int):
         # iterate through the dataset
         current_cls = None
@@ -237,5 +236,6 @@ class ImagenetterWrapper(ParallelAugWrapperDS):
         else:
             self._len = len(self._ds)
     
-    # the number of samples varies per class, we we will use the parent function
-    
+    def _set_samples_per_cls(self, samples_per_cls: int):
+        # the number of samples varies per class, we we will use the parent function
+        return super()._set_samples_per_cls(samples_per_cls=samples_per_cls)

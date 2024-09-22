@@ -175,6 +175,7 @@ class ResnetSimClrWrapper(SimClrModelWrapper):
                 ):
 
         super().__init__(
+                input_shape=input_shape,
                 #logging parameters
                 log_per_batch=log_per_batch,
                 # loss parameters
