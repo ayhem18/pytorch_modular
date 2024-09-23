@@ -2,7 +2,7 @@
 This file contains a pytorch lightning wrapper for the SimClr Model
 """
 
-import torch, warnings
+import torch, warnings, torch_optimizer as topt
 
 from typing import Union, Tuple, List, Dict, Optional
 
@@ -132,28 +132,28 @@ class SimClrModelWrapper(LightningModule):
         
 
     def configure_optimizers(self):
-        # importing the Lars optimizer inside this function, simply because the "flash" package is noticeably slow to load ....
-        # hence slowing down the entire code base even when I am not training
-        from flash.core.optimizers import LARS
+        # I found only one good implementation of LARS through the lightning.flash package depending on pytorch lightning version < 2.0
+        # switching to a widely supported optimizer: Lamb
 
-        optimizer = LARS(params=[{"params": self.model.fe.parameters(), "lr": self.lr1}, # using different learning rates with different components of the model 
+        optimizer = topt.Lamb(params=[{"params": self.model.fe.parameters(), "lr": self.lr1}, # using different learning rates with different components of the model 
                                 {"params": self.model.flatten_layer.parameters(), "lr": self.lr1},
                                 {"params": self.model.ph.parameters(), "lr": self.lr2}
-                                ], 
-                                lr=self.lr1, 
-                                weight_decay=10 ** -6)
+                                ],
+                                lr=self.lr1,
+                                weight_decay=10 ** -6
+                                )
                     
         cosine_scheduler = CosineAnnealingLR(optimizer=optimizer, T_max=self._num_epochs - self._num_warmup_epochs)
 
         if self._num_epochs > 0:
-            optimizer, lr_scheduler = set_warmup_epochs(optimizer=optimizer, 
+            lr_scheduler_with_warmup = set_warmup_epochs(optimizer=optimizer, 
                                                         main_lr_scheduler=cosine_scheduler, 
                                                         num_warmup_epochs=self._num_warmup_epochs, 
                                                         warmup_lr_scheduler='linear')
 
-            return optimizer, lr_scheduler
+            return {"optimizer": optimizer, "lr_scheduler": lr_scheduler_with_warmup}
 
-        return optimizer, cosine_scheduler 
+        return {"optimizer": optimizer, "lr_scheduler": cosine_scheduler}
 
 
 class ResnetSimClrWrapper(SimClrModelWrapper):

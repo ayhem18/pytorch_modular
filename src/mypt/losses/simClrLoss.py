@@ -26,6 +26,10 @@ class SimClrLoss(nn.Module):
                  debug:bool=False,
                  similarity: str='cos',
                  build_indices=None) -> None:
+        # this call is super duper important: inherits the properties of the torch.nn.Module
+        # might not be necessary when using pytorch but raises a very confusing error with pytorch Lightning
+        super().__init__()
+
         if similarity not in self._sims:
             raise NotImplementedError(f"The current implementation supports only a specific set of similarity measures: {self._sims}. Found: {similarity}")
         self.sim = similarity 
@@ -139,7 +143,3 @@ class _SimClrLossNaive(nn.Module):
         # average the loss
         loss = loss / (2 * N)
         return loss
-
-    def __getattr__(self, name: str) -> torch.Any:
-        # overridden for debuggin purposes...
-        return super().__getattr__(name)

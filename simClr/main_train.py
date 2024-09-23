@@ -42,9 +42,3 @@ def train_main():
 
 if __name__ == '__main__':
     train_main()
-    # from mypt.losses.simClrLoss import SimClrLoss
-    # o = SimClrLoss(temperature=0.5)
-    # print(o.temp)
-    # import torch
-    # o = torch.nn.MSELoss()
-    # print(o._modules)

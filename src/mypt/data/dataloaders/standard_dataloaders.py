@@ -85,7 +85,8 @@ def initialize_val_dataloader(dataset_object: Dataset,
                             num_workers=num_workers, 
                             worker_init_fn=partial(set_worker_seed, seed=seed), # this function is used to ensure reproducibility between runs in multi-process setting 
                             generator=dl_gen,
-                            collate_fn=collate_fn)
+                            collate_fn=collate_fn, 
+                            persistent_workers=True)
         return dl
 
     # if the number of workers is set to '0', then the parameter 'pin_memory' will be set to True to improve performance
