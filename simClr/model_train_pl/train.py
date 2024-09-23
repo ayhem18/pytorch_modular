@@ -75,7 +75,7 @@ def train_simClr_wrapper(
     lr = 0.3 * (batch_size / 256) # according to the paper's formula
 
     # define the wrapper
-    wrapper = ResnetSimClrWrapper(input_shape=output_shape, 
+    wrapper = ResnetSimClrWrapper(input_shape=(3,) + output_shape, 
                                   output_dim=_OUTPUT_DIM,
                                   num_fc_layers=_NUM_FC_LAYERS,
 
@@ -102,13 +102,13 @@ def train_simClr_wrapper(
 
     # define the trainer
     trainer = L.Trainer(
-                        accelerator='gpu' if 'cuda' in device else 'cpu', ## I don't have acess to TPUs at the time of writing this code)))
-                        devices='auto', # not sure of the aftermath of setting this parameter to 'auto' (1 is the safest choiceTh)
+                        accelerator='gpu' if 'cuda' in device else 'cpu',     ## I don't have acess to TPUs at the time of writing this code)))
+                        devices=1, # not sure of the aftermath of setting this parameter to 'auto' (1 is the safest choiceTh)
                         logger=False, # disable logging until figuring out how to combine ClearML with PytorchLightning 
                         default_root_dir=log_dir,
                         max_epochs=num_epochs,
                         check_val_every_n_epoch=val_per_epoch,
-                        log_every_n_steps=1 if len(train_dl) < 10 else 10,)
+                        log_every_n_steps=1 if len(train_dl) < 10 else 10)
                         # callbacks=[])
 
 

@@ -4,7 +4,7 @@ This file contains a pytorch lightning wrapper for the SimClr Model
 
 import torch, warnings, torch_optimizer as topt
 
-from typing import Union, Tuple, List, Dict, Optional
+from typing import Union, Tuple, List, Dict, Optional, Iterator
 
 from torch.optim.lr_scheduler import CosineAnnealingLR
 
@@ -65,8 +65,7 @@ class SimClrModelWrapper(LightningModule):
 
         # the loss function: it seems that the self.loss_obj is already an internal attribute
         # of the PytorchLightning module
-        # self._loss = SimClrLoss(temperature=temperature, debug=debug_loss)
-        self._loss = torch.nn.MSELoss()
+        self._loss = SimClrLoss(temperature=temperature, debug=debug_loss)
         
         # the optimizer parameters
         self.lr1, self.lr2 = self._set_learning_rates(lrs)
@@ -104,7 +103,7 @@ class SimClrModelWrapper(LightningModule):
         # calculate the loss
         batch_loss_obj = self._loss.forward(g_x)
 
-        log_dict = {"batch_train_loss": batch_loss_obj.item()}
+        log_dict = {}
 
         if isinstance(batch_loss_obj, Tuple):
             batch_loss_obj, positive_pairs_sims, negative_pairs_sims = batch_loss_obj            
@@ -115,6 +114,9 @@ class SimClrModelWrapper(LightningModule):
                     }
 
             log_dict.update(pos_neg_sim_stats)
+
+        # at this point of the code we know that batch_loss_obj actually represents the loss tensor and the tuple with the logging stats
+        log_dict.update({"batch_train_loss": batch_loss_obj.item()})
 
         return batch_loss_obj, log_dict
 
@@ -154,6 +156,22 @@ class SimClrModelWrapper(LightningModule):
             return {"optimizer": optimizer, "lr_scheduler": lr_scheduler_with_warmup}
 
         return {"optimizer": optimizer, "lr_scheduler": cosine_scheduler}
+
+
+    def to(self, *args, **kwargs):
+        self.model = self.model.to(*args, **kwargs)
+        return self
+
+    def children(self) -> Iterator[torch.nn.Module]:
+        # overloading this method to return the correct children of the wrapper: those of the self.model field
+        return self.model.children()
+
+    def modules(self) -> Iterator[torch.nn.Module]:
+        return self.model.modules()
+    
+    def named_children(self) -> Iterator[Tuple[str, torch.nn.Module]]:
+        return self.model.named_children()
+        
 
 
 class ResnetSimClrWrapper(SimClrModelWrapper):
