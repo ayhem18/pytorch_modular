@@ -2,13 +2,12 @@
 This file contains a pytorch lightning wrapper for the SimClr Model
 """
 
-import torch, warnings, torch_optimizer as topt
+import torch, warnings, torch_optimizer as topt, numpy as np
 
 from typing import Union, Tuple, List, Dict, Optional, Iterator
-
 from torch.optim.lr_scheduler import CosineAnnealingLR
-
 from pytorch_lightning import LightningModule
+from clearml import Task, Logger
 
 from mypt.losses.simClrLoss import SimClrLoss
 from mypt.code_utilities import pytorch_utilities as pu, directories_and_files as dirf
@@ -47,6 +46,7 @@ class SimClrModelWrapper(LightningModule):
 
                 #logging arguments
                 log_per_batch: int,
+                logger: Optional[Logger], 
                 # loss arguments
                 temperature: float,
                 debug_loss:bool,
@@ -63,8 +63,7 @@ class SimClrModelWrapper(LightningModule):
         self.model: SimClrModel = None
         self.input_shape = input_shape
 
-        # the loss function: it seems that the self.loss_obj is already an internal attribute
-        # of the PytorchLightning module
+        # make sure that the loss override the nn.Module and actually calls the super constructor
         self._loss = SimClrLoss(temperature=temperature, debug=debug_loss)
         
         # the optimizer parameters
@@ -72,26 +71,45 @@ class SimClrModelWrapper(LightningModule):
         self._num_epochs = num_epochs
         self._num_warmup_epochs = num_warmup_epochs
 
-        # logging parameters
-        self.log_per_batch = log_per_batch
+        # logging parameters: 
+        # this parameter has to be passed since, I will doing the logging to clearml myself 
+        self.log_per_batch = log_per_batch  
+        self.myLogger = logger
+
+        # logging variables
+        self.train_batch_logs: List[Dict[str, float]] = [] # a field to save the metrics logged during the training batches
+        self.val_batch_logs: List[Dict[str, float]] = [] # a field to save the metrics logged during the validation batches
 
 
     def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         return self.model.forward(x)
 
 
-    def _batch_log(self, log_dict: Dict, batch_idx: int) -> None:
+    def _batch_log(self, 
+                   log_dict: Dict, 
+                   batch_idx: int) -> None:
         """
         Args:
             log_dict (Dict): the batch output saved as a dictionary
             batch_idx (int): The index of the batch (might be used to decide which batch output to log)
         """
-        if batch_idx % self.log_per_batch == 0:
-            pass
-        pass
-    
 
-    def _step(self, batch: Tuple[torch.Tensor, torch.Tensor]) -> Tuple[torch.Tensor, Dict]:
+        # make sure to refer to myLogger and not self.logger
+        if self.myLogger is None or batch_idx % self.log_per_batch != 0: 
+            return
+        
+        # the flexibility of clearML comes with the issue of specifying the iteration number
+        # but there is no way Pytorch lightning is not keeping track of the global step...
+
+        for key, value in log_dict.items():
+            self.myLogger.report_scalar(title=key, 
+                                    series=key, 
+                                    value=value, 
+                                    iteration=self.global_step # 
+                                    )
+            
+
+    def _step(self, batch: Tuple[torch.Tensor, torch.Tensor], split: str) -> Tuple[torch.Tensor, Dict]:
         x1_batch, x2_batch = batch
         
         # concatenate the input 
@@ -109,33 +127,79 @@ class SimClrModelWrapper(LightningModule):
             batch_loss_obj, positive_pairs_sims, negative_pairs_sims = batch_loss_obj            
 
             pos_neg_sim_stats = {
-                        "train_avg_positive_pair_sim": torch.mean(positive_pairs_sims).item(),
-                        "train_avg_negative_pair_sim": torch.mean(negative_pairs_sims).item()
+                        f"{split}_avg_positive_pair_sim": torch.mean(positive_pairs_sims).item(),
+                        f"{split}_avg_negative_pair_sim": torch.mean(negative_pairs_sims).item()
                     }
 
             log_dict.update(pos_neg_sim_stats)
 
         # at this point of the code we know that batch_loss_obj actually represents the loss tensor and the tuple with the logging stats
-        log_dict.update({"batch_train_loss": batch_loss_obj.item()})
+        log_dict.update({f"batch_{split}_loss": batch_loss_obj.item()})
 
         return batch_loss_obj, log_dict
 
     
-    def training_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int): # apparently setting the return type might raise an error
-        batch_loss_obj, log_dict = self._step(batch)
+    def training_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int) -> SimClrLoss:
+        batch_loss_obj, log_dict = self._step(batch, split='train')
         self._batch_log(log_dict=log_dict, batch_idx=batch_idx)
-        return batch_loss_obj
-
-
-    def validation_step(self, val_batch: Tuple[torch.Tensor, torch.Tensor], batch_index:int):
-        batch_loss_obj, log_dict = self._step(val_batch)
-        self._batch_log(log_dict=log_dict, batch_idx=0) # log all validation batches
-        return batch_loss_obj
         
+        # save only the training loss
+        self.train_batch_logs.append(log_dict['batch_train_loss'])
+        return batch_loss_obj
+
+
+    def on_train_epoch_end(self):
+        # calculate the average of batch losses
+        train_epoch_loss = np.mean(self.train_batch_logs)
+
+        # log to ClearMl
+        if self.myLogger is not None:
+            self.myLogger.report_scalar(
+                                        title="train_epoch_loss", 
+                                        series="train_epoch_loss", 
+                                        value=train_epoch_loss, # 
+                                        iteration=int(round(self.global_step / len(self.train_batch_logs))) # the epoch index can be deduced from global step and the length of self.train_batch_logs
+                                        )
+            
+        # clear the list
+        self.train_batch_logs.clear()
+
+        # log the epoch validation loss to use it for checkpointing
+        self.log(name='train_epoch_loss', value=train_epoch_loss)
+
+
+    def validation_step(self, val_batch: Tuple[torch.Tensor, torch.Tensor], batch_index:int) -> SimClrLoss:
+        batch_loss_obj, log_dict = self._step(val_batch, split='val')
+        self._batch_log(log_dict=log_dict, batch_idx=0) # log all validation batches
+            
+        # track the validation batch loss
+        self.val_batch_logs.append(log_dict['batch_val_loss'])
+        return batch_loss_obj
+
+
+    # make sure to name the methods according to the ModelHooks mixin extended by the LightningModule
+    def on_validation_epoch_end(self):
+        # calculate the average of batch losses
+        val_epoch_loss = float(np.mean(self.val_batch_logs))
+
+        # log to ClearMl
+        if self.myLogger is not None:
+            self.myLogger.report_scalar(
+                                        title="val_epoch_loss", 
+                                        series="val_epoch_loss", 
+                                        value=val_epoch_loss, # 
+                                        iteration=int(round(self.global_step / len(self.train_batch_logs)))
+                                        )
+        # clear the list
+        self.val_batch_logs.clear()
+
+        # log the epoch validation loss to use it for checkpointing
+        self.log(name='val_epoch_loss', value=val_epoch_loss)
+
 
     def configure_optimizers(self):
-        # I found only one good implementation of LARS through the lightning.flash package depending on pytorch lightning version < 2.0
-        # switching to a widely supported optimizer: Lamb
+        # I found only one good implementation of LARS through the lightning.flash package. The latter requires pytorch lightning version < 2.0 as a dependency. The current version is 2.4 ...
+        # switching to a supported implementation of Lamb (another large batch learning scheduler)
 
         optimizer = topt.Lamb(params=[{"params": self.model.fe.parameters(), "lr": self.lr1}, # using different learning rates with different components of the model 
                                 {"params": self.model.flatten_layer.parameters(), "lr": self.lr1},
@@ -158,21 +222,24 @@ class SimClrModelWrapper(LightningModule):
         return {"optimizer": optimizer, "lr_scheduler": cosine_scheduler}
 
 
+    # added to ensure that the model behaves as expected: more related to Pytorch  nn.Module than Pytorch Lightning
     def to(self, *args, **kwargs):
         self.model = self.model.to(*args, **kwargs)
         return self
+
 
     def children(self) -> Iterator[torch.nn.Module]:
         # overloading this method to return the correct children of the wrapper: those of the self.model field
         return self.model.children()
 
+
     def modules(self) -> Iterator[torch.nn.Module]:
         return self.model.modules()
-    
+
+
     def named_children(self) -> Iterator[Tuple[str, torch.nn.Module]]:
         return self.model.named_children()
         
-
 
 class ResnetSimClrWrapper(SimClrModelWrapper):
     def __init__(self,
@@ -181,6 +248,7 @@ class ResnetSimClrWrapper(SimClrModelWrapper):
                 num_fc_layers: int,
 
                 #logging parameters
+                logger: Optional[Logger],
                 log_per_batch: int,
                 # loss parameters
                 temperature: float,
@@ -200,6 +268,7 @@ class ResnetSimClrWrapper(SimClrModelWrapper):
                 input_shape=input_shape,
                 #logging parameters
                 log_per_batch=log_per_batch,
+                logger=logger,
                 # loss parameters
                 temperature=temperature,
                 debug_loss=debug_loss,
