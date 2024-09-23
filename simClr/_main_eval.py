@@ -14,7 +14,7 @@ from model_train.evaluating import _set_data_classification_data
 from mypt.subroutines.neighbors.knn import KNN
 from mypt.shortcuts import P
 
-from main_train import _OUTPUT_DIM
+from simClr._main_train import _OUTPUT_DIM
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 

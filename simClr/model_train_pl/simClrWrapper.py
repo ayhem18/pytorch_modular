@@ -27,7 +27,7 @@ class SimClrModelWrapper(LightningModule):
             warnings.warn(message="The number of warmup epochs is set to 0 !!")
 
     @classmethod
-    def _set_learning_rates(cls, lrs: Union[(List | Tuple)[float, float], float]) -> Tuple[float, float]:
+    def _set_learning_rates(cls, lrs: Union[Tuple[float, float], float]) -> Tuple[float, float]:
         if isinstance(lrs, float):
             lr1, lr2 = lrs, 10 * lrs
         elif isinstance(lrs, (Tuple,List)) and len(lrs) == 2:
@@ -56,14 +56,18 @@ class SimClrModelWrapper(LightningModule):
                 num_warmup_epochs:int,                 
 
                 ):
-        
+        # super class call
+        super().__init__()
+
         # the model
         self.model: SimClrModel = None
         self.input_shape = input_shape
 
-        # the loss function
-        self.loss_obj = SimClrLoss(temperature=temperature, debug=debug_loss)
-
+        # the loss function: it seems that the self.loss_obj is already an internal attribute
+        # of the PytorchLightning module
+        # self._loss = SimClrLoss(temperature=temperature, debug=debug_loss)
+        self._loss = torch.nn.MSELoss()
+        
         # the optimizer parameters
         self.lr1, self.lr2 = self._set_learning_rates(lrs)
         self._num_epochs = num_epochs
@@ -98,7 +102,7 @@ class SimClrModelWrapper(LightningModule):
         _, g_x = self.forward(x)
         
         # calculate the loss
-        batch_loss_obj = self.loss_obj.forward(g_x)
+        batch_loss_obj = self._loss.forward(g_x)
 
         log_dict = {"batch_train_loss": batch_loss_obj.item()}
 
@@ -115,13 +119,13 @@ class SimClrModelWrapper(LightningModule):
         return batch_loss_obj, log_dict
 
     
-    def training_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int) -> SimClrLoss:
+    def training_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int): # apparently setting the return type might raise an error
         batch_loss_obj, log_dict = self._step(batch)
         self._batch_log(log_dict=log_dict, batch_idx=batch_idx)
         return batch_loss_obj
 
 
-    def validation_step(self, val_batch: Tuple[torch.Tensor, torch.Tensor], batch_index:int) -> torch.Tensor | Dict[str, torch.Any] | None:
+    def validation_step(self, val_batch: Tuple[torch.Tensor, torch.Tensor], batch_index:int):
         batch_loss_obj, log_dict = self._step(val_batch)
         self._batch_log(log_dict=log_dict, batch_idx=0) # log all validation batches
         return batch_loss_obj

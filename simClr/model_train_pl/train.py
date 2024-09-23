@@ -17,15 +17,19 @@ from .simClrWrapper import ResnetSimClrWrapper
 from .set_ds import _set_data
 
 
-# THOSE VALUES WERE SET AFTER TUNING THE MODEL
+# project name on clearml
+TRACK_PROJECT_NAME = 'simClr'
+
+# These VALUES WERE SET AFTER TUNING THE MODEL
 _NUM_FC_LAYERS = 3
 _DROPOUT = 0.2
 
-# those are chosen manually
+# these are chosen manually
 _OUTPUT_DIM = 128
 _TEMPERATURE = 0.5
+_OUTPUT_SHAPE = (200, 200)
 
-# 101 IS DEFINITELY AN OVERKILL
+# 101 IS DEFINITELY AN OVERKILL, so let's see how it goes...
 ARCHITECTURE = 50
 
 def train_simClr_wrapper(
@@ -33,12 +37,12 @@ def train_simClr_wrapper(
         val_data_folder:Optional[Union[str, Path]],
         dataset: str,
 
-        output_shape:Tuple[int, int], 
 
         num_epochs: int, 
         batch_size: int,
 
         log_dir: Union[str, Path],
+        output_shape:Tuple[int, int]=None, 
         num_warmup_epochs:int=10,
         val_per_epoch: int = 3,
         seed:int = 69,
@@ -47,9 +51,13 @@ def train_simClr_wrapper(
 
         num_train_samples_per_cls: Union[int, float]=None, # the number of training samples per cls
         num_val_samples_per_cls: Union[int, float]=None, # the number of validation samples per cls
-        ):    
+        ) -> ResnetSimClrWrapper:    
+
+    if output_shape is None:
+        output_shape = _OUTPUT_SHAPE
+    
     # process the loggin directory
-    log_dir = dirf.process_path(log_dir)
+    log_dir = dirf.process_path(log_dir, file_ok=False, dir_ok=True)
 
     # get the default device
     device = pu.get_default_device()
@@ -95,16 +103,18 @@ def train_simClr_wrapper(
     # define the trainer
     trainer = L.Trainer(
                         accelerator='gpu' if 'cuda' in device else 'cpu', ## I don't have acess to TPUs at the time of writing this code)))
-                        devices=1,
+                        devices='auto', # not sure of the aftermath of setting this parameter to 'auto' (1 is the safest choiceTh)
                         logger=False, # disable logging until figuring out how to combine ClearML with PytorchLightning 
                         default_root_dir=log_dir,
                         max_epochs=num_epochs,
                         check_val_every_n_epoch=val_per_epoch,
-                        log_every_n_steps=1 if len(train_dl) < 10 else 10,
-                        callbacks=[checkpnt_callback])
+                        log_every_n_steps=1 if len(train_dl) < 10 else 10,)
+                        # callbacks=[])
 
 
     trainer.fit(model=wrapper,
                 train_dataloaders=train_dl,
-                val_dataloaders=val_dl
+                val_dataloaders=val_dl,
                 )
+
+    return wrapper

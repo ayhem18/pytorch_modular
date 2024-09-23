@@ -139,3 +139,7 @@ class _SimClrLossNaive(nn.Module):
         # average the loss
         loss = loss / (2 * N)
         return loss
+
+    def __getattr__(self, name: str) -> torch.Any:
+        # overridden for debuggin purposes...
+        return super().__getattr__(name)
