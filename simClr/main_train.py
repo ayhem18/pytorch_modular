@@ -29,7 +29,7 @@ def train_main():
                         dataset=dataset_name,
                         log_dir=os.path.join(ckpnt_dir_parent, f'{dataset_name}_iteration_{n + 1}'),
                         num_epochs=5, 
-                        batch_size=512, 
+                        batch_size=16, 
                         seed=0, 
                         use_logging=False,
                         num_warmup_epochs=0,

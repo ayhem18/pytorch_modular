@@ -3,7 +3,7 @@ from mypt.code_utilities import directories_and_files as dirf
 from mypt.models.simClr.simClrModel import ResnetSimClr
 from mypt.subroutines.neighbors import model_embs as me
 
-from model_train.training import run_pipeline, OUTPUT_SHAPE, _TRACK_PROJECT_NAME
+from model_train_pytorch.training import run_pipeline, OUTPUT_SHAPE, _TRACK_PROJECT_NAME
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 

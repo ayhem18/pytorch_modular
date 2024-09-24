@@ -22,7 +22,7 @@ _DEFAULT_DATA_AUGS = [
     tr.ColorJitter(brightness=0.5, contrast=0.5)
 ]
 
-_UNIFORM_DATA_AUGS = [] # [tr.Normalize(mean=[0.485, 0.456, 0.406],  std=[0.229, 0.224, 0.225])] : one of the augmentations used with the original Resnet models 
+_UNIFORM_DATA_AUGS = []
 
 
 _SUPPORTED_DATASETS = ['imagenette', 'food101']

@@ -34,29 +34,12 @@ def get_module_device(module: nn.Module) -> str:
     device = next(module.parameters()).device
     return device
 
-def __verify_extension(p):
-    return os.path.basename(p).endswith('.pt') or os.path.basename(p).endswith('.pth')
-
-
 
 def save_checkpoint(model: nn.Module, 
                     optimizer: Optimizer, 
                     lr_scheduler: Optional[torch.optim.lr_scheduler.LRScheduler],
                     path: Union[str, Path], 
                     **kwargs):
-
-    # # it is quite common to save a model with some loss value in the name
-    # file_name, ext = os.path.splitext(path)
-    # # replace any '.' in the file name by ','
-    # file_name = re.sub(f'^[A-Za-z1-9.]', '_', file_name)
-    # # file_name = file_name.replace(r'', '_')
-
-    # # assemble the final filename
-    # path = os.path.join(Path(path).parent, f'{file_name}{ext}')
-
-    # path = process_path(path,
-    #                     condition=lambda p : os.path.splitext(p)[-1] in ['.pt', '.pnt'], 
-    #                     error_message="Make sure the checkpoint has the correct extension")
 
     ckpnt_dict = {"model_state_dict": model.state_dict(), 
                   "optimizer_state_dict": optimizer.state_dict()}   
@@ -73,45 +56,22 @@ def save_checkpoint(model: nn.Module,
                         condition=lambda p : os.path.splitext(p)[-1] in ['.pt', '.pnt'], 
                         error_message="Make sure the checkpoint has the correct extension")
 
-def save_model(model: nn.Module, path: Union[str, Path] = None) -> None:
-    # the time of saving the model
-    now = d.now()
-    file_name = "-".join([str(now.month), str(now.day), str(now.hour), str(now.minute)])
-    # add the extension
-    file_name += '.pt'
 
-    # first check if the path variable is None:
-    path = path if path is not None else os.path.join(HOME, file_name)
+# def load_model(base_model: nn.Module,
+#                path: Union[str, Path]) -> nn.Module:
+#     # first process the path
+#     path = process_path(path,
+#                              dir_ok=False,
+#                              file_ok=True,
+#                              condition=lambda p: not os.path.isfile(p) or __verify_extension(p),
+#                              error_message='MAKE SURE THE FILE PASSED IS OF THE CORRECT EXTENSION')
 
-    # process the path
-    path = process_path(path,
-                             dir_ok=True,
-                             file_ok=True,
-                             condition=lambda p: not os.path.isfile(p) or __verify_extension(p),
-                             error_message='MAKE SURE THE FILE PASSED IS OF THE CORRECT EXTENSION')
+#     base_model.load_state_dict(torch.load(path))
 
-    if os.path.isdir(path):
-        path = os.path.join(path, file_name)
-
-    # finally save the model.
-    torch.save(model.state_dict(), path)
+#     return base_model
 
 
-def load_model(base_model: nn.Module,
-               path: Union[str, Path]) -> nn.Module:
-    # first process the path
-    path = process_path(path,
-                             dir_ok=False,
-                             file_ok=True,
-                             condition=lambda p: not os.path.isfile(p) or __verify_extension(p),
-                             error_message='MAKE SURE THE FILE PASSED IS OF THE CORRECT EXTENSION')
-
-    base_model.load_state_dict(torch.load(path))
-
-    return base_model
-
-
-# let's define functionalities for reproducibility
+# let's define functionalities for reproducibility and random seeds
 
 def seed_everything(seed: int = 69):
     # let's set reproducility
@@ -119,7 +79,20 @@ def seed_everything(seed: int = 69):
     np.random.seed(seed)
     torch.manual_seed(seed=seed)
     torch.use_deterministic_algorithms(True, warn_only=True) # certain layers have no deterministic implementation... well need to compromise on this one...
-    torch.backends.cudnn.benchmark = False    
+    torch.backends.cudnn.benchmark = False 
+
+    # # the final to ensure reproducibility is to set the environment variable: # CUBLAS_WORKSPACE_CONFIG=:16:8
+    import warnings
+    # first check if the CUBLAS_WORSKPACE_CONFIG variable is set or not
+    env_var = os.getenv('CUBLAS_WORKSPACE_CONFIG')
+    if env_var is None:
+        # the env variable was not set previously
+        os.environ['CUBLAS_WORKSPACE_CONFIG'] = ':16:8'
+    else:
+        if env_var not in [':16:8']:
+            warnings.warn(message=f"the env variable 'CUBLAS_WORKSPACE_CONFIG' is set to the value {env_var}. setting it to: ':16:8' ")
+            os.environ['CUBLAS_WORKSPACE_CONFIG'] = ':16:8'        
+
     
 def set_worker_seed(_, seed: int = 69):
     np.random.seed(seed=seed)

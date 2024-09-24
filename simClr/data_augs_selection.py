@@ -9,7 +9,7 @@ from pathlib import Path
 from mypt.data.dataloaders.standard_dataloaders import initialize_train_dataloader
 from mypt.data.datasets.parallel_augmentation.parallel_aug_ds_wrapper import Food101Wrapper, ImagenetterWrapper
 
-from model_train._set_ds import _DEFAULT_DATA_AUGS, _UNIFORM_DATA_AUGS
+from model_train_pytorch._set_ds import _DEFAULT_DATA_AUGS, _UNIFORM_DATA_AUGS
 
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))

@@ -9,8 +9,8 @@ from pathlib import Path
 from mypt.code_utilities import directories_and_files as dirf
 from mypt.models.simClr.simClrModel import ResnetSimClr
 
-from model_train.training import OUTPUT_SHAPE
-from model_train.evaluating import _set_data_classification_data
+from model_train_pytorch.training import OUTPUT_SHAPE
+from model_train_pytorch.evaluating import _set_data_classification_data
 from mypt.subroutines.neighbors.knn import KNN
 from mypt.shortcuts import P
 
