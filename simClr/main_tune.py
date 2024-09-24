@@ -50,5 +50,3 @@ if __name__ == '__main__':
 
     train_folder, val_folder, test_folder = tuning_data_preparation(imagenette_ds_folder=imagenette_ds_folder, 
                                                                     des_data_folder=imagenette_tune)
-    
-

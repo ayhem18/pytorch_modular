@@ -1,0 +1,18 @@
+# these are chosen manually
+_OUTPUT_DIM = 128
+_TEMPERATURE = 0.5
+_OUTPUT_SHAPE = (200, 200)
+
+# 101 IS DEFINITELY AN OVERKILL, so let's see how it goes...
+ARCHITECTURE_IMAGENETTE = 50
+ARCHITECTURE_FOOD_101 = 50
+
+
+TRACK_PROJECT_NAME = 'simClr'
+TUNING_TASK_RUN_NAME = 'hyper-parameters-optimization'
+
+# These VALUES WERE SET AFTER TUNING THE MODEL
+_NUM_FC_LAYERS = 3
+_DROPOUT = 0.2
+
+

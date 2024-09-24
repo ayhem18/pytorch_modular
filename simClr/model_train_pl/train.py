@@ -6,31 +6,72 @@ This script contais the training code for the SimClrWrapper PL model
 import pytorch_lightning as L
 
 from clearml import Task, Logger
-from typing import Union, Optional, Tuple, List
+from typing import Union, Optional, Tuple
 from pathlib import Path
+from torch.utils.data import DataLoader
 
 from pytorch_lightning.callbacks import ModelCheckpoint
 
 from mypt.code_utilities import pytorch_utilities as pu, directories_and_files as dirf
+from mypt.shortcuts import P
 
 from .simClrWrapper import ResnetSimClrWrapper
 from .set_ds import _set_data
 
+# 
+from .constants import (_TEMPERATURE, _OUTPUT_DIM, _OUTPUT_SHAPE, 
+                        ARCHITECTURE_IMAGENETTE, ARCHITECTURE_FOOD_101, 
+                        _NUM_FC_LAYERS, _DROPOUT,
+                        TRACK_PROJECT_NAME) 
 
-# project name on clearml
-TRACK_PROJECT_NAME = 'simClr'
 
-# These VALUES WERE SET AFTER TUNING THE MODEL
-_NUM_FC_LAYERS = 3
-_DROPOUT = 0.2
+def _set_logging(use_logging: bool, run_name: str, **kwargs) -> Optional[Logger]:
 
-# these are chosen manually
-_OUTPUT_DIM = 128
-_TEMPERATURE = 0.5
-_OUTPUT_SHAPE = (200, 200)
+    if use_logging:
+        # create a clearml task object
+        task = Task.init(project_name=TRACK_PROJECT_NAME,
+                         task_name=run_name,
+                         **kwargs
+                         )
+        logger = task.get_logger()
+    else:
+        logger = None
 
-# 101 IS DEFINITELY AN OVERKILL, so let's see how it goes...
-ARCHITECTURE = 50
+    return logger
+
+
+def _set_ckpnt_callback(val_dl: Optional[DataLoader], 
+                        num_epochs:int, 
+                        val_per_epoch:int,
+                        log_dir: P) -> ModelCheckpoint:
+
+    if val_dl is not None:
+        # if the validation dataset is passed, make sure
+        # the val_per_epoch argument is less than half the number of epochs
+        # so that at least 2 checkpoints are considered     
+        if num_epochs // 2 < val_per_epoch:
+            raise ValueError("Passing a validation dataset while setting the 'val_per_epoch' less than the number of epochs will eventually raise an error !!!") 
+
+
+    ckpnt_split = 'val' if val_dl is not None else 'train'
+    # if the validation dataset is passed, then we need to have al least one validation epoch before checkpointing
+    # otherwise update the checkpoint every epoch (we need the best training loss...)
+    every_n_epochs = val_per_epoch if val_dl is not None else 1
+    monitor = f"{ckpnt_split}_epoch_loss"
+
+    checkpnt_callback = ModelCheckpoint(dirpath=log_dir, 
+                                        save_top_k=1, 
+                                        monitor=monitor, # the checkpointing process might depend on either the train on the validation data
+                                        mode='min', 
+                                        every_n_epochs=every_n_epochs, 
+                                        # save the checkpoint with the epoch and validation loss
+                                        filename= ckpnt_split + '-{epoch:02d}-'+ '{' + monitor + ':06f}',
+                                        # auto_insert_metric_name=True,
+                                        save_on_train_epoch_end=(val_dl is None) # if there is a validation set then check after the val epoch
+                                        )
+
+    return checkpnt_callback
+
 
 def train_simClr_wrapper(
         train_data_folder:Union[str, Path],          
@@ -60,8 +101,9 @@ def train_simClr_wrapper(
     # process the loggin directory
     log_dir = dirf.process_path(log_dir, file_ok=False, dir_ok=True)
 
-    # get the default device
-    device = pu.get_default_device()
+    # set the logger
+    logger = _set_logging(use_logging=use_logging, 
+                        run_name=run_name)
 
     # DATA: 
     train_dl, val_dl = _set_data(train_data_folder=train_data_folder,
@@ -73,24 +115,13 @@ def train_simClr_wrapper(
                                 num_val_samples_per_cls=num_val_samples_per_cls,
                                 seed=seed)
 
-    if val_dl is not None:
-        # if the validation dataset is passed, make sure
-        # the val_per_epoch argument is less than half the number of epochs
-        # for Pytorch lightning to consider at least 2 validation epochs        
-        if num_epochs // 2 < val_per_epoch:
-            raise ValueError("Passing a validation dataset while setting the 'val_per_epoch' less than the number of epochs will eventually raise an error !!!") 
+    checkpnt_callback = _set_ckpnt_callback(val_dl=val_dl, 
+                                            num_epochs=num_epochs, 
+                                            val_per_epoch=val_per_epoch, 
+                                            log_dir=log_dir)
 
     lr = 0.3 * (batch_size / 256) # according to the paper's formula
 
-    if use_logging:
-        # create a clearml task object
-        task = Task.init(project_name=TRACK_PROJECT_NAME,
-                         task_name=run_name,
-                         )
-        logger = task.get_logger()
-    else:
-        logger = None
-        
     # define the wrapper
     wrapper = ResnetSimClrWrapper(
                                   # model parameters
@@ -113,33 +144,18 @@ def train_simClr_wrapper(
 
                                   # more model parameters
                                   dropout=_DROPOUT,
-                                  architecture=ARCHITECTURE,
+                                  architecture=ARCHITECTURE_FOOD_101 if dataset=='food101' else ARCHITECTURE_IMAGENETTE,
                                   freeze=False
                                   )
 
-    ckpnt_split = 'val' if val_dl is not None else 'train'
-
-    # if the validation dataset is passed, then we need to have al least on validation epoch before checkpointing
-    # otherwise update the checkpoint every epoch (we need the best training loss...)
-    every_n_epochs = val_per_epoch if val_dl is not None else 1
-    monitor = f"{ckpnt_split}_epoch_loss"
-    checkpnt_callback = ModelCheckpoint(dirpath=log_dir, 
-                                        save_top_k=1, 
-                                        monitor=monitor, # the checkpointing process might depend on either the train on the validation data
-                                        mode='min', 
-                                        every_n_epochs=every_n_epochs, 
-                                        # save the checkpoint with the epoch and validation loss
-                                        filename= ckpnt_split + '-{epoch:02d}-'+ '{' + monitor + ':06f}',
-                                        # auto_insert_metric_name=True,
-                                        save_on_train_epoch_end=(val_dl is None) # if there is a validation set then check after the val epoch
-                                        )
-
+    # get the default device
+    device = pu.get_default_device()
 
     # define the trainer
     trainer = L.Trainer(
                         accelerator='gpu' if 'cuda' in device else 'cpu',     ## I don't have acess to TPUs at the time of writing this code)))
-                        devices=1, # not sure of the aftermath of setting this parameter to 'auto' (1 is the safest choiceTh)
-                        logger=False, # disable logging until figuring out how to combine ClearML with PytorchLightning 
+                        devices=1, # not sure of the aftermath of setting this parameter to 'auto' (1 is the safest choice for now)
+                        logger=False, # since I am not using any of the supported logging options, logger=False + using the self.log function would do the job...
                         default_root_dir=log_dir,
                         max_epochs=num_epochs,
                         check_val_every_n_epoch=val_per_epoch,

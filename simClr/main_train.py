@@ -5,7 +5,8 @@ This script contains the implementation of the main training process
 import os
 from mypt.code_utilities import directories_and_files as dirf
 
-from model_train_pl.train import train_simClr_wrapper, TRACK_PROJECT_NAME
+from model_train_pl.train import train_simClr_wrapper
+from model_train_pl.constants import TRACK_PROJECT_NAME
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 
