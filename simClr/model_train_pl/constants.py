@@ -15,4 +15,8 @@ TUNING_TASK_RUN_NAME = 'hyper-parameters-optimization'
 _NUM_FC_LAYERS = 3
 _DROPOUT = 0.2
 
+_LARGEST_BATCH_SIZE = 512
+VAL_SPLIT = 0.15
+
+
 

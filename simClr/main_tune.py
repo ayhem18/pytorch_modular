@@ -11,6 +11,9 @@ from mypt.shortcuts import P
 from mypt.data.datasets.image_classification import utils as icu
 from mypt.code_utilities import directories_and_files as dirf
 
+from model_train_pl.tuning import tune_main_function
+from model_train_pl.constants import VAL_SPLIT, _LARGEST_BATCH_SIZE
+
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 current = SCRIPT_DIR
 while 'data' not in os.listdir(current):
@@ -18,8 +21,6 @@ while 'data' not in os.listdir(current):
 
 DATA_FOLDER = os.path.join(current, 'data')
 
-
-VAL_SPLIT = 0.15
 
 def tuning_data_preparation(imagenette_ds_folder: P,
                             des_data_folder: P) -> Tuple[P, P, P]:
@@ -43,10 +44,39 @@ def tuning_data_preparation(imagenette_ds_folder: P,
     return train_split, val_split, test_split
     # the next step is to simply wrap the folders with instances of the DataFolder class
     
+    
+def tune_main():
+    imagenette_tune = os.path.join(DATA_FOLDER, 'imagenette_tune')
+
+    if sorted(os.listdir(imagenette_tune)) != ['test', 'train', 'val']:
+        raise ValueError((f"the data folder is not in the expected structure. Expected 3 subfolders: {['train', 'test', 'val']}. " 
+                         f"Found: {os.listdir(imagenette_tune)}. Make sure to call the 'tuning_data_preparation' fuction"))
+
+
+    parent_log_dir = dirf.process_path(os.path.join(SCRIPT_DIR, 'tune_logs'), dir_ok=True, file_ok=False)
+    
+    n = len(os.listdir(parent_log_dir))
+
+    tune_parent_dir = os.path.join(parent_log_dir, f'tune_exp_{n + 1}')
+
+    tune_main_function(train_data_folder=os.path.join(imagenette_tune, 'train'),
+                       val_data_folder=os.path.join(imagenette_tune, 'val'),
+                       dataset='imagenette',
+                       num_epochs_per_job=3,
+                       val_per_epoch=1,
+                       batch_size=_LARGEST_BATCH_SIZE,
+                       parent_log_dir=tune_parent_dir,
+                       num_warmup_epochs=5,
+                       num_jobs=3,
+                       )
+
 
 if __name__ == '__main__':  
     imagenette_ds_folder = os.path.join(DATA_FOLDER, 'imagenette', 'train')
     imagenette_tune = os.path.join(DATA_FOLDER, 'imagenette_tune')
 
-    train_folder, val_folder, test_folder = tuning_data_preparation(imagenette_ds_folder=imagenette_ds_folder, 
-                                                                    des_data_folder=imagenette_tune)
+    # make this function is called at least once !!! (to prepare the data for hyper-parameter tuning...)
+    # train_folder, val_folder, test_folder = tuning_data_preparation(imagenette_ds_folder=imagenette_ds_folder, 
+    #                                                                 des_data_folder=imagenette_tune)
+
+    tune_main()

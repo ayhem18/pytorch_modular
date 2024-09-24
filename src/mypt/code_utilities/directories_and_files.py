@@ -269,11 +269,13 @@ def image_dataset_directory_error(path: Union[Path, str]) -> str:
 
 
 def dir_contains_only_types(directory:Union[str, Path], valid_extensions: List[str]) -> bool:
+    # make sure to convert the extensions to lower case
+    valid_extensions = [e.lower() for e in valid_extensions]
     directory = process_path(directory, dir_ok=True, file_ok=False)
     for r, _, files in os.walk(directory):
         for f in files:
             file_path = os.path.join(r, f)
-            if os.path.splitext(file_path)[-1] not in valid_extensions:
+            if os.path.splitext(file_path)[-1].lower() not in valid_extensions:
                 return False
     return True
 

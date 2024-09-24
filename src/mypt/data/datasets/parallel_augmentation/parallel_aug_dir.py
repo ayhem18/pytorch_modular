@@ -13,11 +13,12 @@ from .parallel_aug_abstract import AbstractParallelAugsDs
 
 class ParallelAugDirDs(AbstractParallelAugsDs):
     def __init__(self, 
-                root: Union[str, Path],
+                root_dir: Union[str, Path],
                 output_shape: Tuple[int, int],
                 augs_per_sample: int,
                 sampled_data_augs:List,
-                uniform_data_augs: List,
+                uniform_augs_before: List,
+                uniform_augs_after: List,
                 image_extensions:Optional[List[str]]=None,
                 seed: int=0):
         
@@ -25,7 +26,8 @@ class ParallelAugDirDs(AbstractParallelAugsDs):
                 output_shape=output_shape,
                 augs_per_sample=augs_per_sample,
                 sampled_data_augs=sampled_data_augs,
-                uniform_data_augs=uniform_data_augs,
+                uniform_augs_before= uniform_augs_before,
+                uniform_augs_after=uniform_augs_after,
                 seed=seed)
 
         if image_extensions is None:
@@ -33,7 +35,7 @@ class ParallelAugDirDs(AbstractParallelAugsDs):
 
         # the root directory can have any structure as long as 
         # it contains only image data
-        self.root = dirf.process_path(root, 
+        self.root_dir = dirf.process_path(root_dir, 
                                       file_ok=False,
                                       dir_ok=True,
                                       condition=lambda x: dirf.dir_contains_only_types(x, valid_extensions=image_extensions), # contains only image data
@@ -46,7 +48,7 @@ class ParallelAugDirDs(AbstractParallelAugsDs):
         self._prepare_idx2path()
         
         # count the number of samples once
-        self.data_count = len(os.listdir(root))
+        self.data_count = len(os.listdir(root_dir))
 
 
     def _prepare_idx2path(self):
@@ -54,13 +56,13 @@ class ParallelAugDirDs(AbstractParallelAugsDs):
         idx2path = {}
         counter = 0
 
-        for r, _, files in os.walk(self.root):
+        for r, _, files in os.walk(self.root_dir):
             for f in files:
                 file_path = os.path.join(r, f)
                 idx2path[counter] = file_path
                 counter += 1
         # sorted the samples for reproducibility
-        paths = sorted(list(idx2path.values))
+        paths = sorted(list(idx2path.values()))
         self.idx2path = dict([(i, p) for i, p in enumerate(paths)])
 
         # I initially thought of shuffling the indices since the directory might represent an image classification task
