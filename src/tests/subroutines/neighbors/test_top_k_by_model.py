@@ -16,7 +16,7 @@ from torchvision.datasets import FashionMNIST
 from mypt.code_utilities import directories_and_files as dirf
 from mypt.subroutines.neighbors import model_embs as me
 from mypt.models.simClr.simClrModel import ResnetSimClr
-from mypt.data.datasets.parallel_augmentation.parallel_aug_ds import ParallelAugDs
+from mypt.data.datasets.parallel_augmentation.parallel_aug_dir import ParallelAugDs
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 

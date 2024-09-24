@@ -18,6 +18,7 @@ def abs_path(path: Union[str, Path]) -> Path:
 
 
 DEFAULT_ERROR_MESSAGE = 'MAKE SURE THE passed path satisfies the condition passed with it'
+IMAGE_EXTENSIONS = ['.png', '.jpeg', '.jpg']
 
 
 def process_path(save_path: Union[str, Path, None],
@@ -230,8 +231,6 @@ def directory_partition(src_dir: Union[str, Path],
         
     return Path(des_dir)
 
-IMAGE_EXTENSIONS = ['.png', '.jpeg', '.jpg']
-
 
 def image_directory(path: Union[Path, str], image_extensions = None) -> bool:
     if image_extensions is None:
@@ -242,6 +241,7 @@ def image_directory(path: Union[Path, str], image_extensions = None) -> bool:
         if ext not in image_extensions:
             return False
     return True
+
 
 def image_dataset_directory(path: Union[Path, str], 
                             image_extensions: List[str] = None) -> bool:
@@ -262,6 +262,7 @@ def image_dataset_directory(path: Union[Path, str],
             return False
 
     return True
+
 
 def image_dataset_directory_error(path: Union[Path, str]) -> str: 
     return f"Please make sure the path: {path} contains only directories for classes and each class directory contains image files."
@@ -336,7 +337,7 @@ def _assign_files(dir: Union[str, Path], num_splits: int, seed: int) -> Dict:
     np.random.seed(seed)
 
     if  num_splits < 2:
-        raise ValueError(f"please make sure the number of splits is at least 2. Found: {num_splits}")
+        raise ValueError(f"the number of splits is expected to be at least 2. Found: {num_splits}")
     
 
     dir = process_path(dir, file_ok=False, condition=lambda p: len(os.listdir(p)) > 0, error_message="the directory cannot be empty !!!")
@@ -383,6 +384,7 @@ def _assign_files(dir: Union[str, Path], num_splits: int, seed: int) -> Dict:
         raise ValueError(f"the splits are too imbalanced")
 
     return split_file_map
+
 
 def split_dir_disjoint(dir: Union[str, Path], 
                        num_splits: int,

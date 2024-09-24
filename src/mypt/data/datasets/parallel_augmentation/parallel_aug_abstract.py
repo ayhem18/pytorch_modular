@@ -15,6 +15,11 @@ from ....code_utilities import pytorch_utilities as pu
 from abc import ABC, abstractmethod
 
 class AbstractParallelAugsDs(Dataset, ABC):
+    """
+    The parent class of Parallel Augmentation Datasets. The main functionality is implemented in
+    in the ._set_augmentations() method: returning 2 tr.Compose each outputting images of the same output shape
+    """
+
     @classmethod
     def load_sample(cls, sample_path: Union[str, Path]):
         # make sure the path is absolute
@@ -35,7 +40,7 @@ class AbstractParallelAugsDs(Dataset, ABC):
                 sampled_data_augs:List,
                 seed: int=0):
 
-        # reproducibiliy provides a much better idea about the performance
+        # reproducibility is crucial for a consistent evaluation of the model
         pu.seed_everything(seed=seed)
         
         # the output of the resulting data (After augmentation)

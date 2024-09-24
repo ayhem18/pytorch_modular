@@ -11,7 +11,7 @@ from ....code_utilities import directories_and_files as dirf
 from .parallel_aug_abstract import AbstractParallelAugsDs
 
 
-class ParallelAugDs(AbstractParallelAugsDs):
+class ParallelAugDirDs(AbstractParallelAugsDs):
     def __init__(self, 
                 root: Union[str, Path],
                 output_shape: Tuple[int, int],
@@ -21,24 +21,25 @@ class ParallelAugDs(AbstractParallelAugsDs):
                 image_extensions:Optional[List[str]]=None,
                 seed: int=0):
         
-        super.__init__(
+        super().__init__(
                 output_shape=output_shape,
                 augs_per_sample=augs_per_sample,
                 sampled_data_augs=sampled_data_augs,
                 uniform_data_augs=uniform_data_augs,
-                image_extensions=image_extensions,
                 seed=seed)
 
         if image_extensions is None:
             image_extensions = dirf.IMAGE_EXTENSIONS
 
-        self.root = dirf.process_path(root,
-                                    file_ok=False,
-                                    dir_ok=True,
-                                    # the directory should contain only images files (no dirs)
-                                    condition=lambda x: all([os.path.isfile(os.path.join(x, p)) and os.path.splitext(os.path.join(x, p))[-1] in self.im_exts for p in os.listdir(x)]),
-                                    error_message=f'The root directory is expected to contains only image files and no directories')
-
+        # the root directory can have any structure as long as 
+        # it contains only image data
+        self.root = dirf.process_path(root, 
+                                      file_ok=False,
+                                      dir_ok=True,
+                                      condition=lambda x: dirf.dir_contains_only_types(x, valid_extensions=image_extensions), # contains only image data
+                                      error_message=f'The root directory is expectd to contain only image data: specifically those extensions: {image_extensions}'
+                                      )
+        
         # create a mapping between a numerical index and the associated sample path for O(1) access time (on average...)
         self.idx2path = None
         # set the mapping from the index to the sample's path
@@ -49,15 +50,29 @@ class ParallelAugDs(AbstractParallelAugsDs):
 
 
     def _prepare_idx2path(self):
-        # make sure to sort files names (for cross-platform reproducibilty )
-        samples = sorted(os.listdir(self.root))
-        self.idx2path = dict([(index, os.path.join(self.root, fn)) for index, fn in enumerate(samples)])
+        # define a dictionary
+        idx2path = {}
+        counter = 0
+
+        for r, _, files in os.walk(self.root):
+            for f in files:
+                file_path = os.path.join(r, f)
+                idx2path[counter] = file_path
+                counter += 1
+        # sorted the samples for reproducibility
+        paths = sorted(list(idx2path.values))
+        self.idx2path = dict([(i, p) for i, p in enumerate(paths)])
+
+        # I initially thought of shuffling the indices since the directory might represent an image classification task
+        # and the consecutive indices belong to the same class. However, as I can see this is also the case
+        # for Pytorch built-in datasets
+        # and the shuffling part should be done at the dataloader level
 
 
     def __getitem__(self, index: int):
         # extract the path to the sample (using the map between the index and the sample path !!!)
         sample_image = self.load_sample(self.idx2path[index])   
-        augs1, augs2 = self.__set_augmentations()
+        augs1, augs2 = self._set_augmentations()
         s1, s2 = augs1(sample_image), augs2(sample_image) 
         return s1, s2
 
