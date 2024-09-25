@@ -57,19 +57,6 @@ def save_checkpoint(model: nn.Module,
                         error_message="Make sure the checkpoint has the correct extension")
 
 
-# def load_model(base_model: nn.Module,
-#                path: Union[str, Path]) -> nn.Module:
-#     # first process the path
-#     path = process_path(path,
-#                              dir_ok=False,
-#                              file_ok=True,
-#                              condition=lambda p: not os.path.isfile(p) or __verify_extension(p),
-#                              error_message='MAKE SURE THE FILE PASSED IS OF THE CORRECT EXTENSION')
-
-#     base_model.load_state_dict(torch.load(path))
-
-#     return base_model
-
 
 # let's define functionalities for reproducibility and random seeds
 
@@ -78,16 +65,16 @@ def seed_everything(seed: int = 69):
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed=seed)
-    torch.use_deterministic_algorithms(True, warn_only=True) # certain layers have no deterministic implementation... well need to compromise on this one...
+    torch.use_deterministic_algorithms(True, warn_only=True) # certain layers have no deterministic implementation... we'll need to compromise on this one...
     torch.backends.cudnn.benchmark = False 
 
-    # # the final to ensure reproducibility is to set the environment variable: # CUBLAS_WORKSPACE_CONFIG=:16:8
+    # the final step to ensure reproducibility is to set the environment variable: # CUBLAS_WORKSPACE_CONFIG=:16:8
     import warnings
     # first check if the CUBLAS_WORSKPACE_CONFIG variable is set or not
     env_var = os.getenv('CUBLAS_WORKSPACE_CONFIG')
     if env_var is None:
         # the env variable was not set previously
-        os.environ['CUBLAS_WORKSPACE_CONFIG'] = ':16:8'
+        os.environ['CUBLAS_WORKSPACE_CONFIG'] = ':16:8' # this is not the only viable value. I cannot remember the other value at the time of writing this code.
     else:
         if env_var not in [':16:8']:
             warnings.warn(message=f"the env variable 'CUBLAS_WORKSPACE_CONFIG' is set to the value {env_var}. setting it to: ':16:8' ")

@@ -53,32 +53,40 @@ def tune_main_function(
     initial_lr = 0.3 * (batch_size / 256) # according to the paper's formula
 
 
+    optimization_task = Task.init(
+                        project_name=TRACK_PROJECT_NAME, 
+                        task_name=TUNING_TASK_RUN_NAME,
+                        task_type=Task.TaskTypes.optimizer,
+                        reuse_last_task_id=False, 
+
+                        auto_connect_arg_parser=False, 
+                        auto_connect_frameworks=False, 
+                        auto_connect_streams=False
+                    )
+        
+    # task.connect(['num_fc_layers', 'dropout'])
+
     # define a function as a the tuning task
     def tune_task_function(
         num_fc_layers: int, 
         dropout: float,
-        set_up: bool=False
-    ):
-        if set_up:
-            # create the the task with the given run_name
-            task = Task.init(project_name=TRACK_PROJECT_NAME, task_name=TUNING_TASK_RUN_NAME)
-            Task
-            task.connect('num_fc_layers')
-            return
+    ):  
+        task, sub_exp_logger = _set_logging(use_logging=True, 
+                                            run_name=TUNING_TASK_RUN_NAME, 
+                                            return_task=True,
+                                            auto_connect_arg_parser=False, 
+                                            auto_connect_frameworks=False, 
+                                            auto_connect_streams=False
+                                            )
         
+        # connect the task to the 'num_fc_layers' and 'dropout' parameters
+        task.connect({'num_fc_layers': None, 'dropout': None})
+
+        # and since the 'sub_exp_logger' is actually connected to the 'task' object, ClearML should be able to capture the desired metrics
+
         # the exact loging directory depends on the number of experiments conducted so far
         sub_exp_log_dir = dirf.process_path(os.path.join(parent_log_dir, f'sub_exp_{len(os.listdir(parent_log_dir)) + 1}'))
 
-        # set the logging
-        sub_exp_logger = _set_logging(
-                                    use_logging=True, 
-                                    task_name=TUNING_TASK_RUN_NAME, # use the same run_name as in setup mode
-                                    # pass this argument as per the instructions of the ClearMl tutorial: 
-                                    # https://clear.ml/docs/latest/docs/guides/optimization/hyper-parameter-optimization/examples_hyperparam_opt/
-                                    reuse_last_task_id=False  
-                                    )
-        
-        # set the checkpoint 
 
         checkpnt_callback = _set_ckpnt_callback(val_dl=val_dl, 
                                                 num_epochs=num_epochs_per_job, 
@@ -138,10 +146,14 @@ def tune_main_function(
     tune_optimizer = HyperParameterOptimizer(
         base_task_id=Task.get_task(project_name=TRACK_PROJECT_NAME, task_name=TUNING_TASK_RUN_NAME).id, 
 
+
+        # adding the 'General/' prefix just because of the tutorial: 
+        # https://github.com/allegroai/clearml/blob/master/examples/optimization/hyper-parameter-optimization/hyper_parameter_optimizer.py
+
         hyper_parameters=[
-            LogUniformParameterRange(name='dropout', min_value='0.1', max_value='1'),
-            DiscreteParameterRange(name='num_fc_layers', values=list(range(2, 6))), # from 2 to 5 fully connected layers 
-            DiscreteParameterRange(name='set_up', values=[False]), # from 2 to 5 fully connected layers 
+            LogUniformParameterRange(name='General/dropout', min_value='0.1', max_value='1'),  
+            DiscreteParameterRange(name='General/num_fc_layers', values=list(range(2, 6))), # from 2 to 5 fully connected layers 
+            # DiscreteParameterRange(name='set_up', values=[False]), 
         ],
         # this is the objective metric we want to maximize/minimize
         objective_metric_title='val_epoch_loss',

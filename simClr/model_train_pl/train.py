@@ -25,7 +25,9 @@ from .constants import (_TEMPERATURE, _OUTPUT_DIM, _OUTPUT_SHAPE,
                         TRACK_PROJECT_NAME) 
 
 
-def _set_logging(use_logging: bool, run_name: str, **kwargs) -> Optional[Logger]:
+def _set_logging(use_logging: bool, 
+                 run_name: str, 
+                 return_task: bool, **kwargs) -> Optional[Logger]:
 
     if use_logging:
         # create a clearml task object
@@ -36,7 +38,11 @@ def _set_logging(use_logging: bool, run_name: str, **kwargs) -> Optional[Logger]
         logger = task.get_logger()
     else:
         logger = None
-
+        task = None
+    
+    if return_task:
+        return task, logger
+    
     return logger
 
 
@@ -103,7 +109,8 @@ def train_simClr_wrapper(
 
     # set the logger
     logger = _set_logging(use_logging=use_logging, 
-                        run_name=run_name)
+                        run_name=run_name, 
+                        return_task=False)
 
     # DATA: 
     train_dl, val_dl = _set_data(train_data_folder=train_data_folder,
