@@ -11,7 +11,7 @@ from mypt.shortcuts import P
 from mypt.data.datasets.image_classification import utils as icu
 from mypt.code_utilities import directories_and_files as dirf
 
-from model_train_pl.tuning import tune_main_function
+from model_train_pl.tuning_optimizer import tune_main_function
 from model_train_pl.constants import VAL_SPLIT, _LARGEST_BATCH_SIZE
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
@@ -62,6 +62,7 @@ def tune_main():
     tune_main_function(train_data_folder=os.path.join(imagenette_tune, 'train'),
                        val_data_folder=os.path.join(imagenette_tune, 'val'),
                        dataset='imagenette',
+                       tune_exp_number=n + 1,
                        num_epochs_per_job=3,
                        val_per_epoch=1,
                        batch_size=_LARGEST_BATCH_SIZE,
@@ -75,8 +76,9 @@ if __name__ == '__main__':
     imagenette_ds_folder = os.path.join(DATA_FOLDER, 'imagenette', 'train')
     imagenette_tune = os.path.join(DATA_FOLDER, 'imagenette_tune')
 
-    # make this function is called at least once !!! (to prepare the data for hyper-parameter tuning...)
+    # make sure the function commented below is called at least once !!! (to prepare the data for hyper-parameter tuning...)
     # train_folder, val_folder, test_folder = tuning_data_preparation(imagenette_ds_folder=imagenette_ds_folder, 
     #                                                                 des_data_folder=imagenette_tune)
+
 
     tune_main()

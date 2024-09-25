@@ -6,6 +6,7 @@ This script contais the training code for the SimClrWrapper PL model
 import pytorch_lightning as L
 
 from clearml import Task, Logger
+from clearml.errors import UsageError
 from typing import Union, Optional, Tuple
 from pathlib import Path
 from torch.utils.data import DataLoader
@@ -27,15 +28,24 @@ from .constants import (_TEMPERATURE, _OUTPUT_DIM, _OUTPUT_SHAPE,
 
 def _set_logging(use_logging: bool, 
                  run_name: str, 
-                 return_task: bool, **kwargs) -> Optional[Logger]:
+                 return_task: bool, 
+                 init_task:bool=True,
+                 **kwargs) -> Optional[Logger]:
 
     if use_logging:
         # create a clearml task object
-        task = Task.init(project_name=TRACK_PROJECT_NAME,
-                         task_name=run_name,
-                         **kwargs
-                         )
-        logger = task.get_logger()
+        if init_task:
+            task = Task.init(project_name=TRACK_PROJECT_NAME,
+                            task_name=run_name,
+                            **kwargs
+                            )
+            logger = task.get_logger()
+        else:
+            task = Task.create(project_name=TRACK_PROJECT_NAME,
+                            task_name=run_name,
+                            # **kwargs
+                            )
+            logger = task.get_logger()
     else:
         logger = None
         task = None
