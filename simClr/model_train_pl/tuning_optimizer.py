@@ -80,20 +80,21 @@ def tune_main_function(
     tune_optimizer = HyperParameterOptimizer(
         base_task_id=args['template_task_id'], # calling the template_task_id through the 'args' seems like the only way to connect the hp optimizer to the 'optimization_task'
 
-        # adding the 'General/' prefix just because of the tutorial: 
+        # adding the 'General/' prefix, according to the tutorial: 
         # https://github.com/allegroai/clearml/blob/master/examples/optimization/hyper-parameter-optimization/hyper_parameter_optimizer.py
 
         hyper_parameters=[
-            LogUniformParameterRange(name='General/dropout', min_value='0.1', max_value='1'),  
+            LogUniformParameterRange(name='General/dropout', min_value='-3', max_value=0),  # from e^{-3} to 1
             DiscreteParameterRange(name='General/num_fc_layers', values=list(range(2, 6))), # from 2 to 5 fully connected layers 
             DiscreteParameterRange(name='General/set_up', values=[False]), # always  use False for 'set_up'
         ],
+
         # this is the objective metric we want to maximize/minimize
         objective_metric_title='val_epoch_loss',
         objective_metric_series='val_epoch_loss',
-        # now we decide if we want to maximize it or minimize it (accuracy we maximize)
+        # minimize the val_epoch_loss
         objective_metric_sign='min',
-        max_number_of_concurrent_tasks=1,
+        max_number_of_concurrent_tasks=1, #humble starts
 
         optimizer_class=OptimizerOptuna,
         # If specified all Tasks created by the HPO process will be created under the `spawned_project` project
@@ -108,7 +109,7 @@ def tune_main_function(
     # run the optimizer
     tune_optimizer.start_locally()
 
-    # make sure to call the 'wait' function as the experiments are running on the background 
+    # make sure to call the 'wait' function as the experiments are running on background threads 
     # and not the main process...
     tune_optimizer.wait()
 

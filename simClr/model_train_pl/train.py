@@ -30,7 +30,7 @@ def _set_logging(use_logging: bool,
                  run_name: str, 
                  return_task: bool, 
                  init_task:bool=True,
-                 **kwargs) -> Optional[Logger]:
+                 **kwargs) -> Union[Tuple[Task, Logger], Optional[Logger]]:
 
     if use_logging:
         # create a clearml task object
