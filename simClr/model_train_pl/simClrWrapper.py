@@ -161,9 +161,7 @@ class SimClrModelWrapper(LightningModule):
                                         iteration=int(round(self.global_step / len(self.train_batch_logs))) # the epoch index can be deduced from global step and the length of self.train_batch_logs
                                         )
             
-        # clear the list
         self.train_batch_logs.clear()
-
         # log the epoch validation loss to use it for checkpointing
         self.log(name='train_epoch_loss', value=train_epoch_loss)
 
@@ -188,9 +186,9 @@ class SimClrModelWrapper(LightningModule):
                                         title="val_epoch_loss", 
                                         series="val_epoch_loss", 
                                         value=val_epoch_loss, # 
-                                        iteration=int(round(self.global_step / len(self.train_batch_logs)))
+                                        iteration=int(round(self.global_step / len(self.val_batch_logs)))
                                         )
-        # clear the list
+        # clear the training and validation logs after the
         self.val_batch_logs.clear()
 
         # log the epoch validation loss to use it for checkpointing

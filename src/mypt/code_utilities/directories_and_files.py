@@ -1,10 +1,10 @@
 """
 This scripts contains functionalities to manipulate files and directories
 """
-import os, zipfile, shutil, re, random, itertools
+import os, zipfile, shutil, re, random
 import numpy as np
 
-from typing import Union, Optional, List, Dict
+from typing import Union, Optional, List, Dict, Callable, Tuple
 from pathlib import Path
 from datetime import datetime
 from sklearn.model_selection import train_test_split
@@ -24,15 +24,21 @@ IMAGE_EXTENSIONS = ['.png', '.jpeg', '.jpg']
 def process_path(save_path: Union[str, Path, None],
                       dir_ok: bool = True,
                       file_ok: bool = True,
-                      condition: callable = None,
+                      must_exist: bool = False,
+                      condition: Callable = None,
                       error_message: str = DEFAULT_ERROR_MESSAGE) -> Union[str, Path, None]:
+
     if save_path is not None:
         # first make the save_path absolute
         save_path = abs_path(save_path)
 
         if not os.path.exists(save_path):
+            if must_exist:
+                raise ValueError(f"Passing a non-existing directory while setting the 'must_exist' argument to True")
+
             if dir_ok and not file_ok:
                 os.makedirs(save_path)
+        
             else:
                 raise ValueError(f"when passing a non-existing file, the parameters dir_ok and file_ok must be set to True and False respectively")
 
@@ -41,9 +47,26 @@ def process_path(save_path: Union[str, Path, None],
              (not dir_ok and os.path.isdir(save_path))), \
             f'MAKE SURE NOT TO PASS A {"directory" if not dir_ok else "file"}'
 
-        assert condition is None or condition(save_path), error_message
+        if condition is not None:
+            condition_output = condition(save_path)
+            # check the type of the condition output
+            if not isinstance(condition_output, (tuple, bool)):
+                raise TypeError(f"The condition function must output either a tuple[bool, str] where 'str' can represent the error, or a 'bool' value. Found: {condition_output}")
 
+            if isinstance(condition_output, Tuple):
+                res, possible_error = condition_output
+                # make sure the types are correct (since we cannot use generic types with the 'isinstance' function) 
+                if not (isinstance(res, bool) and isinstance(possible_error, str)):
+                    raise TypeError(f"if the condition function outputs a tuple. The first element must be a bool and the second a str. found: {condition_output}")
 
+                if not res:
+                    raise ValueError(f"general error message: {error_message}\n specific error message: {possible_error}")
+
+            # at this point, we know that 'condition_output' is a boolean variable 
+            # only consider the case of condition_output = False
+            elif not condition_output:
+                raise ValueError(error_message)
+                
     return save_path
 
 
@@ -268,7 +291,7 @@ def image_dataset_directory_error(path: Union[Path, str]) -> str:
     return f"Please make sure the path: {path} contains only directories for classes and each class directory contains image files."
 
 
-def dir_contains_only_types(directory:Union[str, Path], valid_extensions: List[str]) -> bool:
+def dir_contains_only_types(directory:Union[str, Path], valid_extensions: List[str]) -> Tuple[bool, str] | bool:
     # make sure to convert the extensions to lower case
     valid_extensions = [e.lower() for e in valid_extensions]
     directory = process_path(directory, dir_ok=True, file_ok=False)
@@ -276,7 +299,8 @@ def dir_contains_only_types(directory:Union[str, Path], valid_extensions: List[s
         for f in files:
             file_path = os.path.join(r, f)
             if os.path.splitext(file_path)[-1].lower() not in valid_extensions:
-                return False
+                return False, f"the file {os.path.basename(file_path)} has a disallowed extension."
+    
     return True
 
 

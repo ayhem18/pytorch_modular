@@ -46,9 +46,6 @@ class ParallelAugDirDs(AbstractParallelAugsDs):
         self.idx2path = None
         # set the mapping from the index to the sample's path
         self._prepare_idx2path()
-        
-        # count the number of samples once
-        self.data_count = len(os.listdir(root_dir))
 
 
     def _prepare_idx2path(self):
@@ -64,6 +61,7 @@ class ParallelAugDirDs(AbstractParallelAugsDs):
         # sorted the samples for reproducibility
         paths = sorted(list(idx2path.values()))
         self.idx2path = dict([(i, p) for i, p in enumerate(paths)])
+        self.data_count = len(self.idx2path)
 
         # I initially thought of shuffling the indices since the directory might represent an image classification task
         # and the consecutive indices belong to the same class. However, as I can see this is also the case

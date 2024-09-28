@@ -53,7 +53,8 @@ def tune_main():
                          f"Found: {os.listdir(imagenette_tune)}. Make sure to call the 'tuning_data_preparation' fuction"))
 
 
-    parent_log_dir = dirf.process_path(os.path.join(SCRIPT_DIR, 'tune_logs'), dir_ok=True, file_ok=False)
+    parent_log_dir = dirf.process_path(os.path.join(SCRIPT_DIR, 'logs', 'tune_logs'), 
+                                       dir_ok=True, file_ok=False)
     
     n = len(os.listdir(parent_log_dir))
 
@@ -63,11 +64,11 @@ def tune_main():
                        val_data_folder=os.path.join(imagenette_tune, 'val'),
                        dataset='imagenette',
                        tune_exp_number=n + 1,
-                       num_epochs_per_job=3,
+                       num_epochs_per_job=2,
                        val_per_epoch=1,
                        batch_size=_LARGEST_BATCH_SIZE,
                        parent_log_dir=tune_parent_dir,
-                       num_warmup_epochs=5,
+                       num_warmup_epochs=0,
                        num_jobs=3,
                        )
 

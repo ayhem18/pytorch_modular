@@ -22,7 +22,7 @@ def func(arg1: int,
                                     task_name=f'test_run').id # the template task should be already created at this point
 
     optimization_task = Task.init( 
-                        project_name='HP_OPTIMIZATION', # cannot use Task.init() simultaneously in the same project
+                        project_name='HP_OPTIMIZATION',
                         task_name=f'test_run_hp_optimization',
                         task_type=Task.TaskTypes.optimizer,
                         reuse_last_task_id=False, 

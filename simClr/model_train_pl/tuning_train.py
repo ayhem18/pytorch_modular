@@ -19,8 +19,8 @@ from .set_ds import _set_data_tune
 from .train import  _set_logging, _set_ckpnt_callback
 from .simClrWrapper import ResnetSimClrWrapper
 from .constants import (_TEMPERATURE, _OUTPUT_DIM, _OUTPUT_SHAPE, 
-                        ARCHITECTURE_IMAGENETTE, ARCHITECTURE_FOOD_101, 
-                        TRACK_PROJECT_NAME, TUNING_TASK_RUN_NAME) 
+                        ARCHITECTURE_IMAGENETTE, ARCHITECTURE_FOOD_101, TUNING_TASK_RUN_NAME) 
+
 
 def tune_template_task_function(
         train_data_folder:Union[str, Path],          
@@ -35,10 +35,24 @@ def tune_template_task_function(
         output_shape:Tuple[int, int]=None, 
         num_warmup_epochs:int=10,
         val_per_epoch: int = 3,
+        log_per_batch:int=5,
         seed:int = 69,
         set_up: bool = False,
         initial_metric_value:float=10
     ):
+    """
+    This function represents the 'template_task': the piece of code that will be cloned by the ClearML optimizer.
+    
+    few ideas to keep in mind: 
+
+    * there are two types of parameters: 
+        1. passed through the function parameters: train_data_folder, val_data_folder, num_warmup_epochs.. those are not hp optimized by the HpOptimizer
+        2. hyperparameters modified by the HpOptimizer
+
+    * calling the function first with 'set_up=True' will create a task and a dictionary called 'args', connect the 'args' to the task
+    and hence save all non-hp to remotely so that different clones of the task will all contain this information (accessed through the 'args' dictionary !!!!)
+    
+    """
 
     if output_shape is None:
         output_shape = _OUTPUT_SHAPE
@@ -47,7 +61,7 @@ def tune_template_task_function(
     task, sub_exp_logger = _set_logging(use_logging=True, 
                                         run_name=f'{TUNING_TASK_RUN_NAME}_{tune_exp_number}', 
                                         return_task=True,
-                                        init_task=False, 
+                                        init_task=True,                                         
                                         auto_connect_arg_parser=False, 
                                         auto_connect_frameworks=False, 
                                         auto_connect_streams=False
@@ -57,9 +71,10 @@ def tune_template_task_function(
     sub_exp_logger.report_scalar(title='val_epoch_loss', series='val_epoch_loss', value=initial_metric_value, iteration=0)
     
     # connect the task to the 'num_fc_layers' and 'dropout' parameters
-    args = {'num_fc_layers': None, 'dropout': None}
+    args = {'num_fc_layers': 2, 'dropout': None}
     
     if set_up:
+        # add the non-hp parameters to the 'args' so they can be used across different clones
         args.update({
                 "train_data_folder":train_data_folder,                 
                 "val_data_folder":val_data_folder,
@@ -74,13 +89,15 @@ def tune_template_task_function(
                 "num_warmup_epochs":num_warmup_epochs,
                 "val_per_epoch": val_per_epoch,
                 "seed":seed,
+                'log_per_batch': log_per_batch,
                 'set_up': True
                 })
 
     task.connect(args)
     
-    if args['set_up']:
-        return 
+    # if args['set_up']:
+    #     task.close()
+    #     return 
 
 
     # set the data
@@ -91,17 +108,27 @@ def tune_template_task_function(
                                 batch_size=args['batch_size'], 
                                 seed=args['seed'])
     
+    print(f"train_dl length {len(train_dl)}" )
+    print(f"val_dl length {len(val_dl)}" )
+
     initial_lr = 0.3 * (args['batch_size'] / 256) # according to the paper's formula
     
+    parent_log_dir = dirf.process_path(args['parent_log_dir'], 
+                                       dir_ok=True, 
+                                       file_ok=False)
     
+    # clear any empty directories in the 'parent_log_dir'
+    dirf.clear_directory(parent_log_dir, lambda x: os.path.isdir(x) and len(os.listdir(x)) == 0)
+
     # the exact loging directory depends on the number of experiments conducted so far
-    sub_exp_log_dir = dirf.process_path(os.path.join(args['parent_log_dir'], f'sub_exp_{len(os.listdir(args["parent_log_dir"])) + 1}'))
+    sub_exp_log_dir = dirf.process_path(os.path.join(parent_log_dir, f'sub_exp_{len(os.listdir(parent_log_dir)) + 1}'), 
+                                        dir_ok=True, 
+                                        file_ok=False)
 
-
-    checkpnt_callback = _set_ckpnt_callback(val_dl=args['val_dl'], 
+    checkpnt_callback = _set_ckpnt_callback(val_dl=val_dl, 
                                             num_epochs=args['num_epochs'], 
                                             val_per_epoch=args['val_per_epoch'], 
-                                            log_dir=args['sub_exp_log_dir'])
+                                            log_dir=sub_exp_log_dir)
 
     wrapper = ResnetSimClrWrapper(
                                 # model parameters
@@ -111,7 +138,7 @@ def tune_template_task_function(
 
                                 #logging parameters
                                 logger=sub_exp_logger,
-                                log_per_batch=3,
+                                log_per_batch=args['log_per_batch'],
                                 
                                 # loss parameters 
                                 temperature=_TEMPERATURE,
@@ -148,4 +175,5 @@ def tune_template_task_function(
                 val_dataloaders=val_dl,
                 )
 
-    
+    # close the task
+    task.close()
