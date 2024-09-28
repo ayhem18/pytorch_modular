@@ -56,6 +56,9 @@ def tune_main():
     parent_log_dir = dirf.process_path(os.path.join(SCRIPT_DIR, 'logs', 'tune_logs'), 
                                        dir_ok=True, file_ok=False)
     
+    # make sure to exclude all the empty directories
+    dirf.clear_directory(directory=parent_log_dir, condition=lambda x: os.path.isdir(x) and len(os.listdir(x)) == 0)
+
     n = len(os.listdir(parent_log_dir))
 
     tune_parent_dir = os.path.join(parent_log_dir, f'tune_exp_{n + 1}')
@@ -69,7 +72,6 @@ def tune_main():
                        batch_size=_LARGEST_BATCH_SIZE,
                        parent_log_dir=tune_parent_dir,
                        num_warmup_epochs=0,
-                       num_jobs=3,
                        )
 
 

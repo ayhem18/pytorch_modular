@@ -67,8 +67,6 @@ def tune_template_task_function(
                                         auto_connect_streams=False
                                         )
     
-    # log the 'val_epoch_loss' metric so that the hyperparameter optimizer can find it 
-    sub_exp_logger.report_scalar(title='val_epoch_loss', series='val_epoch_loss', value=initial_metric_value, iteration=0)
     
     # connect the task to the 'num_fc_layers' and 'dropout' parameters
     args = {'num_fc_layers': 2, 'dropout': None}
@@ -95,9 +93,11 @@ def tune_template_task_function(
 
     task.connect(args)
     
-    # if args['set_up']:
-    #     task.close()
-    #     return 
+    if args['set_up']:
+        # log the 'val_epoch_loss' metric so that the hyperparameter optimizer can find it 
+        sub_exp_logger.report_scalar(title='val_epoch_loss', series='val_epoch_loss', value=initial_metric_value, iteration=0)
+        task.close()
+        return 
 
 
     # set the data

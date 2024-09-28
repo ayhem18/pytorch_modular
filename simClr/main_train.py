@@ -41,29 +41,6 @@ def train_main():
                         )
 
 if __name__ == '__main__':
-    # train_main()
-    train_data_folder = os.path.join(SCRIPT_DIR, 'data', 'imagenette_tune', 'train')
-    val_data_folder = os.path.join(SCRIPT_DIR, 'data', 'imagenette_tune', 'val')
+    train_main()
 
-    from model_train_pl.set_ds import _set_data_tune
-    train_dl, val_dl = _set_data_tune(train_data_folder, val_data_folder, 
-                        output_shape=(200, 200),
-                        batch_size=10, 
-                        dataset='imagenette')
-
-    print(len(train_dl))
-    print(len(val_dl))
-
-    # from mypt.data.datasets.parallel_augmentation import parallel_aug_dir as pad
-    # from torchvision import transforms as tr
-    # ds = pad.ParallelAugDirDs(train_data_folder, 
-    #                      output_shape=(200, 200), 
-    #                      augs_per_sample=2, 
-    #                      sampled_data_augs=[tr.AutoAugment(), tr.CenterCrop(size=(150, 150)), tr.Grayscale()],
-    #                      uniform_augs_after=[],
-    #                      uniform_augs_before=[])
-    
-    # print(len(ds))
-    
-    # _set_data_tune()
 

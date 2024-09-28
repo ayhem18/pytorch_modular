@@ -1,7 +1,7 @@
 """
 This script contain functionalities related to data loading shared among different tasks
 """
-import torch
+import torch, warnings
 
 from functools import partial
 from warnings import warn
@@ -37,6 +37,18 @@ def initialize_train_dataloader(dataset_object: Dataset,
 
     dl_train_gen = torch.Generator()
     dl_train_gen.manual_seed(seed)
+
+    # under the rare case that the size of the dataset is smaller than the batch size, this function will return an empty 
+    # dataloader when the 'drop_last' argument is set to True
+
+    # let's add a check to that: 
+    if len(dataset_object) <= batch_size and drop_last:
+        raise ValueError(f"Found a dataset with size {len(dataset_object)} and a batch size : {batch_size}. When setting the 'drop_last' param to True, the dataloader will be empty. Make sure there is no issue with dataset size computation...")
+
+    # if the size of the dataset is still less than the batch size, raise a warning (as it might signal a problem in the dataset size calculation)
+    if len(dataset_object) <= batch_size:
+        warnings.warn(message=f"Found a dataset with size {len(dataset_object)} and a batch size : {batch_size}. Make sure there is no issue with dataset size computation...")
+
 
     if num_workers != 0:
         dl_train = DataLoader(dataset=dataset_object, 
