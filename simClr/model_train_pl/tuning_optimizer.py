@@ -113,5 +113,4 @@ def tune_main_function(
     # and not the main process...
     tune_optimizer.wait()
 
-    # not setting the time limit for now
     tune_optimizer.stop()
