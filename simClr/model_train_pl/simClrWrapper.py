@@ -4,19 +4,46 @@ This file contains a pytorch lightning wrapper for the SimClr Model
 
 import torch, warnings, torch_optimizer as topt, numpy as np
 
-from typing import Union, Tuple, List, Dict, Optional, Iterator
+from typing import Union, Tuple, List, Dict, Optional, Iterator, Callable
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from pytorch_lightning import LightningModule
-from clearml import Task, Logger
+from clearml import Logger
 
 from mypt.losses.simClrLoss import SimClrLoss
-from mypt.code_utilities import pytorch_utilities as pu, directories_and_files as dirf
+from mypt.code_utilities import directories_and_files as dirf
 from mypt.models.simClr.simClrModel import SimClrModel, ResnetSimClr
 from mypt.schedulers.warmup import set_warmup_epochs
+from mypt.similarities.cosineSim import CosineSim
+
+def cosine_sims_model_embeddings_with_transformations(model: torch.nn.Module,
+                                                      batch: torch.nn.Module,
+                                                      transformations: List[Callable]
+                                                      ):
+    n_samples = len(batch)
+    # set the model to eval mode
+    model.eval()
+    # apply the transformations to the batches
+    sims_transformations = []
+
+    with torch.no_grad():
+        batch_embds = model.forward(batch)
+
+        for t in transformations:
+            batch_t = t.forward(batch)
+            batch_t_embds = model.forward(batch_t)
+            # compute the similarities between a sample and its augmented version
+            sample_aug_similarities = torch.diagonal(CosineSim().forward(batch_embds, batch_t_embds)).unsqueeze(-1).cpu()
+            assert sample_aug_similarities.shape == (n_samples, 1)
+    
+    final_sims = torch.concat(sims_transformations, dim=1) # concatenate horizontally
+    assert final_sims.shape == (n_samples, n_samples)
+    return final_sims  
+
 
 
 
 class SimClrModelWrapper(LightningModule):
+    ######################### Parameters Verification #########################
     @classmethod
     def verify_optimizer_parameters(cls, num_epochs: int, num_warmup_epochs:int):
         if num_warmup_epochs >= num_epochs:
@@ -55,6 +82,9 @@ class SimClrModelWrapper(LightningModule):
                 num_epochs: int,
                 num_warmup_epochs:int,                 
 
+                # arguments for the extra dataloaders
+                debug_embds_vs_trans: bool,
+                debug_transformations: Optional[List],
                 ):
         # super class call
         super().__init__()
@@ -80,11 +110,15 @@ class SimClrModelWrapper(LightningModule):
         self.train_batch_logs: List[Dict[str, float]] = [] # a field to save the metrics logged during the training batches
         self.val_batch_logs: List[Dict[str, float]] = [] # a field to save the metrics logged during the validation batches
 
+        self.debug_embds_vs_trans = debug_embds_vs_trans
 
-    def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-        return self.model.forward(x)
+        if self.debug_embds_vs_trans and debug_transformations is None:
+            raise ValueError(f"setting debug_embds_vs_trans to True without passing debugging transformations")
+
+        self.debug_transformations = debug_transformations
 
 
+    ######################### Logging methods #########################
     def _batch_log(self, 
                    log_dict: Dict, 
                    batch_idx: int) -> None:
@@ -105,10 +139,14 @@ class SimClrModelWrapper(LightningModule):
             self.myLogger.report_scalar(title=key, 
                                     series=key, 
                                     value=value, 
-                                    iteration=self.global_step # 
+                                    iteration=self.global_step
                                     )
-            
 
+
+    ######################### Model forward pass #########################
+    def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        return self.model.forward(x)
+        
     def _step(self, batch: Tuple[torch.Tensor, torch.Tensor], split: str) -> Tuple[torch.Tensor, Dict]:
         x1_batch, x2_batch = batch
         
@@ -138,7 +176,8 @@ class SimClrModelWrapper(LightningModule):
 
         return batch_loss_obj, log_dict
 
-    
+
+    ######################### training methods #########################    
     def training_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int) -> SimClrLoss:
         batch_loss_obj, log_dict = self._step(batch, split='train')
         self._batch_log(log_dict=log_dict, batch_idx=batch_idx)
@@ -164,8 +203,10 @@ class SimClrModelWrapper(LightningModule):
         self.train_batch_logs.clear()
         # log the epoch validation loss to use it for checkpointing
         self.log(name='train_epoch_loss', value=train_epoch_loss)
+    
 
 
+    ######################### validation methods #########################
     def validation_step(self, val_batch: Tuple[torch.Tensor, torch.Tensor], batch_index:int) -> SimClrLoss:
         batch_loss_obj, log_dict = self._step(val_batch, split='val')
         self._batch_log(log_dict=log_dict, batch_idx=0) # log all validation batches
@@ -175,7 +216,6 @@ class SimClrModelWrapper(LightningModule):
         return batch_loss_obj
 
 
-    # make sure to name the methods according to the ModelHooks mixin extended by the LightningModule
     def on_validation_epoch_end(self):
         # calculate the average of batch losses
         val_epoch_loss = float(np.mean(self.val_batch_logs))
@@ -193,8 +233,9 @@ class SimClrModelWrapper(LightningModule):
 
         # log the epoch validation loss to use it for checkpointing
         self.log(name='val_epoch_loss', value=val_epoch_loss)
+    
 
-
+    ######################### optimizers #########################
     def configure_optimizers(self):
         # I found only one good implementation of LARS through the lightning.flash package. The latter requires pytorch lightning version < 2.0 as a dependency. The current version is 2.4 ...
         # switching to a supported implementation of Lamb (another large batch learning scheduler)
@@ -219,8 +260,7 @@ class SimClrModelWrapper(LightningModule):
 
         return {"optimizer": optimizer, "lr_scheduler": cosine_scheduler}
 
-
-    # added to ensure that the model behaves as expected: more related to Pytorch  nn.Module than Pytorch Lightning
+    ######################### Pytorch.nn.Module methods #########################
     def to(self, *args, **kwargs):
         self.model = self.model.to(*args, **kwargs)
         return self

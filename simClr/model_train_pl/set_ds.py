@@ -146,7 +146,8 @@ def _set_imagenette_ds(
     return train_ds, val_ds
 
 
-_ds_name_ds_function = {"imagenette": _set_imagenette_ds, "food101": _set_food101_ds}
+_ds_name_ds_function = {"imagenette": _set_imagenette_ds, 
+                        "food101": _set_food101_ds}
 
 
 def _verify_paths(dataset: str, 

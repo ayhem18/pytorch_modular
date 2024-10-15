@@ -296,8 +296,9 @@ def test_residual_fc_block(num_tests: int = 10 ** 3):
 
 
 if __name__ == '__main__':
-    # test_generic_fc_block()
-    # test_exponential_fc_block()
-    # test_residual_fc_block()
+    assert 'cuda' in pu.get_default_device(), "no cuda, this will take ages..."
+    test_generic_fc_block()
+    test_exponential_fc_block()
+    test_residual_fc_block()
     test_residual_fc_block(num_tests=10)
     pass
