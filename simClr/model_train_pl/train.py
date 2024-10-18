@@ -19,7 +19,6 @@ from mypt.shortcuts import P
 from .simClrWrapper import ResnetSimClrWrapper
 from .set_ds import _set_data
 
-# 
 from .constants import (_TEMPERATURE, _OUTPUT_DIM, _OUTPUT_SHAPE, 
                         ARCHITECTURE_IMAGENETTE, ARCHITECTURE_FOOD_101, 
                         _NUM_FC_LAYERS, _DROPOUT,
@@ -149,7 +148,7 @@ def train_simClr_wrapper(
                                   #logging parameters
                                   logger=logger,
                                   log_per_batch=3,
-                                  
+                                  val_per_epoch=val_per_epoch,
                                   # loss parameters 
                                   temperature=_TEMPERATURE,
                                   debug_loss=True,
@@ -178,17 +177,16 @@ def train_simClr_wrapper(
                         logger=False, # since I am not using any of the supported logging options, logger=False + using the self.log function would do the job...
                         default_root_dir=log_dir,
                         max_epochs=num_epochs,
-                        check_val_every_n_epoch=val_per_epoch,
+                        check_val_every_n_epoch=1,
                         log_every_n_steps=1 if len(simClr_train_dl) < 10 else 10,
                         callbacks=[checkpnt_callback])
 
 
     trainer.fit(model=wrapper,
                 
-                train_dataloaders=CombinedLoader([simClr_train_dl, debug_train_dl], 
-                                                    mode='sequential'),
-
-                val_dataloaders=simClr_val_dl,
+                train_dataloaders=simClr_val_dl,
+                val_dataloaders=CombinedLoader([simClr_val_dl, debug_train_dl], 
+                                                    mode='sequential'), 
                 )
 
     return wrapper

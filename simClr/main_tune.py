@@ -80,8 +80,8 @@ if __name__ == '__main__':
     imagenette_tune = os.path.join(DATA_FOLDER, 'imagenette_tune')
 
     # make sure the function commented below is called at least once !!! (to prepare the data for hyper-parameter tuning...)
-    # train_folder, val_folder, test_folder = tuning_data_preparation(imagenette_ds_folder=imagenette_ds_folder, 
-    #                                                                 des_data_folder=imagenette_tune)
+    train_folder, val_folder, test_folder = tuning_data_preparation(imagenette_ds_folder=imagenette_ds_folder, 
+                                                                    des_data_folder=imagenette_tune)
 
 
-    tune_main()
+    # tune_main()

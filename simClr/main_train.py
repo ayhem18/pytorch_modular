@@ -42,8 +42,8 @@ def train_main():
                         use_logging=False,
                         num_warmup_epochs=0,
                         val_per_epoch=1,
-                        num_train_samples_per_cls=100,
-                        num_val_samples_per_cls=100,
+                        num_train_samples_per_cls=None,
+                        num_val_samples_per_cls=None,
                         run_name=run_name,     
                         debug_augmentations=debug_augmentations                   
                         )

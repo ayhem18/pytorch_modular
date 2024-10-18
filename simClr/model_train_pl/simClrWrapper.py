@@ -81,6 +81,7 @@ class SimClrModelWrapper(LightningModule):
 
                 #logging arguments
                 log_per_batch: int,
+                val_per_epoch: int,
                 logger: Optional[Logger], 
                 # loss arguments
                 temperature: float,
@@ -112,6 +113,7 @@ class SimClrModelWrapper(LightningModule):
         # logging parameters: 
         # this parameter has to be passed since, I will doing the logging to clearml myself 
         self.log_per_batch = log_per_batch  
+        self.val_per_epoch = val_per_epoch
         self.myLogger = logger
 
         # logging variables
@@ -124,7 +126,7 @@ class SimClrModelWrapper(LightningModule):
             raise ValueError(f"setting debug_embds_vs_trans to True without passing debugging transformations")
 
         self.debug_transformations = debug_transformations
-
+        self.epoch_index = 0
 
     ######################### Logging methods #########################
     def _batch_log(self, 
@@ -195,8 +197,8 @@ class SimClrModelWrapper(LightningModule):
         return batch_loss_obj, log_dict
 
 
-    ######################### training methods #########################    
-    def training_step_forward(self,  
+    ######################### training methods #########################            
+    def training_step(self,  
                       batch: Tuple[torch.Tensor, torch.Tensor], 
                       batch_idx: int) -> SimClrLoss:
         batch_loss_obj, log_dict = self._step(batch, split='train')
@@ -206,13 +208,31 @@ class SimClrModelWrapper(LightningModule):
         self.train_batch_logs.append(log_dict['batch_train_loss'])
         return batch_loss_obj
 
-    def training_step_debug(self, 
+
+    def on_train_epoch_end(self):
+        self.epoch_index = int(round(self.global_step / len(self.train_batch_logs)))
+        # calculate the average of batch losses
+        train_epoch_loss = np.mean(self.train_batch_logs)
+
+        # log to ClearMl
+        if self.myLogger is not None:
+            self.myLogger.report_scalar(
+                                        title="train_epoch_loss", 
+                                        series="train_epoch_loss", 
+                                        value=train_epoch_loss, # 
+                                        iteration=self.epoch_index # the epoch index can be deduced from global step and the length of self.train_batch_logs
+                                        )
+            
+        self.train_batch_logs.clear()
+        # log the epoch validation loss to use it for checkpointing
+        self.log(name='train_epoch_loss', value=train_epoch_loss)
+    
+
+    ######################### validation methods #########################
+    def validation_step_debug(self, 
                             batch: Tuple[torch.Tensor, torch.Tensor],
                             batch_idx:int,
                             ):
-        # set the model to the eval mode
-        self.model.eval()
-
         with torch.no_grad():
             # step 1
             _, fx = self.forward(batch)
@@ -237,57 +257,35 @@ class SimClrModelWrapper(LightningModule):
             aug_scores = torch.mean((cos_sims_augs >= closest_neighbors), dim=0).cpu().tolist()
             self._aug_scores_logs(aug_scores=aug_scores)
 
-        # make sure to set it back to train
-        self.model.train()
 
-
-    def training_step(self, 
-                      batch: Tuple[torch.Tensor, torch.Tensor], 
-                      batch_idx: int,
-                      *args) -> Optional[SimClrLoss]:
-
-        # first check if we are setting the augmentation debug mode 
-        if self.debug_embds_vs_trans:
-            # make sure the dataloader index is passed
-            if len(args) != 1:
-                raise ValueError(f"The model is set to the debug embedding mode. The dataloader index must be passe ")
-
-            if args[0] == 0:
-                return self.training_step_forward(batch, batch_idx)
-            
-            self.training_step_debug(batch, batch_idx)
-            return
-
-        return self.training_step_forward(batch, batch_idx)
-
-
-
-    def on_train_epoch_end(self):
-        # calculate the average of batch losses
-        train_epoch_loss = np.mean(self.train_batch_logs)
-
-        # log to ClearMl
-        if self.myLogger is not None:
-            self.myLogger.report_scalar(
-                                        title="train_epoch_loss", 
-                                        series="train_epoch_loss", 
-                                        value=train_epoch_loss, # 
-                                        iteration=int(round(self.global_step / len(self.train_batch_logs))) # the epoch index can be deduced from global step and the length of self.train_batch_logs
-                                        )
-            
-        self.train_batch_logs.clear()
-        # log the epoch validation loss to use it for checkpointing
-        self.log(name='train_epoch_loss', value=train_epoch_loss)
-    
-
-    ######################### validation methods #########################
-    def validation_step(self, val_batch: Tuple[torch.Tensor, torch.Tensor], batch_index:int) -> SimClrLoss:
+    def validation_step_forward(self, val_batch: Tuple[torch.Tensor, torch.Tensor], 
+                                batch_index:int) -> SimClrLoss:
         batch_loss_obj, log_dict = self._step(val_batch, split='val')
         self._batch_log(log_dict=log_dict, batch_idx=0) # log all validation batches
             
         # track the validation batch loss
         self.val_batch_logs.append(log_dict['batch_val_loss'])
         return batch_loss_obj
+
+
+    def validation_step(self, 
+                        val_batch, 
+                        val_batch_idx, 
+                        *args,):
+        # first check if we are setting the augmentation debug mode 
+        if self.debug_embds_vs_trans:
+            # make sure the dataloader index is passed
+            if len(args) != 1:
+                raise ValueError(f"The model is set to the debug embedding mode. The dataloader index must be passed")
+
+        if self.debug_embds_vs_trans and args[0] == 1:
+            self.validation_step_debug(val_batch, val_batch_idx)
+            return
+        
+        if self.epoch_index % self.val_per_epoch == 0:
+            return self.validation_step_forward(val_batch, val_batch_idx)
+        
+
 
     def on_validation_epoch_end(self):
         # calculate the average of batch losses
@@ -361,6 +359,7 @@ class ResnetSimClrWrapper(SimClrModelWrapper):
                 #logging parameters
                 logger: Optional[Logger],
                 log_per_batch: int,
+                val_per_epoch:int,
                 # loss parameters
                 temperature: float,
                 debug_loss:bool,
@@ -383,6 +382,7 @@ class ResnetSimClrWrapper(SimClrModelWrapper):
                 #logging parameters
                 log_per_batch=log_per_batch,
                 logger=logger,
+                val_per_epoch=val_per_epoch,
                 # loss parameters
                 temperature=temperature,
                 debug_loss=debug_loss,

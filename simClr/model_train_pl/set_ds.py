@@ -1,7 +1,8 @@
 """
 This script contains few functions to handle working with multiple datasets
 """
-
+import os
+from pathlib import Path
 from typing import Optional, Tuple, List
 from torch.utils.data.dataset import Dataset
 from torch.utils.data import DataLoader
@@ -13,6 +14,15 @@ from mypt.data.dataloaders.standard_dataloaders import initialize_train_dataload
 from mypt.data.datasets.parallel_augmentation.parallel_aug_ds_wrapper import Food101Wrapper, ImagenetterWrapper
 from mypt.data.datasets.parallel_augmentation.parallel_aug_dir import ParallelAugDirDs 
 from mypt.data.datasets.genericFolderDs import GenericFolderDS
+
+
+SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
+current = SCRIPT_DIR
+
+while 'data' not in os.listdir(current):
+    current = Path(current).parent
+
+DATA_FOLDER = os.path.join(current, 'data')    
 
 
 _DEFAULT_DATA_AUGS = [
@@ -152,7 +162,8 @@ def _set_imagenette_ds_debug(
             batch_size:int
             ):
     
-    train_ds = GenericFolderDS(root=train_data_folder, 
+    
+    train_ds = GenericFolderDS(root=os.path.join(DATA_FOLDER, 'imagenette_tune', 'train'), 
                                transforms=[tr.ToTensor(), 
                                            tr.Resize(size=output_shape)], # the images needs to be resized tensors
                                image_extensions=None)
@@ -263,7 +274,7 @@ def _set_data(
             num_val_samples_per_cls=num_val_samples_per_cls,
             sampled_augs=sampled_augs)
 
-    train_dl_debug = _set_imagenette_ds_debug(train_data_folder=train_data_folder, 
+    train_dl_debug = _set_imagenette_ds_debug(train_data_folder=os.path.join(DATA_FOLDER, ), 
                                               output_shape=output_shape, 
                                               batch_size=batch_size)
 
