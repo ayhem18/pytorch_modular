@@ -26,6 +26,8 @@ class CosineSim(nn.Module):
 
         # cosine similarity is basically dot product of normalized vectors...
         res = x_norm @ y_norm.T
-        # make sure the loss is of the
-        assert res.shape == (x_samples, y_samples), f"Make sure the final result matches the expected shape. Expected: {(x_samples, y_samples)}. Found: {res.shape}"
+        # make sure the loss is of the expected shape
+        if res.shape != (x_samples, y_samples):
+            raise ValueError(f"final result does not match the expected shape. Expected: {(x_samples, y_samples)}. Found: {res.shape}")
+
         return res

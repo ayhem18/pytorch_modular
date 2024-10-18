@@ -16,6 +16,7 @@ from mypt.schedulers.warmup import set_warmup_epochs
 from mypt.similarities.cosineSim import CosineSim
 
 def cosine_sims_model_embeddings_with_transformations(model: torch.nn.Module,
+                                                      process_model_output: Callable,
                                                       batch: torch.nn.Module,
                                                       transformations: List[Callable]
                                                       ):
@@ -26,20 +27,27 @@ def cosine_sims_model_embeddings_with_transformations(model: torch.nn.Module,
     sims_transformations = []
 
     with torch.no_grad():
-        batch_embds = model.forward(batch)
+        batch_embds = process_model_output(model.forward(batch))
 
         for t in transformations:
             batch_t = t.forward(batch)
-            batch_t_embds = model.forward(batch_t)
+            # make sure the augmentations leads to different results 
+            
+            # for s, st in zip(batch, batch_t):
+            #     assert torch.any(s != st), "augmentations must change every sample"
+
+            batch_t_embds = process_model_output(model.forward(batch_t)) 
             # compute the similarities between a sample and its augmented version
             sample_aug_similarities = torch.diagonal(CosineSim().forward(batch_embds, batch_t_embds)).unsqueeze(-1).cpu()
+
             assert sample_aug_similarities.shape == (n_samples, 1)
-    
+
+            sims_transformations.append(sample_aug_similarities)
+
+
     final_sims = torch.concat(sims_transformations, dim=1) # concatenate horizontally
-    assert final_sims.shape == (n_samples, n_samples)
+    assert final_sims.shape == (n_samples, len(transformations))
     return final_sims  
-
-
 
 
 class SimClrModelWrapper(LightningModule):
@@ -142,6 +150,16 @@ class SimClrModelWrapper(LightningModule):
                                     iteration=self.global_step
                                     )
 
+    def _aug_scores_logs(self, aug_scores: List[float]):
+        if self.myLogger is None:
+            return 
+        
+        for aug_cls, aug_s in zip(self.debug_transformations, aug_scores):
+            self.myLogger.report_scalar(title="augmentation scores",
+                                        series = str(aug_cls),
+                                        value=aug_s,
+                                        iteration=self.global_step)
+
 
     ######################### Model forward pass #########################
     def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -178,13 +196,70 @@ class SimClrModelWrapper(LightningModule):
 
 
     ######################### training methods #########################    
-    def training_step(self, batch: Tuple[torch.Tensor, torch.Tensor], batch_idx: int) -> SimClrLoss:
+    def training_step_forward(self,  
+                      batch: Tuple[torch.Tensor, torch.Tensor], 
+                      batch_idx: int) -> SimClrLoss:
         batch_loss_obj, log_dict = self._step(batch, split='train')
         self._batch_log(log_dict=log_dict, batch_idx=batch_idx)
         
         # save only the training loss
         self.train_batch_logs.append(log_dict['batch_train_loss'])
         return batch_loss_obj
+
+    def training_step_debug(self, 
+                            batch: Tuple[torch.Tensor, torch.Tensor],
+                            batch_idx:int,
+                            ):
+        # set the model to the eval mode
+        self.model.eval()
+
+        with torch.no_grad():
+            # step 1
+            _, fx = self.forward(batch)
+            # compute the cosine similarities between the embeddings of the batch
+            batch_cos_sims = CosineSim().forward(fx, fx)
+            # set the diagonal to zero (cause it is currently set to "1")
+            batch_cos_sims.fill_diagonal_(0)
+
+            # find the closest sample for each sample
+            # broadcast it to have the same shape as the cos_sims_augs object 
+            closest_neighbors = torch.broadcast_to(torch.max(batch_cos_sims, dim=1, keepdim=True)[0], # the maximum similarity per each sample (dim = 1), keepdim to keep my sanity
+                                                   size=(len(batch), len(self.debug_transformations))
+                                                   )
+
+            # step 2 
+            cos_sims_augs = cosine_sims_model_embeddings_with_transformations(model=self.model, 
+                                                                            process_model_output=lambda x : x[1],
+                                                                            batch = batch,
+                                                                            transformations=self.debug_transformations)
+
+            # calculate the number of samples for which is the augmentation version is less similar then the closest neighbor
+            aug_scores = torch.mean((cos_sims_augs >= closest_neighbors), dim=0).cpu().tolist()
+            self._aug_scores_logs(aug_scores=aug_scores)
+
+        # make sure to set it back to train
+        self.model.train()
+
+
+    def training_step(self, 
+                      batch: Tuple[torch.Tensor, torch.Tensor], 
+                      batch_idx: int,
+                      *args) -> Optional[SimClrLoss]:
+
+        # first check if we are setting the augmentation debug mode 
+        if self.debug_embds_vs_trans:
+            # make sure the dataloader index is passed
+            if len(args) != 1:
+                raise ValueError(f"The model is set to the debug embedding mode. The dataloader index must be passe ")
+
+            if args[0] == 0:
+                return self.training_step_forward(batch, batch_idx)
+            
+            self.training_step_debug(batch, batch_idx)
+            return
+
+        return self.training_step_forward(batch, batch_idx)
+
 
 
     def on_train_epoch_end(self):
@@ -205,7 +280,6 @@ class SimClrModelWrapper(LightningModule):
         self.log(name='train_epoch_loss', value=train_epoch_loss)
     
 
-
     ######################### validation methods #########################
     def validation_step(self, val_batch: Tuple[torch.Tensor, torch.Tensor], batch_index:int) -> SimClrLoss:
         batch_loss_obj, log_dict = self._step(val_batch, split='val')
@@ -214,7 +288,6 @@ class SimClrModelWrapper(LightningModule):
         # track the validation batch loss
         self.val_batch_logs.append(log_dict['batch_val_loss'])
         return batch_loss_obj
-
 
     def on_validation_epoch_end(self):
         # calculate the average of batch losses
@@ -296,6 +369,9 @@ class ResnetSimClrWrapper(SimClrModelWrapper):
                 num_epochs: int,
                 num_warmup_epochs:int,
 
+                debug_embds_vs_trans: bool,
+                debug_transformations: Optional[List],
+
                 # more model arguments
                 dropout: Optional[float] = None,
                 architecture: int = 50, 
@@ -313,7 +389,11 @@ class ResnetSimClrWrapper(SimClrModelWrapper):
                 # optimizer parameters
                 lrs=lrs, 
                 num_epochs=num_epochs,
-                num_warmup_epochs=num_warmup_epochs)
+                num_warmup_epochs=num_warmup_epochs,
+
+                debug_embds_vs_trans=debug_embds_vs_trans,
+                debug_transformations=debug_transformations,
+                )
 
         self.model = ResnetSimClr(
                                 input_shape=self.input_shape, 

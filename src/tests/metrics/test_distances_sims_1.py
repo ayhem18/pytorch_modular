@@ -27,7 +27,7 @@ def _test_cos_sim(num_tests:int=10 ** 4):
 
         sims3 = CosineSim().forward(x, -x)
         assert np.isclose(torch.max(torch.abs(sims3)).item(), 1), "Cosine similarities must be between -1 and 1"
-        assert torch.allclose(torch.diag(sims3), -torch.ones(len(sims3))), "CosSim(x, -x) = 1"
+        assert torch.allclose(torch.diag(sims3), -torch.ones(len(sims3))), "CosSim(x, -x) = -1"
 
 
 

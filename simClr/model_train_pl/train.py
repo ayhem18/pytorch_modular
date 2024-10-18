@@ -6,12 +6,12 @@ This script contais the training code for the SimClrWrapper PL model
 import pytorch_lightning as L
 
 from clearml import Task, Logger
-from clearml.errors import UsageError
-from typing import Union, Optional, Tuple
+from typing import Union, Optional, Tuple, List
 from pathlib import Path
 from torch.utils.data import DataLoader
 
 from pytorch_lightning.callbacks import ModelCheckpoint
+from pytorch_lightning.utilities import CombinedLoader
 
 from mypt.code_utilities import pytorch_utilities as pu, directories_and_files as dirf
 from mypt.shortcuts import P
@@ -100,6 +100,7 @@ def train_simClr_wrapper(
         log_dir: Union[str, Path],
         run_name: str,
 
+        debug_augmentations: List,
         output_shape:Tuple[int, int]=None, 
         num_warmup_epochs:int=10,
         val_per_epoch: int = 3,
@@ -122,17 +123,16 @@ def train_simClr_wrapper(
                         run_name=run_name, 
                         return_task=False)
 
-    # DATA: 
-    train_dl, val_dl = _set_data(train_data_folder=train_data_folder,
-                                val_data_folder=val_data_folder, 
-                                dataset=dataset,
-                                output_shape=output_shape,
-                                batch_size=batch_size, 
-                                num_train_samples_per_cls=num_train_samples_per_cls,
-                                num_val_samples_per_cls=num_val_samples_per_cls,
-                                seed=seed)
+    simClr_train_dl, simClr_val_dl, debug_train_dl = _set_data(train_data_folder=train_data_folder,
+                                                    val_data_folder=val_data_folder, 
+                                                    dataset="imagenette",
+                                                    output_shape=output_shape,
+                                                    batch_size=batch_size, 
+                                                    num_train_samples_per_cls=num_train_samples_per_cls,
+                                                    num_val_samples_per_cls=num_val_samples_per_cls,
+                                                    seed=seed)
 
-    checkpnt_callback = _set_ckpnt_callback(val_dl=val_dl, 
+    checkpnt_callback = _set_ckpnt_callback(val_dl=simClr_val_dl, 
                                             num_epochs=num_epochs, 
                                             val_per_epoch=val_per_epoch, 
                                             log_dir=log_dir)
@@ -159,9 +159,12 @@ def train_simClr_wrapper(
                                   num_epochs=num_epochs,
                                   num_warmup_epochs=num_warmup_epochs,
 
+                                  debug_embds_vs_trans=True, 
+                                  debug_transformations=debug_augmentations,
+
                                   # more model parameters
                                   dropout=_DROPOUT,
-                                  architecture=ARCHITECTURE_FOOD_101 if dataset=='food101' else ARCHITECTURE_IMAGENETTE,
+                                  architecture=ARCHITECTURE_IMAGENETTE,
                                   freeze=False
                                   )
 
@@ -176,13 +179,16 @@ def train_simClr_wrapper(
                         default_root_dir=log_dir,
                         max_epochs=num_epochs,
                         check_val_every_n_epoch=val_per_epoch,
-                        log_every_n_steps=1 if len(train_dl) < 10 else 10,
+                        log_every_n_steps=1 if len(simClr_train_dl) < 10 else 10,
                         callbacks=[checkpnt_callback])
 
 
     trainer.fit(model=wrapper,
-                train_dataloaders=train_dl,
-                val_dataloaders=val_dl,
+                
+                train_dataloaders=CombinedLoader([simClr_train_dl, debug_train_dl], 
+                                                    mode='sequential'),
+
+                val_dataloaders=simClr_val_dl,
                 )
 
     return wrapper

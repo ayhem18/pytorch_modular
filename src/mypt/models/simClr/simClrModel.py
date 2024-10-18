@@ -70,6 +70,9 @@ class ResnetSimClr(SimClrModel):
 
         super().__init__()
 
+        if len(input_shape) != 3:
+            raise ValueError(f"Make sure the input_shape argument represents the sample input shape; 3 dimensions !! Found: {input_shape}")
+ 
         # the feature extractor or the encoder "f" as denoted in the paper.
         self.fe = rfe.ResNetFeatureExtractor(num_layers=fe_num_blocks, 
                                         architecture=architecture,

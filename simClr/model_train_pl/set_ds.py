@@ -12,6 +12,7 @@ from mypt.code_utilities import directories_and_files as dirf
 from mypt.data.dataloaders.standard_dataloaders import initialize_train_dataloader, initialize_val_dataloader
 from mypt.data.datasets.parallel_augmentation.parallel_aug_ds_wrapper import Food101Wrapper, ImagenetterWrapper
 from mypt.data.datasets.parallel_augmentation.parallel_aug_dir import ParallelAugDirDs 
+from mypt.data.datasets.genericFolderDs import GenericFolderDS
 
 
 _DEFAULT_DATA_AUGS = [
@@ -106,6 +107,63 @@ def _set_food101_ds(
 
     return train_ds, val_ds
 
+def _set_food101_ds(
+            train_data_folder: P,
+            val_data_folder: Optional[P],
+            output_shape: Tuple[int, int],
+            num_train_samples_per_cls:Optional[int],
+            num_val_samples_per_cls:Optional[int],
+            sampled_augs: List):
+    
+    # train_path, val_path = _process_paths(train_data_folder, val_data_folder)
+    train_ds = Food101Wrapper(root_dir=train_data_folder, 
+                                output_shape=output_shape,
+                                augs_per_sample=2, 
+                                sampled_data_augs=sampled_augs,
+                                uniform_augs_before=[],
+                                uniform_augs_after=_UNIFORM_DATA_AUGS,
+                                train=True,
+                                samples_per_cls=num_train_samples_per_cls
+                                )
+
+    if val_data_folder is not None:
+        val_data_folder = dirf.process_path(val_data_folder, 
+                                          dir_ok=True, 
+                                          file_ok=False, 
+                                          )
+
+        val_ds = Food101Wrapper(root_dir=val_data_folder, 
+                                output_shape=output_shape,
+                                augs_per_sample=2, 
+                                sampled_data_augs=sampled_augs,
+                                uniform_augs_before=[],
+                                uniform_augs_after=_UNIFORM_DATA_AUGS,
+                                train=False,
+                                samples_per_cls=num_val_samples_per_cls,    
+                                )
+
+    return train_ds, val_ds
+
+
+
+def _set_imagenette_ds_debug(
+            train_data_folder: P,
+            output_shape: Tuple[int, int],
+            batch_size:int
+            ):
+    
+    train_ds = GenericFolderDS(root=train_data_folder, 
+                               transforms=[tr.ToTensor(), 
+                                           tr.Resize(size=output_shape)], # the images needs to be resized tensors
+                               image_extensions=None)
+    
+    return initialize_train_dataloader(dataset_object=train_ds, 
+                                       seed=0, 
+                                       batch_size=batch_size, 
+                                       num_workers=2, 
+                                       drop_last=False, 
+                                       warning=False, 
+                                       pin_memory=False)
 
 def _set_imagenette_ds(
             train_data_folder: P,
@@ -189,7 +247,7 @@ def _set_data(
             batch_size:int,
             output_shape: Tuple[int, int],
             num_train_samples_per_cls:Optional[int],
-            num_val_samples_per_cls:Optional[int],    
+            num_val_samples_per_cls:Optional[int],
             seed:int=69) -> Tuple[DataLoader, Optional[DataLoader]]:
 
     train_path, val_path, sampled_augs = _verify_paths(dataset=dataset, 
@@ -197,7 +255,7 @@ def _set_data(
                                                        val_data_folder=val_data_folder,
                                                        output_shape=output_shape)
 
-    train_ds, val_ds = _ds_name_ds_function[dataset](
+    train_ds, val_ds = _set_imagenette_ds(
             train_data_folder=train_path,
             val_data_folder=val_path,
             output_shape=output_shape,
@@ -205,9 +263,13 @@ def _set_data(
             num_val_samples_per_cls=num_val_samples_per_cls,
             sampled_augs=sampled_augs)
 
+    train_dl_debug = _set_imagenette_ds_debug(train_data_folder=train_data_folder, 
+                                              output_shape=output_shape, 
+                                              batch_size=batch_size)
 
-    return _set_dataloaders(train_ds, val_ds, batch_size=batch_size, seed=seed)
+    train_dl, val_dl = _set_dataloaders(train_ds, val_ds, batch_size=batch_size, seed=seed)
 
+    return train_dl, val_dl, train_dl_debug
 
 def _set_dataset_tune(
             train_data_folder: P,
