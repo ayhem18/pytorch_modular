@@ -10,7 +10,6 @@ from model_train_pl.train import train_simClr_wrapper
 from model_train_pl.constants import TRACK_PROJECT_NAME
 
 
-
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 
 
@@ -19,7 +18,9 @@ def train_main():
     train_data_folder = os.path.join(SCRIPT_DIR, 'data', dataset_name, 'train')
     val_data_folder = os.path.join(SCRIPT_DIR, 'data', dataset_name, 'val')
     
-    ckpnt_dir_parent = dirf.process_path(os.path.join(SCRIPT_DIR, 'logs', 'train_logs'), dir_ok=True, file_ok=False)
+    ckpnt_dir_parent = dirf.process_path(os.path.join(SCRIPT_DIR, 'logs', 'train_logs'), 
+                                         dir_ok=True, 
+                                         file_ok=False)
 
     # delete any empty folders in the 'train_logs' folder
     dirf.clear_directory(ckpnt_dir_parent, condition=lambda x: os.path.isdir(x) and len(os.listdir(x)) == 0)
@@ -37,9 +38,9 @@ def train_main():
                         dataset=dataset_name,
                         log_dir=os.path.join(ckpnt_dir_parent, f'{dataset_name}_iteration_{n + 1}'),
                         num_epochs=5, 
-                        batch_size=16, 
+                        batch_size=512, 
                         seed=0, 
-                        use_logging=False,
+                        use_logging=True,
                         num_warmup_epochs=0,
                         val_per_epoch=1,
                         num_train_samples_per_cls=None,
@@ -50,3 +51,5 @@ def train_main():
 
 if __name__ == '__main__':
     train_main()  
+    # aug = tr.GaussianBlur(kernel_size=(11, 11))
+    # print(pu.get_augmentation_name(aug))

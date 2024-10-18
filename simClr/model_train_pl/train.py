@@ -178,7 +178,7 @@ def train_simClr_wrapper(
                         default_root_dir=log_dir,
                         max_epochs=num_epochs,
                         check_val_every_n_epoch=1,
-                        log_every_n_steps=1 if len(simClr_train_dl) < 10 else 10,
+                        log_every_n_steps=1 if len(simClr_train_dl) < 10 else 5,
                         callbacks=[checkpnt_callback])
 
 

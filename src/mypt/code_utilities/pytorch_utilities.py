@@ -11,7 +11,7 @@ from typing import Union, List, Optional
 from pathlib import Path
 from datetime import datetime as d
 from torch.optim.optimizer import Optimizer
-
+from torchvision import transforms as tr
 from .directories_and_files import process_path
 
 HOME = os.path.dirname(os.path.realpath(__file__))
@@ -98,3 +98,10 @@ def iterate(module: nn.Module) -> List[nn.Module]:
 
     return children_nodes
     
+
+def get_augmentation_name(aug):
+    aug_cls_name = re.sub("^[^\s\w]*", "", str(aug.__class__))
+    aug_cls_name = re.sub("[^\s\w]*$", "", aug_cls_name)
+    return re.split("\W+", aug_cls_name)[-1]
+
+
