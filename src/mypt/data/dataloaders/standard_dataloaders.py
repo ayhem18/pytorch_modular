@@ -43,11 +43,11 @@ def initialize_train_dataloader(dataset_object: Dataset,
 
     # let's add a check to that: 
     if len(dataset_object) <= batch_size and drop_last:
-        raise ValueError(f"Found a dataset with size {len(dataset_object)} and a batch size : {batch_size}. When setting the 'drop_last' param to True, the dataloader will be empty. Make sure there is no issue with dataset size computation...")
+        raise ValueError(f"Found a dataset with size {len(dataset_object)} and a batch size : {batch_size}. When setting the 'drop_last' param to True, the dataloader will be empty. Make sure there is no issue with dataset...")
 
     # if the size of the dataset is still less than the batch size, raise a warning (as it might signal a problem in the dataset size calculation)
     if len(dataset_object) <= batch_size:
-        warnings.warn(message=f"Found a dataset with size {len(dataset_object)} and a batch size : {batch_size}. Make sure there is no issue with dataset size computation...")
+        warnings.warn(message=f"Found a dataset with size {len(dataset_object)} and a batch size : {batch_size}. Make sure there is no issue with dataset...")
 
 
     if num_workers != 0:

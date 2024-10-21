@@ -26,13 +26,16 @@ DATA_FOLDER = os.path.join(current, 'data')
 
 
 _DEFAULT_DATA_AUGS = [
-    tr.RandomHorizontalFlip(p=0.5), 
+    tr.RandomHorizontalFlip(p=1),
+    tr.RandomVerticalFlip(p=1),
+
     tr.RandomResizedCrop((200, 200), scale=(0.4, 1)),
     
-    tr.RandomErasing(p=0.8, scale=(0.05, 0.15)),
-    tr.RandomGrayscale(p=0.8),
+    tr.RandomErasing(p=1, scale=(0.05, 0.15)),
+    tr.RandomGrayscale(p=1),
     tr.GaussianBlur(kernel_size=(5, 5)),
-    tr.ColorJitter(brightness=0.5, contrast=0.5)
+    tr.ColorJitter(brightness=0.5, 
+                   contrast=0.5)
 ]
 
 _UNIFORM_DATA_AUGS = []
@@ -58,12 +61,13 @@ def _process_paths(train_path: P, val_path: Optional[P]) -> Tuple[P, Optional[P]
 def _set_dataloaders(train_ds: Dataset, 
                      val_ds: Optional[Dataset],
                      seed:int, 
-                     batch_size:int):
+                     train_batch_size:int, 
+                     val_batch_size:int) -> Tuple[DataLoader, Optional[DataLoader]]:
 
     ## data loaders
     train_dl = initialize_train_dataloader(dataset_object=train_ds, 
                                          seed=seed,
-                                         batch_size=batch_size,
+                                         batch_size=train_batch_size,
                                          num_workers=2,
                                          warning=False  
                                          )
@@ -71,7 +75,7 @@ def _set_dataloaders(train_ds: Dataset,
     if val_ds is not None:
         val_dl = initialize_val_dataloader(dataset_object=train_ds, 
                                             seed=seed,
-                                            batch_size=batch_size,
+                                            batch_size=val_batch_size,
                                             num_workers=2,
                                             )
     else:
@@ -255,7 +259,8 @@ def _set_data(
             train_data_folder: P,
             val_data_folder: Optional[P],
             dataset:str,
-            batch_size:int,
+            train_batch_size: int,
+            val_batch_size: int,
             output_shape: Tuple[int, int],
             num_train_samples_per_cls:Optional[int],
             num_val_samples_per_cls:Optional[int],
@@ -276,9 +281,13 @@ def _set_data(
 
     train_dl_debug = _set_imagenette_ds_debug(train_data_folder=os.path.join(DATA_FOLDER, ), 
                                               output_shape=output_shape, 
-                                              batch_size=batch_size)
+                                              batch_size=val_batch_size)
 
-    train_dl, val_dl = _set_dataloaders(train_ds, val_ds, batch_size=batch_size, seed=seed)
+    train_dl, val_dl = _set_dataloaders(train_ds, 
+                                        val_ds, 
+                                        train_batch_size=train_batch_size, 
+                                        val_batch_size=val_batch_size,
+                                        seed=seed)
 
     return train_dl, val_dl, train_dl_debug
 

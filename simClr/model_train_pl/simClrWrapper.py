@@ -1,10 +1,10 @@
 """
 This file contains a pytorch lightning wrapper for the SimClr Model
 """
-
 import torch, warnings, torch_optimizer as topt, numpy as np
 
 from typing import Union, Tuple, List, Dict, Optional, Iterator, Callable
+from collections import defaultdict
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from pytorch_lightning import LightningModule
 from clearml import Logger
@@ -16,26 +16,24 @@ from mypt.similarities.cosineSim import CosineSim
 from mypt.schedulers.warmup import set_warmup_epochs
 
 
-def cosine_sims_model_embeddings_with_transformations(model: torch.nn.Module,
+AUGMENTATIONS_PER_CURVE = 5
+
+def cosine_sims_model_embeddings_with_augmentations(model: torch.nn.Module,
                                                       process_model_output: Callable,
                                                       batch: torch.nn.Module,
-                                                      transformations: List[Callable]
+                                                      augmentations: List[Callable]
                                                       ):
     n_samples = len(batch)
     # set the model to eval mode
     model.eval()
-    # apply the transformations to the batches
-    sims_transformations = []
+    # apply the augmentations to the batches
+    sims_augmentations = []
 
     with torch.no_grad():
         batch_embds = process_model_output(model.forward(batch))
 
-        for t in transformations:
+        for t in augmentations:
             batch_t = t.forward(batch)
-            # make sure the augmentations leads to different results 
-            
-            # for s, st in zip(batch, batch_t):
-            #     assert torch.any(s != st), "augmentations must change every sample"
 
             batch_t_embds = process_model_output(model.forward(batch_t)) 
             # compute the similarities between samples and their augmented versions
@@ -43,11 +41,11 @@ def cosine_sims_model_embeddings_with_transformations(model: torch.nn.Module,
 
             assert sample_aug_similarities.shape == (n_samples, 1)
 
-            sims_transformations.append(sample_aug_similarities)
+            sims_augmentations.append(sample_aug_similarities)
 
 
-    final_sims = torch.concat(sims_transformations, dim=1) # concatenate horizontally
-    assert final_sims.shape == (n_samples, len(transformations))
+    final_sims = torch.concat(sims_augmentations, dim=1) # concatenate horizontally
+    assert final_sims.shape == (n_samples, len(augmentations))
     return final_sims  
 
 
@@ -94,16 +92,25 @@ class SimClrModelWrapper(LightningModule):
 
                 # arguments for the extra dataloaders
                 debug_embds_vs_trans: bool,
-                debug_transformations: Optional[List],
+                debug_augmentations: Optional[List],
+                get_augmentation_name: Optional[Union[Callable, Dict]] = None,
                 ):
         # super class call
         super().__init__()
+
+        # counters to save the training and validation epochs
+        self.train_epoch_index = 0
+        self.val_epoch_index = 0
+
+        # save the number of batches per train and validation epochs
+        self.batches_per_train_epoch = None
+        self.batches_per_val_epoch = None
 
         # the model
         self.model: SimClrModel = None
         self.input_shape = input_shape
 
-        # make sure that the loss override the nn.Module and actually calls the super constructor
+        # make sure that the loss override the nn.Module and calls the super constructor (otherwise some unexpected error would be raised)
         self._loss = SimClrLoss(temperature=temperature, debug=debug_loss)
         
         # the optimizer parameters
@@ -112,7 +119,7 @@ class SimClrModelWrapper(LightningModule):
         self._num_warmup_epochs = num_warmup_epochs
 
         # logging parameters: 
-        # this parameter has to be passed since, I will doing the logging to clearml myself 
+        # this parameter has to be passed since, I will be doing the logging to clearml myself 
         self.log_per_batch = log_per_batch  
         self.val_per_epoch = val_per_epoch
         self.myLogger = logger
@@ -125,19 +132,18 @@ class SimClrModelWrapper(LightningModule):
 
         self.debug_embds_vs_trans = debug_embds_vs_trans
 
-        if self.debug_embds_vs_trans and debug_transformations is None:
-            raise ValueError(f"setting debug_embds_vs_trans to True without passing debugging transformations")
+        if self.debug_embds_vs_trans and debug_augmentations is None:
+            raise ValueError(f"setting debug_embds_vs_trans to True without passing debugging augmentations")
 
-        self.debug_transformations = debug_transformations
-        # counters to save the training and validation epochs
-        self.train_epoch_index = 0
-        self.val_epoch_index = 0
+        self.debug_augmentations = debug_augmentations
+        self.augmentations_scores = defaultdict(lambda :[])
 
-        # save the number batches per train and validation epoch
-        self.batches_per_train_epoch = None
-        self.batches_per_val_epoch = None
-
-
+        if get_augmentation_name is None:
+            warnings.warn(("The 'get_augmentation_name' argument was passed as a None object.\n" 
+                          "The default function might not be suitable for more complex augmentations: Mainly those involving the `Compose` class"))
+            get_augmentation_name = pu.get_augmentation_name
+        
+        self.get_augmentation_name = get_augmentation_name        
 
     ######################### Logging methods #########################
     def train_batch_log(self, 
@@ -177,12 +183,18 @@ class SimClrModelWrapper(LightningModule):
     def _aug_scores_logs(self, aug_scores: List[float], batch_idx:int):
         if self.myLogger is None:
             return 
-        
-        for aug_cls, aug_s in zip(self.debug_transformations, aug_scores):
-            self.myLogger.report_scalar(title="augmentation scores",
-                                        series = pu.get_augmentation_name(aug_cls),
-                                        value=aug_s,
-                                        iteration=self.val_epoch_index * self.batches_per_val_epoch + batch_idx)
+
+        if len(aug_scores) != len(self.debug_augmentations):
+            raise ValueError(f"The number of augmentation scores does not match the number of augmentations...")
+
+        # divide the logging for augmentation scores into multiple curves. Otherwise, it might get too cluttered
+        for i in range(0, len(self.debug_augmentations), AUGMENTATIONS_PER_CURVE):
+            for aug_cls, aug_s in zip(self.debug_augmentations[i: i + AUGMENTATIONS_PER_CURVE], aug_scores[i: i + AUGMENTATIONS_PER_CURVE]):
+                self.myLogger.report_scalar(title=f"augmentation scores_GROUP_{i // AUGMENTATIONS_PER_CURVE + 1}",
+                                            series = self.get_augmentation_name(aug_cls),
+                                            value=aug_s,
+                                            iteration=self.val_epoch_index * self.batches_per_val_epoch + batch_idx
+                                            )
 
 
     ######################### Model forward pass #########################
@@ -230,7 +242,6 @@ class SimClrModelWrapper(LightningModule):
         self.train_batch_logs.append(log_dict['batch_train_loss'])
         return batch_loss_obj
 
-
     def on_train_epoch_end(self):
         # calculate the average of batch losses
         train_epoch_loss = np.mean(self.train_batch_logs)
@@ -254,6 +265,7 @@ class SimClrModelWrapper(LightningModule):
                             batch: Tuple[torch.Tensor, torch.Tensor],
                             batch_idx:int,
                             ):
+
         with torch.no_grad():
             # step 1
             _, fx = self.forward(batch)
@@ -263,19 +275,24 @@ class SimClrModelWrapper(LightningModule):
             # find the closest sample for each sample
             # broadcast it to have the same shape as the cos_sims_augs object 
             closest_neighbors = torch.broadcast_to(torch.max(batch_cos_sims, dim=1, keepdim=True)[0], # the maximum similarity per each sample (dim = 1), keepdim to keep my sanity
-                                                   size=(len(batch), len(self.debug_transformations))
+                                                   size=(len(batch), len(self.debug_augmentations))
                                                    )
 
             # step 2 
-            cos_sims_augs = cosine_sims_model_embeddings_with_transformations(model=self.model, 
+            cos_sims_augs = cosine_sims_model_embeddings_with_augmentations(model=self.model, 
                                                                             process_model_output=lambda x : x[1],
                                                                             batch = batch,
-                                                                            transformations=self.debug_transformations)
+                                                                            augmentations=self.debug_augmentations)
 
             # calculate the number of samples for which is the augmentation version is less similar then the closest neighbor
             aug_scores = torch.mean((cos_sims_augs >= closest_neighbors).to(torch.float32), dim=0).cpu().tolist()
             self._aug_scores_logs(aug_scores=aug_scores, batch_idx=batch_idx)
 
+            # save the augmentation scores as well
+            for a, a_sc in zip(self.debug_augmentations, aug_scores):
+                # get the augmentation name and append the scores
+                self.augmentations_scores[self.get_augmentation_name(a)] = a_sc
+      
 
     def validation_step_forward(self, val_batch: Tuple[torch.Tensor, torch.Tensor], 
                                 batch_index:int) -> SimClrLoss:
@@ -285,7 +302,6 @@ class SimClrModelWrapper(LightningModule):
         # track the validation batch loss
         self.val_batch_logs.append(log_dict['batch_val_loss'])
         return batch_loss_obj
-
 
     def validation_step(self, 
                         val_batch, 
@@ -308,7 +324,6 @@ class SimClrModelWrapper(LightningModule):
         if self.val_epoch_index % self.val_per_epoch == 0:
             return self.validation_step_forward(val_batch, val_batch_idx)
         
-
     def on_validation_epoch_end(self):
         # calculate the average of batch losses
         val_epoch_loss = float(np.mean(self.val_batch_logs))
@@ -354,24 +369,29 @@ class SimClrModelWrapper(LightningModule):
 
         return {"optimizer": optimizer, "lr_scheduler": cosine_scheduler}
 
+
     ######################### Pytorch.nn.Module methods #########################
     def to(self, *args, **kwargs):
         self.model = self.model.to(*args, **kwargs)
         return self
 
-
     def children(self) -> Iterator[torch.nn.Module]:
         # overloading this method to return the correct children of the wrapper: those of the self.model field
         return self.model.children()
 
-
     def modules(self) -> Iterator[torch.nn.Module]:
         return self.model.modules()
-
 
     def named_children(self) -> Iterator[Tuple[str, torch.nn.Module]]:
         return self.model.named_children()
         
+    ######################### Checkpointing methods #########################
+    def on_save_checkpoint(self, checkpoint: Dict):
+        # add the augmentation scores
+        checkpoint['augmentation_scores'] = dict(self.augmentations_scores)
+        checkpoint['debug_augmentations'] = self.debug_augmentations
+        return super().on_save_checkpoint(checkpoint)
+
 
 class ResnetSimClrWrapper(SimClrModelWrapper):
     def __init__(self,
@@ -392,7 +412,7 @@ class ResnetSimClrWrapper(SimClrModelWrapper):
                 num_warmup_epochs:int,
 
                 debug_embds_vs_trans: bool,
-                debug_transformations: Optional[List],
+                debug_augmentations: Optional[List],
 
                 # more model arguments
                 dropout: Optional[float] = None,
@@ -415,7 +435,7 @@ class ResnetSimClrWrapper(SimClrModelWrapper):
                 num_warmup_epochs=num_warmup_epochs,
 
                 debug_embds_vs_trans=debug_embds_vs_trans,
-                debug_transformations=debug_transformations,
+                debug_augmentations=debug_augmentations,
                 )
 
         self.model = ResnetSimClr(
