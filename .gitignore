@@ -22,3 +22,10 @@ simClr/data
 simClr/logs
 
 *.xml
+
+*.tgz
+
+src/tests/data/data/food101/train/imagenette2/noisy_imagenette.csv
+
+*.tar.gz
+

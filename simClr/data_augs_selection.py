@@ -32,17 +32,17 @@ def check_data_aug(data_folder, dataset: str):
                                 augs_per_sample=2, 
                                 sampled_data_augs=_DEFAULT_DATA_AUGS, 
                                 uniform_augs_after=_UNIFORM_DATA_AUGS,
-                                uniform_augs_before=[])
+                                uniform_augs_before=[],
+                                samples_per_cls=None)
 
     else:
         train_ds = ImagenetterWrapper(root_dir=data_folder,
                                   output_shape=(200, 200), 
                                   augs_per_sample=2, 
                                   sampled_data_augs=_DEFAULT_DATA_AUGS, 
-                                  uniform_augs_after=_UNIFORM_DATA_AUGS,
+                                  uniform_augs_after=_UNIFORM_DATA_AUGS, 
                                   uniform_augs_before=[],
-                                  samples_per_cls=5, 
-                                  classification_mode=False)
+                                  samples_per_cls=None)
     
 
     # create a dataloader
@@ -101,8 +101,10 @@ def check_data_aug(data_folder, dataset: str):
 
 
 
+
+
 if __name__ == '__main__':
-    # dataset = 'food101'
-    dataset = 'imagenette'
+    dataset = 'food101'
+    # dataset = 'imagenette'
     train_data_folder = os.path.join(DATA_FOLDER, dataset, 'train')
     check_data_aug(train_data_folder, dataset)
