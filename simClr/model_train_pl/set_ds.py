@@ -29,9 +29,9 @@ _DEFAULT_DATA_AUGS = [
     tr.RandomHorizontalFlip(p=1),
     tr.RandomVerticalFlip(p=1),
 
-    tr.RandomResizedCrop((200, 200), scale=(0.4, 1)),
-    
+    tr.RandomResizedCrop((200, 200), scale=(0.7, 1)),    
     tr.RandomErasing(p=1, scale=(0.05, 0.15)),
+
     tr.RandomGrayscale(p=1),
     tr.GaussianBlur(kernel_size=(5, 5)),
     tr.ColorJitter(brightness=0.5, 

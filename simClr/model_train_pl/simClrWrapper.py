@@ -98,6 +98,9 @@ class SimClrModelWrapper(LightningModule):
         # super class call
         super().__init__()
 
+        # save the hyperparameters
+        self.save_hyperparameters()
+
         # counters to save the training and validation epochs
         self.train_epoch_index = 0
         self.val_epoch_index = 0
@@ -144,6 +147,8 @@ class SimClrModelWrapper(LightningModule):
             get_augmentation_name = pu.get_augmentation_name
         
         self.get_augmentation_name = get_augmentation_name        
+
+
 
     ######################### Logging methods #########################
     def train_batch_log(self, 
@@ -291,7 +296,7 @@ class SimClrModelWrapper(LightningModule):
             # save the augmentation scores as well
             for a, a_sc in zip(self.debug_augmentations, aug_scores):
                 # get the augmentation name and append the scores
-                self.augmentations_scores[self.get_augmentation_name(a)] = a_sc
+                self.augmentations_scores[self.get_augmentation_name(a)].append(a_sc)
       
 
     def validation_step_forward(self, val_batch: Tuple[torch.Tensor, torch.Tensor], 

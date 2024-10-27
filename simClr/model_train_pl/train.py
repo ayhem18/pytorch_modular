@@ -2,30 +2,32 @@
 This script contais the training code for the SimClrWrapper PL model
 """
 
+# imports
+import torch
 import numpy as np
 import pytorch_lightning as L
 
+# from imports
 from clearml import Task, Logger
 from typing import Union, Optional, Tuple, List, Callable, Dict
 from pathlib import Path
 from collections import defaultdict
+from itertools import chain
+from sklearn.cluster import KMeans
 
-import torch
+# torch and pl imports
 from torch.utils.data import DataLoader
-
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.utilities import CombinedLoader
 
-from sklearn.cluster import KMeans
-
+# imports from the mypt packge
 from mypt.data.dataloaders.standard_dataloaders import initialize_val_dataloader
-
 from mypt.code_utilities import pytorch_utilities as pu, directories_and_files as dirf
 from mypt.data.datasets.parallel_augmentation.parallel_aug_dir import ParallelAugDirDs
 from mypt.shortcuts import P
-
 from mypt.similarities.cosineSim import CosineSim
 
+# imports from the directory
 from .simClrWrapper import ResnetSimClrWrapper
 from .set_ds import _set_data
 
@@ -33,7 +35,6 @@ from .constants import (_TEMPERATURE, _OUTPUT_DIM, _OUTPUT_SHAPE,
                         ARCHITECTURE_IMAGENETTE, ARCHITECTURE_FOOD_101, 
                         _NUM_FC_LAYERS, _DROPOUT,
                         TRACK_PROJECT_NAME) 
-
 
 def _set_logging(use_logging: bool, 
                  run_name: str, 
@@ -231,36 +232,29 @@ def evaluate_augmentations(augmentations: List,
 
     # use the statistics to cluster 
     kmeans = KMeans(n_clusters=num_categories, 
-                distance='euclidean', 
+                # metric='euclidean', 
                 random_state=0,)
 
     labels: np.ndarray = kmeans.fit_predict(augs_samples)
 
-    # having the labels prepared, order the augmentation categories by difficulties
-
     # having the labels prepared, it is time to order the augmentation categories by difficulty
-    labels_unique = labels.unique()
+    labels_unique = np.unique(labels)
     
-    sorted(labels_unique, # the unique label 
-           key=lambda l: np.mean(augs_samples[labels == l, -2]).item(), # for each label 'l' index the augs_samples with the labels and average the median... 
-           reverse=True)
+    labels_unique = sorted(labels_unique, # the unique label 
+                            key=lambda l: np.mean(augs_samples[labels == l.item(), -2]).item(), # for each label 'l' index the augs_samples with the labels and average the median... 
+                            reverse=True) # higher average implies easier augmentation
 
+    # at this point the labels are sorted by difficulty
     augmentations_per_difficulty = defaultdict(lambda :[])
 
-    last_difficulty = None
-    last_difficulty_level = 0
+    label2difficulty = dict((l.item(), index) for index, l in enumerate(labels_unique))
 
-    for aug_index, l in enumerate(labels):
-        if l != last_difficulty:
-            last_difficulty_level += 1
-            last_difficulty = l
-        
-        augmentations_per_difficulty[last_difficulty_level].append(augmentations[aug_index])
+    for augmentation_index, aug_label in enumerate(labels):
+        augmentations_per_difficulty[label2difficulty[aug_label.item()]].append(augmentations[augmentation_index])
     
     return augmentations_per_difficulty
 
 
-from itertools import chain
 
 def calculate_weights(augmentations_per_difficulty: Dict, 
                     dataset: ParallelAugDirDs,
@@ -269,14 +263,19 @@ def calculate_weights(augmentations_per_difficulty: Dict,
                     batch: torch.nn.Module,
                     augmentations: List[Callable]
                     ):
-
+    
+    # set the device
     device = pu.get_default_device()
+    # move the model to the device
     model = model.to(device)
-    # extract augmentations
+
+    # extract the difficulty levels
     difficulties = sorted(list(augmentations_per_difficulty.keys()))
     
+    # extract the augmentations ordered in difficulty
     augs = chain.from_iterable([augmentations_per_difficulty[i] for i in difficulties])
 
+    # the 
     weights = chain.from_iterable([
                                 [1 / (np.sqrt(1 + d)) for _ in range(len(augmentations_per_difficulty[d]))] 
                                 for d in difficulties
@@ -296,6 +295,7 @@ def calculate_weights(augmentations_per_difficulty: Dict,
             batch = batch.to(device)
             batch_embds = process_model_output(model.forward(batch))
             batch_res = []
+
             for t in augs:
                 batch_t = t.forward(batch)
                 batch_t_embds = process_model_output(model.forward(batch_t)) 
@@ -305,6 +305,7 @@ def calculate_weights(augmentations_per_difficulty: Dict,
 
             batch_res = np.concat(batch_res, axis=1) # concatenate horizontally
             dataset_result.append(batch_res)
+            
         # concatenate all the batches vertically to build the dataset
         dataset_result = np.concat(dataset_result, axis=0)
 
