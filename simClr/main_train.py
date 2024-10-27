@@ -72,9 +72,7 @@ if __name__ == '__main__':
                                         augmentation_scores=aug_scores,
                                         num_categories=3)
 
+    from model_train_pl.set_ds import _set_imagenette_ds
 
-    
-
-    # # the next step woulw
-    # sample_weights = calculate_weights(augmentations_per_difficulty=augs_per_difficulty,
-    #                                    dataset=)
+    sample_weights = calculate_weights(augmentations_per_difficulty=augs_per_difficulty,
+                                       )

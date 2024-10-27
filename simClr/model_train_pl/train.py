@@ -261,7 +261,6 @@ def calculate_weights(augmentations_per_difficulty: Dict,
                     model: torch.nn.Module,
                     process_model_output: Callable,
                     batch: torch.nn.Module,
-                    augmentations: List[Callable]
                     ):
     
     # set the device
@@ -281,7 +280,7 @@ def calculate_weights(augmentations_per_difficulty: Dict,
                                 for d in difficulties
                                 ])
 
-    dl = initialize_val_dataloader(dataset, seed=0, batch_size=1024, warning=False, num_workers=0)
+    dl = initialize_val_dataloader(dataset, seed=0, batch_size=2048, warning=False, num_workers=0)
     
     # the k-th hardest category is assocaited 1 / sqrt(k + 1)
     # first calculate the weight similarities mean between a given samples and all the augmentations
@@ -305,7 +304,7 @@ def calculate_weights(augmentations_per_difficulty: Dict,
 
             batch_res = np.concat(batch_res, axis=1) # concatenate horizontally
             dataset_result.append(batch_res)
-            
+
         # concatenate all the batches vertically to build the dataset
         dataset_result = np.concat(dataset_result, axis=0)
 

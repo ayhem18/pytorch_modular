@@ -159,18 +159,29 @@ def _set_food101_ds(
     return train_ds, val_ds
 
 
-
 def _set_imagenette_ds_debug(
             train_data_folder: P,
             output_shape: Tuple[int, int],
-            batch_size:int
+            batch_size:int,
+            num_train_samples_per_cls:Optional[int],
             ):
     
+    # train_path, val_path = _process_paths(train_data_folder, val_data_folder)
+    train_ds = ImagenetterWrapper(root_dir=train_data_folder, 
+                                output_shape=output_shape,
+                                augs_per_sample=0, 
+                                sampled_data_augs=[],
+                                uniform_augs_before=[],
+                                uniform_augs_after=[],
+                                train=True,
+                                samples_per_cls=num_train_samples_per_cls,
+                                classification_mode=True
+                                )
     
-    train_ds = GenericFolderDS(root=os.path.join(DATA_FOLDER, 'imagenette_tune', 'train'), 
-                               transforms=[tr.ToTensor(), 
-                                           tr.Resize(size=output_shape)], # the images needs to be resized tensors
-                               image_extensions=None)
+    # train_ds = GenericFolderDS(root=os.path.join(DATA_FOLDER, 'imagenette_tune', 'train'), 
+    #                            transforms=[tr.ToTensor(), 
+    #                                        tr.Resize(size=output_shape)], # the images needs to be resized tensors
+    #                            image_extensions=None)
     
     return initialize_train_dataloader(dataset_object=train_ds, 
                                        seed=0, 

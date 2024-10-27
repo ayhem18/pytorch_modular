@@ -8,16 +8,15 @@ import torchvision.transforms as tr
 
 from pathlib import Path 
 from typing import Union, List, Tuple, Optional
-from bisect import bisect
 from tqdm import tqdm
 
 from torch.utils.data import Dataset
 from torchvision.datasets import Food101, Imagenette
 
 from mypt.data.datasets.parallel_augmentation.parallel_aug_abstract import AbstractParallelAugsDs
+from mypt.data.datasets.mixins.cls_ds_wrapper import ClassificationDsWrapper
 
-
-class ParallelAugWrapperDS(AbstractParallelAugsDs):
+class ParallelAugWrapperDS(ClassificationDsWrapper, AbstractParallelAugsDs):
     def __init__(self, 
                 root_dir: Union[str, Path], 
                 output_shape: Tuple[int, int],
@@ -25,11 +24,11 @@ class ParallelAugWrapperDS(AbstractParallelAugsDs):
                 sampled_data_augs:List,
                 uniform_augs_before: List,
                 uniform_augs_after: List,
-                train:bool=True,
-                classification_mode: bool=False) -> None:
+                train:bool=True) -> None:
+                # classification_mode: bool=False) -> None:
                 
-        if classification_mode and len(sampled_data_augs) > 0:
-            raise ValueError(f"In classification mode, there should be no sampled data augmentations...")
+        # if classification_mode and len(sampled_data_augs) > 0:
+        #     raise ValueError(f"In classification mode, there should be no sampled data augmentations...")
 
         super().__init__(output_shape=output_shape, 
                          augs_per_sample=augs_per_sample,
@@ -42,56 +41,58 @@ class ParallelAugWrapperDS(AbstractParallelAugsDs):
         self._len:int = None
         self.train = train
         self.samples_per_cls_map = None
-        self.classification_mode = classification_mode
+        # self.classification_mode = classification_mode
 
-    def _set_samples_per_cls(self, samples_per_cls: int):
-        # iterate through the dataset
-        current_cls = None
+    # def _set_samples_per_cls(self, samples_per_cls: int):
+    #     # iterate through the dataset
+    #     current_cls = None
         
-        last_pointer = 0
-        cls_count = 0
+    #     last_pointer = 0
+    #     cls_count = 0
 
-        mapping = {0: 0}
+    #     mapping = {0: 0}
         
-        for i in tqdm(range(len(self._ds)), desc="iterating through the dataset to set the samples for each class"):
-            _, c = self._ds[i]
+    #     for i in tqdm(range(len(self._ds)), desc="iterating through the dataset to set the samples for each class"):
+    #         _, c = self._ds[i]
             
-            if current_cls is None:
-                current_cls = c
+    #         if current_cls is None:
+    #             current_cls = c
             
-            if current_cls == c:
-                cls_count += 1    
+    #         if current_cls == c:
+    #             cls_count += 1    
 
-                if cls_count == samples_per_cls:
-                    last_pointer = last_pointer + cls_count
+    #             if cls_count == samples_per_cls:
+    #                 last_pointer = last_pointer + cls_count
                     
 
-            else:
-                if cls_count <= samples_per_cls:
-                    last_pointer = last_pointer + cls_count
+    #         else:
+    #             if cls_count <= samples_per_cls:
+    #                 last_pointer = last_pointer + cls_count
 
-                mapping[last_pointer] = i 
+    #             mapping[last_pointer] = i 
 
-                cls_count = 1              
-                current_cls = c          
+    #             cls_count = 1              
+    #             current_cls = c          
 
-        self.samples_per_cls_map = mapping
+    #     self.samples_per_cls_map = mapping
 
 
     def __get_item_default_(self, index:int) -> Tuple[torch.Tensor, torch.Tensor]:
         # extract the path to the sample (using the map between the index and the sample path !!!)
         if self.samples_per_cls_map is not None:            
-            # extract the indices of first samples of each class in the wrapper
-            cls_first_sample_indices = sorted(list(self.samples_per_cls_map.keys()))
+            # # extract the indices of first samples of each class in the wrapper
+            # cls_first_sample_indices = sorted(list(self.samples_per_cls_map.keys()))
 
-            index_in_first_sample_list = bisect(cls_first_sample_indices, index) - 1
+            # index_in_first_sample_list = bisect(cls_first_sample_indices, index) - 1
 
-            cls_index_first_sample_wrapper = cls_first_sample_indices[index_in_first_sample_list]
+            # cls_index_first_sample_wrapper = cls_first_sample_indices[index_in_first_sample_list]
 
-            cls_index_first_sample_original = self.samples_per_cls_map[cls_index_first_sample_wrapper]
+            # cls_index_first_sample_original = self.samples_per_cls_map[cls_index_first_sample_wrapper]
 
-            final_index = cls_index_first_sample_original + (index - cls_index_first_sample_wrapper)
-            
+            # final_index = cls_index_first_sample_original + (index - cls_index_first_sample_wrapper)
+
+            final_index = self._find_final_index(index)
+
             sample_image:torch.Tensor = self._ds[final_index][0]
         else:
             sample_image:torch.Tensor = self._ds[index][0]   
@@ -102,32 +103,30 @@ class ParallelAugWrapperDS(AbstractParallelAugsDs):
         return s1, s2
 
 
-    def __get_item_cls_(self, index:int) -> Tuple[torch.Tensor, int]:
-        # extract the path to the sample (using the map between the index and the sample path !!!)
-        if self.samples_per_cls_map is not None:
+    # def __get_item_cls_(self, index:int) -> Tuple[torch.Tensor, int]:
+    #     # extract the path to the sample (using the map between the index and the sample path !!!)
+    #     if self.samples_per_cls_map is not None:
 
-            # extract the indices of first samples of each class in the wrapper
-            cls_first_sample_indices = sorted(list(self.samples_per_cls_map.keys()))
+    #         # extract the indices of first samples of each class in the wrapper
+    #         cls_first_sample_indices = sorted(list(self.samples_per_cls_map.keys()))
 
-            index_in_first_sample_list = bisect(cls_first_sample_indices, index) - 1
+    #         index_in_first_sample_list = bisect(cls_first_sample_indices, index) - 1
 
-            cls_index_first_sample_wrapper = cls_first_sample_indices[index_in_first_sample_list]
+    #         cls_index_first_sample_wrapper = cls_first_sample_indices[index_in_first_sample_list]
 
-            cls_index_first_sample_original = self.samples_per_cls_map[cls_index_first_sample_wrapper]
+    #         cls_index_first_sample_original = self.samples_per_cls_map[cls_index_first_sample_wrapper]
 
-            final_index = cls_index_first_sample_original + (index - cls_index_first_sample_wrapper)
+    #         final_index = cls_index_first_sample_original + (index - cls_index_first_sample_wrapper)
 
-            return self._ds[final_index]
+    #         return self._ds[final_index]
         
-        item = self._ds[index]
-        return item
+    #     item = self._ds[index]
+    #     return item
 
 
-    def __getitem__(self, index: int) -> Union[Tuple[torch.Tensor, torch.Tensor], 
-                                               Tuple[torch.Tensor, List[int]]
-                                               ]:
-        if self.classification_mode:
-            return self.__get_item_cls_(index)
+    def __getitem__(self, index: int) -> Tuple[torch.Tensor, torch.Tensor]:
+        # if self.classification_mode:
+        #     return self.__get_item_cls_(index)
 
         return self.__get_item_default_(index)
 
@@ -148,8 +147,7 @@ class Food101Wrapper(ParallelAugWrapperDS):
                 uniform_augs_before: List,
                 uniform_augs_after: List,
                 train:bool=True,
-                samples_per_cls: Optional[int] = None,
-                classification_mode: bool=False) -> None:
+                samples_per_cls: Optional[int] = None) -> None:
 
         super().__init__(
                 root_dir=root_dir,
@@ -158,22 +156,23 @@ class Food101Wrapper(ParallelAugWrapperDS):
                 sampled_data_augs=sampled_data_augs,
                 uniform_augs_before=uniform_augs_before,
                 uniform_augs_after=uniform_augs_after,
-                train=train,
-                classification_mode=classification_mode)
+                train=train)
+                # classification_mode=classification_mode)
 
-        ds_transform = [tr.ToTensor(), tr.Resize(size=output_shape)] + uniform_augs_before + uniform_augs_after
+        # ds_transform = [tr.ToTensor(), tr.Resize(size=output_shape)] + uniform_augs_before + uniform_augs_after
 
         self._ds = Food101(root=root_dir,     
                          split='train' if train else 'test',
-                         transform=tr.Compose(ds_transform) if classification_mode else None, 
+                         transform=None,#tr.Compose(ds_transform) if classification_mode else None, 
                          download=True)
 
         # call the self._set_samples_per_cls method after setting the self._ds field
         if samples_per_cls is not None:
-            self._set_samples_per_cls(samples_per_cls)
+            self.samples_per_cls_map = self._set_samples_per_cls(samples_per_cls)
             self._len = 101 * samples_per_cls
         else:
             self._len = len(self._ds)
+
         
     def _set_samples_per_cls(self, samples_per_cls: int):        
         # instead of a all rounded function that works for all cases, we will suppose, for the sake of efficiency
@@ -196,8 +195,7 @@ class ImagenetterWrapper(ParallelAugWrapperDS):
                 uniform_augs_before: List,
                 uniform_augs_after: List,
                 train:bool=True,
-                samples_per_cls: Optional[int] = None,
-                classification_mode: bool=False) -> None:
+                samples_per_cls: Optional[int] = None) -> None:
 
         super().__init__(
                 root_dir=root_dir,
@@ -206,32 +204,32 @@ class ImagenetterWrapper(ParallelAugWrapperDS):
                 sampled_data_augs=sampled_data_augs,
                 uniform_augs_before=uniform_augs_before,
                 uniform_augs_after=uniform_augs_after,
-                train=train,
-                classification_mode=classification_mode)
+                train=train)
+                # classification_mode=classification_mode)
 
 
-        ds_transform = [tr.ToTensor(), tr.Resize(size=output_shape)] + uniform_augs_before + uniform_augs_after
+        # ds_transform = [tr.ToTensor(), tr.Resize(size=output_shape)] + uniform_augs_before + uniform_augs_after
 
         # for some reason, setting the download parameter to True raises an error if the directory already exists
         # wrap the self._ds field in a try and catch statment to cover all cases (setting the download argument with whether the directly exists or not is not enough as certain files might be missing...)
         try:
             self._ds = Imagenette(root=self.root_dir,     
                             split='train' if train else 'val', # the split argument must either 'train' or 'val'
-                            transform=tr.Compose(ds_transform) if classification_mode else None, 
+                            transform=None, #tr.Compose(ds_transform) if classification_mode else None, 
                             download=True,  
                             size='full')
         except RuntimeError as e:
             if 'dataset not found' not in str(e).lower():
                 self._ds = Imagenette(root=self.root_dir,     
                                 split='train' if train else 'val',
-                                transform=tr.Compose(ds_transform) if classification_mode else None, 
+                                transform=None, #tr.Compose(ds_transform) if classification_mode else None, 
                                 download=False,  
                                 size='full')
             else:
                 raise e
             
         if samples_per_cls is not None:
-            self._set_samples_per_cls(samples_per_cls)
+            self.samples_per_cls_map = self._set_samples_per_cls(samples_per_cls)
             self._len = 10 * samples_per_cls
         else:
             self._len = len(self._ds)
@@ -239,3 +237,4 @@ class ImagenetterWrapper(ParallelAugWrapperDS):
     def _set_samples_per_cls(self, samples_per_cls: int):
         # the number of samples varies per class, we we will use the parent function
         return super()._set_samples_per_cls(samples_per_cls=samples_per_cls)
+

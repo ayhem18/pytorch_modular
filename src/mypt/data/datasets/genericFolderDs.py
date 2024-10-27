@@ -3,11 +3,11 @@ This script contains an implementation of a generic Dataset Object that returns 
 without imposing a specific structure.
 """
 import os
+import torchvision.transforms as tr
 
 from typing import Union, List, Tuple, Dict
 from torch.utils.data import Dataset
 from PIL import Image
-
 
 from mypt.code_utilities import directories_and_files as dirf
 from mypt.shortcuts import P
@@ -24,7 +24,6 @@ class GenericFolderDS(Dataset):
         with open(sample_path, "rb") as f:
             img = Image.open(f)
             return img.convert("RGB")
-
 
 
     def __init__(self, 
@@ -73,8 +72,13 @@ class GenericFolderDS(Dataset):
         # load the image
         sample = self.load_sample(self.idx2path[index])
         # pass it through the passed transforms
-        for t in self.transforms:
-            sample = t(sample)
+        try:
+            compound_tr = tr.Compose(self.transforms)
+            return compound_tr(sample)
+        except Exception:
+            # the fall-back approach, call each transformation sequentially
+            for t in self.transforms:
+                sample = t(sample)
         
         return sample
 
@@ -82,3 +86,19 @@ class GenericFolderDS(Dataset):
         if self.data_count is None or self.data_count == 0:
             raise ValueError(f"Make sure to set the self.data_count attribute correctly to retrive the size of the dataset in O(1) time !!!")
         return self.data_count
+
+
+def GenericDsWrapper(Dataset):
+    @classmethod
+    def load_sample(cls, sample_path: P):
+        # make sure the path is absolute
+        if not os.path.isabs(sample_path):
+            raise ValueError(f"The loader is expecting the sample path to be absolute.\nFound:{sample_path}")
+
+        # this code is copied from the DatasetFolder python file
+        with open(sample_path, "rb") as f:
+            img = Image.open(f)
+            return img.convert("RGB")
+
+    def __init__(self, ):
+        pass

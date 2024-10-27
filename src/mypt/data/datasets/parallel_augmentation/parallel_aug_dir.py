@@ -3,12 +3,14 @@ This script contains the implementation of a general dataset object designed for
 (https://arxiv.org/pdf/2002.05709, https://arxiv.org/abs/2103.03230) for example
 """
 
-import os
+import os, torch
+import torchvision.transforms as tr
+
 from typing import Union, List, Tuple, Optional
 from pathlib import Path
 
-from ....code_utilities import directories_and_files as dirf
 from .parallel_aug_abstract import AbstractParallelAugsDs
+from ....code_utilities import directories_and_files as dirf
 
 
 class ParallelAugDirDs(AbstractParallelAugsDs):
@@ -19,6 +21,7 @@ class ParallelAugDirDs(AbstractParallelAugsDs):
                 sampled_data_augs:List,
                 uniform_augs_before: List,
                 uniform_augs_after: List,
+                classification_mode:bool = False,
                 image_extensions:Optional[List[str]]=None,
                 seed: int=0):
         
@@ -47,6 +50,7 @@ class ParallelAugDirDs(AbstractParallelAugsDs):
         # set the mapping from the index to the sample's path
         self._prepare_idx2path()
 
+        self.classification_mode = classification_mode
 
     def _prepare_idx2path(self):
         # define a dictionary
@@ -68,14 +72,22 @@ class ParallelAugDirDs(AbstractParallelAugsDs):
         # for Pytorch built-in datasets
         # and the shuffling part should be done at the dataloader level
 
-
-    def __getitem__(self, index: int):
+    def __getitem__aug(self, index: int) -> Tuple[torch.Tensor, torch.Tensor]:
         # extract the path to the sample (using the map between the index and the sample path !!!)
         sample_image = self.load_sample(self.idx2path[index])   
         augs1, augs2 = self._set_augmentations()
         s1, s2 = augs1(sample_image), augs2(sample_image) 
         return s1, s2
 
+    def __getitem__cl(self, index: int) -> torch.Tensor:
+        # convert the sample from a PIL image to a torch Tensor
+        return (tr.ToTensor()).forward(self.load_sample(self.idx2path[index]))
+
+    def __getitem__(self, index: int):
+        if self.classification_mode:
+            return self.__getitem__cl(index)
+
+        return self.__getitem__aug(index)
 
     def __len__(self) -> int:
         if self.data_count == 0:
