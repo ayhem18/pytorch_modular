@@ -330,22 +330,25 @@ class SimClrModelWrapper(LightningModule):
             return self.validation_step_forward(val_batch, val_batch_idx)
         
     def on_validation_epoch_end(self):
-        # calculate the average of batch losses
-        val_epoch_loss = float(np.mean(self.val_batch_logs))
-        # clear the training and validation logs after the
-        self.val_batch_logs.clear()
+        # certain oeprations take place only when the self.validation_step_forward method was called
+        if self.val_epoch_index % self.val_per_epoch == 0:        
+            # calculate the average of batch losses
+            val_epoch_loss = float(np.mean(self.val_batch_logs))
+            # clear the training and validation logs after the
+            self.val_batch_logs.clear()
 
-        # log to ClearMl
-        if self.myLogger is not None:
-            self.myLogger.report_scalar(
-                                        title="val_epoch_loss", 
-                                        series="val_epoch_loss", 
-                                        value=val_epoch_loss, # 
-                                        iteration=self.val_epoch_index)
-                                        
-        # log the epoch validation loss to use it for checkpointing
-        self.log(name='val_epoch_loss', value=val_epoch_loss)
-        # do not increase the counter for sanity check epochs
+            # log to ClearMl
+            if self.myLogger is not None:
+                self.myLogger.report_scalar(
+                                            title="val_epoch_loss", 
+                                            series="val_epoch_loss", 
+                                            value=val_epoch_loss,
+                                            iteration=self.val_epoch_index)
+                                            
+            # log the epoch validation loss to use it for checkpointing
+            self.log(name='val_epoch_loss', value=val_epoch_loss)
+
+        # increment the validation epoch counter (discard the sanity check epochs)
         self.val_epoch_index += int(not (self._trainer.sanity_checking))
         return 
 

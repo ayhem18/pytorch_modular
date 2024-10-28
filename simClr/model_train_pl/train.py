@@ -257,10 +257,9 @@ def evaluate_augmentations(augmentations: List,
 
 
 def calculate_weights(augmentations_per_difficulty: Dict, 
-                    dataset: ParallelAugDirDs,
+                    dataloader: DataLoader,
                     model: torch.nn.Module,
                     process_model_output: Callable,
-                    batch: torch.nn.Module,
                     ):
     
     # set the device
@@ -272,48 +271,58 @@ def calculate_weights(augmentations_per_difficulty: Dict,
     difficulties = sorted(list(augmentations_per_difficulty.keys()))
     
     # extract the augmentations ordered in difficulty
-    augs = chain.from_iterable([augmentations_per_difficulty[i] for i in difficulties])
+    augs = list(
+        chain.from_iterable([augmentations_per_difficulty[i] for i in difficulties])
+    )
 
-    # the 
-    weights = chain.from_iterable([
-                                [1 / (np.sqrt(1 + d)) for _ in range(len(augmentations_per_difficulty[d]))] 
-                                for d in difficulties
-                                ])
-
-    dl = initialize_val_dataloader(dataset, seed=0, batch_size=2048, warning=False, num_workers=0)
-    
     # the k-th hardest category is assocaited 1 / sqrt(k + 1)
     # first calculate the weight similarities mean between a given samples and all the augmentations
     # harder samples should have lower values
     # apply 1 / weights to obtain the final weights
 
+    weights = list(
+                    chain.from_iterable([
+                                [np.exp(- (d - len(difficulties) // 2) ** 2) for _ in range(len(augmentations_per_difficulty[d]))] 
+                                for d in difficulties
+                                ])
+                )
+    
+
     dataset_result = []
 
     with torch.no_grad():
-        for batch in dl:
+        for batch in dataloader:
             batch = batch.to(device)
             batch_embds = process_model_output(model.forward(batch))
             batch_res = []
 
             for t in augs:
-                batch_t = t.forward(batch)
+                batch_t = t(batch)
                 batch_t_embds = process_model_output(model.forward(batch_t)) 
                 # compute the similarities between samples and their augmented versions
-                sample_aug_similarities = torch.diagonal(CosineSim().forward(batch_embds, batch_t_embds)).unsqueeze(-1).cpu().numpy()
+                sample_aug_similarities = torch.diagonal(CosineSim().forward(batch_embds, batch_t_embds)).unsqueeze(-1)
                 batch_res.append(sample_aug_similarities)
 
-            batch_res = np.concat(batch_res, axis=1) # concatenate horizontally
+            batch_res = torch.concat(batch_res, dim=1) # concatenate horizontally
             dataset_result.append(batch_res)
 
         # concatenate all the batches vertically to build the dataset
-        dataset_result = np.concat(dataset_result, axis=0)
+        dataset_result = torch.concat(dataset_result, dim=0)
+
+    # convert to numpy
+    dataset_result = dataset_result.cpu().numpy()
 
     # make sure to clip anything negative to zero
-    dataset_result = np.clip(dataset_result, a_min=0.0001)
+    dataset_result = np.clip(dataset_result, 
+                             a_min=0.0001, 
+                             a_max=1)
 
-    samples_weights = dataset_result @ np.expand_dims(weights, dim=-1)
+    samples_weights = dataset_result @ np.expand_dims(np.asarray(weights), axis=-1)
+    
+    # samples with larger values are more likely to be easier
+    # hence should be assigned smaller probabilities
+    # inverse the values and pass them as weights for the datalaoder
+    final_weights = (1 / samples_weights).squeeze()
+    
+    return final_weights
 
-    return (1 / samples_weights).squeeze()
-
-
-## TODO: density estimation

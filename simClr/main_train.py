@@ -9,8 +9,6 @@ from model_train_pl.train import train_simClr_wrapper, ResnetSimClrWrapper, eval
 from model_train_pl.constants import TRACK_PROJECT_NAME
 from model_train_pl.set_ds import _DEFAULT_DATA_AUGS
 
-
-
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 
 
@@ -29,19 +27,18 @@ def train_main():
 
     run_name = f'{TRACK_PROJECT_NAME}_iteration_{n + 1}'
 
-
     train_simClr_wrapper(
                         train_data_folder=train_data_folder,
                         val_data_folder=val_data_folder,
                         dataset=dataset_name,
                         log_dir=os.path.join(ckpnt_dir_parent, f'{dataset_name}_iteration_{n + 1}'),
-                        num_epochs=2, 
+                        num_epochs=20, 
                         train_batch_size=512,
                         val_batch_size=1600, 
                         seed=0, 
                         use_logging=False,
-                        num_warmup_epochs=0,
-                        val_per_epoch=1,
+                        num_warmup_epochs=5,
+                        val_per_epoch=2,
                         num_train_samples_per_cls=None,
                         num_val_samples_per_cls=None,
                         run_name=run_name,     
@@ -60,7 +57,7 @@ if __name__ == '__main__':
     n = len(os.listdir(ckpnt_dir_parent))
     log_dir=os.path.join(ckpnt_dir_parent, f'imagenette_iteration_{n}')
 
-    ckpnt = os.path.join(log_dir, 'val-epoch=00-val_epoch_loss=6.731850.ckpt')
+    ckpnt = os.path.join(log_dir, 'val-epoch=01-val_epoch_loss=000nan.ckpt')
 
     wrapper = ResnetSimClrWrapper.load_from_checkpoint(ckpnt)
 
@@ -72,7 +69,17 @@ if __name__ == '__main__':
                                         augmentation_scores=aug_scores,
                                         num_categories=3)
 
-    from model_train_pl.set_ds import _set_imagenette_ds
+    from model_train_pl.set_ds import _set_imagenette_ds_debug
 
-    sample_weights = calculate_weights(augmentations_per_difficulty=augs_per_difficulty,
-                                       )
+    train_data_folder = os.path.join(SCRIPT_DIR, 'data', 'imagenette', 'train')
+    dataloader = _set_imagenette_ds_debug(train_data_folder=train_data_folder, 
+                                        output_shape=(200, 200), 
+                                        batch_size=1024, 
+                                        num_train_samples_per_cls=None)
+    
+    sample_weights = calculate_weights(augmentations_per_difficulty=augs_per_difficulty, 
+                                       dataloader=dataloader, 
+                                       model=wrapper.model, 
+                                       process_model_output=lambda x: x[1])
+    
+    

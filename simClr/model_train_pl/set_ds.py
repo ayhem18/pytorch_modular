@@ -14,7 +14,7 @@ from mypt.data.dataloaders.standard_dataloaders import initialize_train_dataload
 from mypt.data.datasets.parallel_augmentation.parallel_aug_ds_wrapper import Food101Wrapper, ImagenetterWrapper
 from mypt.data.datasets.parallel_augmentation.parallel_aug_dir import ParallelAugDirDs 
 from mypt.data.datasets.genericFolderDs import GenericFolderDS
-
+from mypt.data.datasets.genericFolderDs import ImagenetteGenericWrapper, Food101GenericWrapper
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 current = SCRIPT_DIR
@@ -167,16 +167,22 @@ def _set_imagenette_ds_debug(
             ):
     
     # train_path, val_path = _process_paths(train_data_folder, val_data_folder)
-    train_ds = ImagenetterWrapper(root_dir=train_data_folder, 
-                                output_shape=output_shape,
-                                augs_per_sample=0, 
-                                sampled_data_augs=[],
-                                uniform_augs_before=[],
-                                uniform_augs_after=[],
-                                train=True,
-                                samples_per_cls=num_train_samples_per_cls,
-                                classification_mode=True
-                                )
+    
+    train_ds = ImagenetteGenericWrapper(root_dir=train_data_folder, 
+                                        augmentations=[tr.ToTensor(), tr.Resize(size=output_shape)],
+                                        train=True,
+                                        samples_per_cls=num_train_samples_per_cls)
+
+    # train_ds = ImagenetterWrapper(root_dir=train_data_folder, 
+    #                             output_shape=output_shape,
+    #                             augs_per_sample=0, 
+    #                             sampled_data_augs=[],
+    #                             uniform_augs_before=[],
+    #                             uniform_augs_after=[],
+    #                             train=True,
+    #                             samples_per_cls=num_train_samples_per_cls,
+    #                             classification_mode=True
+    #                             )
     
     # train_ds = GenericFolderDS(root=os.path.join(DATA_FOLDER, 'imagenette_tune', 'train'), 
     #                            transforms=[tr.ToTensor(), 
@@ -290,9 +296,10 @@ def _set_data(
             num_val_samples_per_cls=num_val_samples_per_cls,
             sampled_augs=sampled_augs)
 
-    train_dl_debug = _set_imagenette_ds_debug(train_data_folder=os.path.join(DATA_FOLDER, ), 
+    train_dl_debug = _set_imagenette_ds_debug(train_data_folder=train_data_folder, 
                                               output_shape=output_shape, 
-                                              batch_size=val_batch_size)
+                                              batch_size=val_batch_size,
+                                              num_train_samples_per_cls=num_train_samples_per_cls)
 
     train_dl, val_dl = _set_dataloaders(train_ds, 
                                         val_ds, 
