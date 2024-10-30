@@ -3,13 +3,13 @@ This script contais the training code for the SimClrWrapper PL model
 """
 
 # imports
-import torch
+import torch, os
 import numpy as np
 import pytorch_lightning as L
 
 # from imports
 from clearml import Task, Logger
-from typing import Union, Optional, Tuple, List, Callable, Dict
+from typing import Union, Optional, Tuple, List, Callable, Dict, Iterable
 from pathlib import Path
 from collections import defaultdict
 from itertools import chain
@@ -29,7 +29,7 @@ from mypt.similarities.cosineSim import CosineSim
 
 # imports from the directory
 from .simClrWrapper import ResnetSimClrWrapper
-from .set_ds import _set_data
+from .set_ds import _set_data, _set_imagenette_ds_debug
 
 from .constants import (_TEMPERATURE, _OUTPUT_DIM, _OUTPUT_SHAPE, 
                         ARCHITECTURE_IMAGENETTE, ARCHITECTURE_FOOD_101, 
@@ -53,7 +53,6 @@ def _set_logging(use_logging: bool,
         else:
             task = Task.create(project_name=TRACK_PROJECT_NAME,
                             task_name=run_name,
-                            # **kwargs
                             )
             logger = task.get_logger()
     else:
@@ -98,8 +97,25 @@ def _set_ckpnt_callback(val_dl: Optional[DataLoader],
 
     return checkpnt_callback
 
+def _find_best_ckpnt(log_dir: P) -> P:
+    # this function assumes the checkpoints were 
+    # created using the checkpoint callback
+    # defined above
+    min_val_loss = float('inf')
 
-def train_simClr_wrapper(
+    for ckpnt_org in os.listdir(log_dir):
+        ckpnt, _ = os.path.splitext(ckpnt_org)
+        _, _, val_loss = ckpnt.split('-')
+        _, val_loss = val_loss.split('=')
+        val_loss = float(val_loss)
+        if val_loss < min_val_loss:
+            best_checkpoint = ckpnt_org
+            min_val_loss = val_loss
+
+    return best_checkpoint
+
+
+def train_simClr_single_round(
         train_data_folder:Union[str, Path],          
         val_data_folder:Optional[Union[str, Path]],
         dataset: str,
@@ -107,18 +123,23 @@ def train_simClr_wrapper(
         num_epochs: int, 
         train_batch_size: int,
         val_batch_size: int,
+        samples_weights: Optional[Iterable[float]], # list, np.ndarray, torch.Tensor...
 
         log_dir: Union[str, Path],
         run_name: str,
+        continue_last_task: bool,
 
         debug_augmentations: List,
+
+        initial_checkpoint: Optional[P] = None,
         output_shape:Tuple[int, int]=None, 
+        
         num_warmup_epochs:int=10,
         val_per_epoch: int = 3,
         seed:int = 69,
 
         use_logging: bool = True,
-
+        
         num_train_samples_per_cls: Union[int, float]=None, # the number of training samples per cls
         num_val_samples_per_cls: Union[int, float]=None, # the number of validation samples per cls
         ) -> ResnetSimClrWrapper:    
@@ -132,14 +153,22 @@ def train_simClr_wrapper(
     # set the logger
     logger = _set_logging(use_logging=use_logging, 
                         run_name=run_name, 
-                        return_task=False)
+                        return_task=False,
+                        # according to  https://clear.ml/docs/latest/docs/references/sdk/task/#taskinit
+                        # continue_last_task will take the maximum iteration value for each plot and use an incremented counter
+                        continue_last_task=continue_last_task)
 
-    simClr_train_dl, simClr_val_dl, debug_train_dl = _set_data(train_data_folder=train_data_folder,
+    simClr_train_dl, simClr_val_dl, debug_train_dl = _set_data(
+                                                    # dataset arguments
+                                                    train_data_folder=train_data_folder,
                                                     val_data_folder=val_data_folder, 
                                                     dataset="imagenette",
                                                     output_shape=output_shape,
+                                                    # dataloader arguments
                                                     train_batch_size=train_batch_size,
                                                     val_batch_size=val_batch_size,
+                                                    samples_weights = samples_weights,
+
                                                     num_train_samples_per_cls=num_train_samples_per_cls,
                                                     num_val_samples_per_cls=num_val_samples_per_cls,
                                                     seed=seed)
@@ -201,9 +230,13 @@ def train_simClr_wrapper(
                 train_dataloaders=simClr_train_dl,
                 val_dataloaders=CombinedLoader([simClr_val_dl, debug_train_dl], 
                                                     mode='sequential'), 
+                ckpt_path=initial_checkpoint
                 )
 
-    return wrapper
+    # find the checkpoint
+    best_ckpnt = _find_best_ckpnt(log_dir)
+
+    return wrapper, best_ckpnt
 
 
 def evaluate_augmentations(augmentations: List, 
@@ -253,7 +286,6 @@ def evaluate_augmentations(augmentations: List,
         augmentations_per_difficulty[label2difficulty[aug_label.item()]].append(augmentations[augmentation_index])
     
     return augmentations_per_difficulty
-
 
 
 def calculate_weights(augmentations_per_difficulty: Dict, 
@@ -326,3 +358,84 @@ def calculate_weights(augmentations_per_difficulty: Dict,
     
     return final_weights
 
+
+def train_simClr(
+        train_data_folder:Union[str, Path],          
+        val_data_folder:Optional[Union[str, Path]],
+        dataset: str,
+
+        num_epochs: int, 
+        train_batch_size: int,
+        val_batch_size: int,
+
+        log_dir: Union[str, Path],
+        run_name: str,
+
+        debug_augmentations: List,
+        total_count: int = 3,
+        
+        output_shape:Tuple[int, int]=None, 
+        num_warmup_epochs:int=10,
+        val_per_epoch: int = 3,
+        seed:int = 69,
+
+        use_logging: bool = True,
+
+        num_train_samples_per_cls: Union[int, float]=None, # the number of training samples per cls
+        num_val_samples_per_cls: Union[int, float]=None, # the number of validation samples per cls
+        ):
+    
+    # initialize a counter to keep track of the number of runs
+    counter = 0
+    last_ckpnt = None
+    samples_weights = None # set to None on the first round
+
+    while counter < total_count:
+        round_log_dir = os.path.join(log_dir, f'round_{counter + 1}')
+        # call the train_simClrWrapper function
+        wrapper, last_ckpnt = train_simClr_single_round(train_data_folder=train_data_folder,
+                                            val_data_folder=val_data_folder,
+                                            dataset=dataset, 
+                                            num_epochs=num_epochs,
+
+                                            train_batch_size=train_batch_size,
+                                            val_batch_size=val_batch_size,
+                                            samples_weights=samples_weights,
+
+                                            log_dir=round_log_dir,
+                                            run_name=run_name,
+                                            continue_last_task=(counter > 0), # only reuse the task_id on later iterations
+
+                                            debug_augmentations=debug_augmentations,
+                                            initial_checkpoint=last_ckpnt, # set the last checkpoint as a starting point for the new round (initially set to None)
+                                            
+                                            output_shape=output_shape, 
+                                            num_warmup_epochs=num_warmup_epochs * int(counter == 0), ## use warm-up epochs only on the first round
+                                            val_per_epoch=val_per_epoch,
+                                            seed=seed,
+
+                                            use_logging=use_logging,
+
+                                            num_train_samples_per_cls=num_train_samples_per_cls,
+                                            num_val_samples_per_cls=num_val_samples_per_cls
+                                            )
+        
+        augs_per_difficulty = evaluate_augmentations(
+                                            augmentations=debug_augmentations,
+                                            get_augmentation_name=pu.get_augmentation_name, 
+                                            augmentation_scores=wrapper.augmentation_scores,
+                                            num_categories=3)
+        
+        dataloader = _set_imagenette_ds_debug(train_data_folder=train_data_folder, 
+                                    output_shape=(200, 200), 
+                                    batch_size=1024, 
+                                    num_train_samples_per_cls=None)
+    
+        samples_weights = calculate_weights(augmentations_per_difficulty=augs_per_difficulty, 
+                                        dataloader=dataloader, 
+                                        model=wrapper.model, 
+                                        process_model_output=lambda x: x[1])
+
+
+        # make sure to increase the counter !!!!
+        counter += 1

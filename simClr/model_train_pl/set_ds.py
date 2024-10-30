@@ -3,7 +3,7 @@ This script contains few functions to handle working with multiple datasets
 """
 import os
 from pathlib import Path
-from typing import Optional, Tuple, List
+from typing import Optional, Tuple, List, Iterable
 from torch.utils.data.dataset import Dataset
 from torch.utils.data import DataLoader
 from torchvision import transforms as tr
@@ -61,15 +61,20 @@ def _process_paths(train_path: P, val_path: Optional[P]) -> Tuple[P, Optional[P]
 def _set_dataloaders(train_ds: Dataset, 
                      val_ds: Optional[Dataset],
                      seed:int, 
+                     
                      train_batch_size:int, 
-                     val_batch_size:int) -> Tuple[DataLoader, Optional[DataLoader]]:
+                     val_batch_size:int,
+                     samples_weights: Optional[Iterable[float]],
+                     ) -> Tuple[DataLoader, Optional[DataLoader]]:
 
     ## data loaders
+    # the weights are only passed to the train dataloader
     train_dl = initialize_train_dataloader(dataset_object=train_ds, 
                                          seed=seed,
                                          batch_size=train_batch_size,
                                          num_workers=2,
-                                         warning=False  
+                                         warning=False,
+                                         weights=samples_weights,
                                          )
 
     if val_ds is not None:
@@ -166,28 +171,12 @@ def _set_imagenette_ds_debug(
             num_train_samples_per_cls:Optional[int],
             ):
     
-    # train_path, val_path = _process_paths(train_data_folder, val_data_folder)
+    train_path = _process_paths(train_data_folder)
     
-    train_ds = ImagenetteGenericWrapper(root_dir=train_data_folder, 
+    train_ds = ImagenetteGenericWrapper(root_dir=train_path, 
                                         augmentations=[tr.ToTensor(), tr.Resize(size=output_shape)],
                                         train=True,
                                         samples_per_cls=num_train_samples_per_cls)
-
-    # train_ds = ImagenetterWrapper(root_dir=train_data_folder, 
-    #                             output_shape=output_shape,
-    #                             augs_per_sample=0, 
-    #                             sampled_data_augs=[],
-    #                             uniform_augs_before=[],
-    #                             uniform_augs_after=[],
-    #                             train=True,
-    #                             samples_per_cls=num_train_samples_per_cls,
-    #                             classification_mode=True
-    #                             )
-    
-    # train_ds = GenericFolderDS(root=os.path.join(DATA_FOLDER, 'imagenette_tune', 'train'), 
-    #                            transforms=[tr.ToTensor(), 
-    #                                        tr.Resize(size=output_shape)], # the images needs to be resized tensors
-    #                            image_extensions=None)
     
     return initialize_train_dataloader(dataset_object=train_ds, 
                                        seed=0, 
@@ -273,14 +262,19 @@ def _verify_paths(dataset: str,
 
 
 def _set_data(
+            # dataset arguments
             train_data_folder: P,
             val_data_folder: Optional[P],
             dataset:str,
-            train_batch_size: int,
-            val_batch_size: int,
-            output_shape: Tuple[int, int],
+
             num_train_samples_per_cls:Optional[int],
             num_val_samples_per_cls:Optional[int],
+            output_shape: Tuple[int, int],
+
+            # dataloader arguments
+            train_batch_size: int,
+            val_batch_size: int,
+            
             seed:int=69) -> Tuple[DataLoader, Optional[DataLoader]]:
 
     train_path, val_path, sampled_augs = _verify_paths(dataset=dataset, 
@@ -291,10 +285,10 @@ def _set_data(
     train_ds, val_ds = _set_imagenette_ds(
             train_data_folder=train_path,
             val_data_folder=val_path,
-            output_shape=output_shape,
             num_train_samples_per_cls=num_train_samples_per_cls,
             num_val_samples_per_cls=num_val_samples_per_cls,
-            sampled_augs=sampled_augs)
+            output_shape=output_shape,
+            sampled_augs=sampled_augs,)
 
     train_dl_debug = _set_imagenette_ds_debug(train_data_folder=train_data_folder, 
                                               output_shape=output_shape, 

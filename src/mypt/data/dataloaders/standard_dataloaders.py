@@ -61,16 +61,22 @@ def initialize_train_dataloader(dataset_object: Dataset,
         sampler = WeightedRandomSampler(weights=weights, num_samples=len(dataset_object), replacement=True, generator=dl_train_gen)
         # set the generator to None
         generator = None
+
+        # Pytorch implementation requires the "shuffle" and "sampler" arguments to be exclusive, setting the samples => setting the "shuffle" to None
+        shuffle = None
+
     else:
         # set the sampler to None
         sampler = None
         # and then set the generator
         generator = dl_train_gen
-
+        # Pytorch implementation requires the "shuffle" and "sampler" arguments to be exclusive
+        shuffle = True 
 
     if num_workers != 0:
         dl_train = DataLoader(dataset=dataset_object, 
-                            shuffle=True, # the train data loader must be shuffled !!
+                            shuffle=shuffle,  
+                            # the train data loader must be shuffled !!
                             drop_last=drop_last, 
                             batch_size=batch_size, 
                             num_workers=num_workers, 
@@ -86,7 +92,7 @@ def initialize_train_dataloader(dataset_object: Dataset,
         warn(message=f"the 'num_workers' argument is set to 0. The dataloader will be run by the main process !!!")
 
     dl_train = DataLoader(dataset=dataset_object, 
-                        shuffle=True, # the train dataloader must be shuffled not to hurt performance
+                        shuffle=shuffle, # the train dataloader must be shuffled not to hurt performance
                         drop_last=drop_last, 
                         batch_size=batch_size, 
                         num_workers=0, 
