@@ -36,7 +36,7 @@ class ClassificationDsWrapper:
         self._verify_attrs()
 
         if warning:
-            warnings.warn("The `_set_samples_per_cls` expects consecutive samples to be of the same class. Make sure this assumption is satisfied. Otherwise, the output might lead to unexpected results...")
+            warnings.warn("The `_set_samples_per_cls` expects consecutive samples to be of the same class. Make sure this assumption is satisfied. Otherwise the results would be erroneous")
 
         # iterate through the dataset
         current_cls = None

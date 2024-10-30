@@ -171,7 +171,11 @@ def _set_imagenette_ds_debug(
             num_train_samples_per_cls:Optional[int],
             ):
     
-    train_path = _process_paths(train_data_folder)
+    train_path = dirf.process_path(train_data_folder, 
+                                    dir_ok=True, 
+                                    file_ok=False,
+                                    must_exist=True 
+                                    )
     
     train_ds = ImagenetteGenericWrapper(root_dir=train_path, 
                                         augmentations=[tr.ToTensor(), tr.Resize(size=output_shape)],
@@ -274,7 +278,7 @@ def _set_data(
             # dataloader arguments
             train_batch_size: int,
             val_batch_size: int,
-            
+            samples_weights: Optional[Iterable[float]],        
             seed:int=69) -> Tuple[DataLoader, Optional[DataLoader]]:
 
     train_path, val_path, sampled_augs = _verify_paths(dataset=dataset, 
@@ -293,12 +297,14 @@ def _set_data(
     train_dl_debug = _set_imagenette_ds_debug(train_data_folder=train_data_folder, 
                                               output_shape=output_shape, 
                                               batch_size=val_batch_size,
-                                              num_train_samples_per_cls=num_train_samples_per_cls)
+                                              num_train_samples_per_cls=num_train_samples_per_cls
+                                              )
 
     train_dl, val_dl = _set_dataloaders(train_ds, 
                                         val_ds, 
                                         train_batch_size=train_batch_size, 
                                         val_batch_size=val_batch_size,
+                                        samples_weights=samples_weights,
                                         seed=seed)
 
     return train_dl, val_dl, train_dl_debug

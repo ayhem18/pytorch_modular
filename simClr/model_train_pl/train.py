@@ -17,13 +17,12 @@ from sklearn.cluster import KMeans
 
 # torch and pl imports
 from torch.utils.data import DataLoader
-from pytorch_lightning.callbacks import ModelCheckpoint
+from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
 from pytorch_lightning.utilities import CombinedLoader
 
+
 # imports from the mypt packge
-from mypt.data.dataloaders.standard_dataloaders import initialize_val_dataloader
 from mypt.code_utilities import pytorch_utilities as pu, directories_and_files as dirf
-from mypt.data.datasets.parallel_augmentation.parallel_aug_dir import ParallelAugDirDs
 from mypt.shortcuts import P
 from mypt.similarities.cosineSim import CosineSim
 
@@ -112,7 +111,21 @@ def _find_best_ckpnt(log_dir: P) -> P:
             best_checkpoint = ckpnt_org
             min_val_loss = val_loss
 
-    return best_checkpoint
+    return os.path.join(log_dir, best_checkpoint)
+
+
+def _set_early_stopping_callback(
+                                   metric: str,
+                                   at_train_epoch_end:bool,
+                                   patience: int = 3, 
+                                   min_delta:float = 0.1):
+    return EarlyStopping(monitor=metric,
+                         mode='min', 
+                  min_delta=min_delta, 
+                  patience=patience, 
+                  strict=False, # not improving is still as bad...
+                  check_on_train_epoch_end=at_train_epoch_end # whether to check at the end of the training epoch or not
+                  )    
 
 
 def train_simClr_single_round(
@@ -178,6 +191,9 @@ def train_simClr_single_round(
                                             val_per_epoch=val_per_epoch, 
                                             log_dir=log_dir)
 
+    # set the early stopping callback
+    early_stopping_callback = _set_early_stopping_callback(metric='train_loss', at_train_epoch_end=True, min_delta=0.5)
+
     lr = 0.3 * (train_batch_size / 256) # according to the paper's formula
 
     # define the wrapper
@@ -222,7 +238,7 @@ def train_simClr_single_round(
                         max_epochs=num_epochs,
                         check_val_every_n_epoch=1,
                         log_every_n_steps=1 if len(simClr_train_dl) < 10 else 5,
-                        callbacks=[checkpnt_callback]
+                        callbacks=[checkpnt_callback, early_stopping_callback]
                         )
 
 
@@ -385,10 +401,16 @@ def train_simClr(
         num_val_samples_per_cls: Union[int, float]=None, # the number of validation samples per cls
         ):
     
+    # set the output_shape argument to the default constant value
+    if output_shape is None:
+        output_shape = _OUTPUT_SHAPE
+
     # initialize a counter to keep track of the number of runs
     counter = 0
     last_ckpnt = None
     samples_weights = None # set to None on the first round
+
+    total_num_epochs = 0
 
     while counter < total_count:
         round_log_dir = os.path.join(log_dir, f'round_{counter + 1}')
@@ -396,7 +418,10 @@ def train_simClr(
         wrapper, last_ckpnt = train_simClr_single_round(train_data_folder=train_data_folder,
                                             val_data_folder=val_data_folder,
                                             dataset=dataset, 
-                                            num_epochs=num_epochs,
+                                            # for some reason, loading the model from the checkpoint, loads the number of 
+                                            # the number of epochs per each round will be computed as follows: 
+                                            # round * num_epochs - total_num_epochs
+                                            num_epochs=num_epochs * (counter + 1),
 
                                             train_batch_size=train_batch_size,
                                             val_batch_size=val_batch_size,
@@ -423,19 +448,23 @@ def train_simClr(
         augs_per_difficulty = evaluate_augmentations(
                                             augmentations=debug_augmentations,
                                             get_augmentation_name=pu.get_augmentation_name, 
-                                            augmentation_scores=wrapper.augmentation_scores,
+                                            augmentation_scores=dict(wrapper.augmentations_scores), 
                                             num_categories=3)
         
         dataloader = _set_imagenette_ds_debug(train_data_folder=train_data_folder, 
-                                    output_shape=(200, 200), 
-                                    batch_size=1024, 
-                                    num_train_samples_per_cls=None)
+                                    output_shape=output_shape, 
+                                    batch_size=512, 
+                                    num_train_samples_per_cls=num_train_samples_per_cls 
+                                    )
     
         samples_weights = calculate_weights(augmentations_per_difficulty=augs_per_difficulty, 
                                         dataloader=dataloader, 
                                         model=wrapper.model, 
                                         process_model_output=lambda x: x[1])
 
-
         # make sure to increase the counter !!!!
+
         counter += 1
+
+        # keep track of the total number of epochs
+        total_num_epochs += wrapper.train_epoch_index

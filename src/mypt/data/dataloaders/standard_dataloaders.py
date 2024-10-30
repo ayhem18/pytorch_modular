@@ -57,6 +57,13 @@ def initialize_train_dataloader(dataset_object: Dataset,
     dl_train_gen.manual_seed(seed)
 
     if weights is not None:
+        
+        # make sure the length of the weights is equal to the number of samples
+        # apparently such a constraint is not explicitly enforced by Pytorch but might lead to several issues later down the line
+        if len(weights) != len(dataset_object):
+            raise ValueError((f"The length of the `weights` iterable does not match the size of the dataset:" 
+                             "Found: {len(weights)} weights and {len(dataset_object)} samples "))
+        
         # in case of concrete weights, initialize a sampler and pass a generator to the sampler
         sampler = WeightedRandomSampler(weights=weights, num_samples=len(dataset_object), replacement=True, generator=dl_train_gen)
         # set the generator to None

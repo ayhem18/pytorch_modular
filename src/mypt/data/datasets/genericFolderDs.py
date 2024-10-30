@@ -113,6 +113,7 @@ class GenericDsWrapper(ClassificationDsWrapper, Dataset):
         self.train = train
         self.samples_per_cls_map = {} # initialize the samples_per_cls_map to an empty dictionary
 
+        self.ds_transform = tr.Compose(augmentations)
 
     def __getitem__(self, index:int):
         if len(self.samples_per_cls_map) > 0:            
@@ -185,14 +186,16 @@ class ImagenetteGenericWrapper(GenericDsWrapper):
         try:
             self._ds = Imagenette(root=self.root_dir,     
                             split='train' if train else 'val', 
-                            transform=tr.Compose(self.augmentations),
+                            transform=None,
                             download=True,  
                             size='full')
         except RuntimeError as e:
             if 'dataset not found' not in str(e).lower():
                 self._ds = Imagenette(root=self.root_dir,     
                                 split='train' if train else 'val',
-                                transform=tr.Compose(self.augmentations), 
+                                # setting the transform method in the self._ds object leads to significant degradation in performane
+                                # setting transform to None, while setting applying the transformation later in the __getitem__ method should lead to much better performance
+                                transform=None, 
                                 download=False,  
                                 size='full')
             else:
@@ -203,7 +206,12 @@ class ImagenetteGenericWrapper(GenericDsWrapper):
             self._len = 10 * samples_per_cls
         else:
             self._len = len(self._ds)
+
     
     def _set_samples_per_cls(self, samples_per_cls: int):
         # the number of samples varies per class: use the parent function
         return super()._set_samples_per_cls(samples_per_cls=samples_per_cls)
+
+    def __getitem__(self, index) -> torch.Tensor:
+        # apply the augmentations on the original image by calling the parent __getitem__ method 
+        return self.ds_transform(super().__getitem__(index))

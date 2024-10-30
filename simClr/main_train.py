@@ -32,15 +32,17 @@ def train_main():
                 val_data_folder=val_data_folder,
                 dataset=dataset_name,
                 log_dir=os.path.join(ckpnt_dir_parent, f'{dataset_name}_iteration_{n + 1}'),
-                num_epochs=20, 
+                num_epochs=5, 
                 train_batch_size=512,
-                val_batch_size=1600, 
+                # set to 512 since the dataset size will be just 70 * 10 = 700 and larger values will raise an exception
+                # at the point of dataloader initialization
+                val_batch_size=512,  
                 seed=0, 
-                use_logging=False,
-                num_warmup_epochs=5,
+                use_logging=True,
+                num_warmup_epochs=0,
                 val_per_epoch=2,
-                num_train_samples_per_cls=50,
-                num_val_samples_per_cls=50,
+                num_train_samples_per_cls=70,
+                num_val_samples_per_cls=70,
                 run_name=run_name,     
                 debug_augmentations=_DEFAULT_DATA_AUGS                   
                 )

@@ -36,7 +36,7 @@ class ParallelAugWrapperDS(ClassificationDsWrapper, AbstractParallelAugsDs):
 
 
     def __get_item_default_(self, index:int) -> Tuple[torch.Tensor, torch.Tensor]:
-        # extract the path to the sample (using the map between the index and the sample path !!!)
+        # extract the path to the sample (using the map between the index and the sample path !!!) 
         if len(self.samples_per_cls_map) > 0:            
             final_index = self._find_final_index(index)
 
@@ -132,14 +132,14 @@ class ImagenetterWrapper(ParallelAugWrapperDS):
         try:
             self._ds = Imagenette(root=self.root_dir,     
                             split='train' if train else 'val', # the split argument must either 'train' or 'val'
-                            transform=None, #tr.Compose(ds_transform) if classification_mode else None, 
+                            transform=None,
                             download=True,  
                             size='full')
         except RuntimeError as e:
             if 'dataset not found' not in str(e).lower():
                 self._ds = Imagenette(root=self.root_dir,     
                                 split='train' if train else 'val',
-                                transform=None, #tr.Compose(ds_transform) if classification_mode else None, 
+                                transform=None, 
                                 download=False,  
                                 size='full')
             else:
