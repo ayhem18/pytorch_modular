@@ -93,13 +93,15 @@ class SimClrModelWrapper(LightningModule):
                 # arguments for the extra dataloaders
                 debug_embds_vs_trans: bool,
                 debug_augmentations: Optional[List],
+                save_hps: bool,
                 get_augmentation_name: Optional[Union[Callable, Dict]] = None,
                 ):
         # super class call
         super().__init__()
 
         # save the hyperparameters
-        self.save_hyperparameters()
+        if save_hps:
+            self.save_hyperparameters(ignore='logger') # the logger parameter cannot be pickled (when it is not None, that is)
 
         # counters to save the training and validation epochs
         self.train_epoch_index = 0
@@ -129,9 +131,9 @@ class SimClrModelWrapper(LightningModule):
 
         # logging variables
         # a field to save the metrics logged during the training batches
-        self.train_batch_logs: List[Dict[str, float]] = []
+        self.train_batch_losses: List[Dict[str, float]] = []
         # a field to save the metrics logged during the validation batches 
-        self.val_batch_logs: List[Dict[str, float]] = [] 
+        self.val_batch_losses: List[Dict[str, float]] = [] 
 
         self.debug_embds_vs_trans = debug_embds_vs_trans
 
@@ -244,13 +246,13 @@ class SimClrModelWrapper(LightningModule):
         self.train_batch_log(log_dict=log_dict, batch_idx=batch_idx)
         
         # save only the training loss
-        self.train_batch_logs.append(log_dict['batch_train_loss'])
+        self.train_batch_losses.append(log_dict['batch_train_loss'])
         return batch_loss_obj
 
     def on_train_epoch_end(self):
         # calculate the average of batch losses
-        train_epoch_loss = np.mean(self.train_batch_logs)
-        self.train_batch_logs.clear()
+        train_epoch_loss = np.mean(self.train_batch_losses)
+        self.train_batch_losses.clear()
 
         # log to ClearMl
         if self.myLogger is not None:
@@ -305,7 +307,7 @@ class SimClrModelWrapper(LightningModule):
         self.val_batch_log(log_dict=log_dict, batch_idx=batch_index) # log all validation batches
             
         # track the validation batch loss
-        self.val_batch_logs.append(log_dict['batch_val_loss'])
+        self.val_batch_losses.append(log_dict['batch_val_loss'])
         return batch_loss_obj
 
     def validation_step(self, 
@@ -331,11 +333,11 @@ class SimClrModelWrapper(LightningModule):
         
     def on_validation_epoch_end(self):
         # certain oeprations take place only when the self.validation_step_forward method was called
-        if self.val_epoch_index % self.val_per_epoch == 0:        
+        if self.val_epoch_index % self.val_per_epoch == 0 and len(self.val_batch_losses) > 0:        
             # calculate the average of batch losses
-            val_epoch_loss = float(np.mean(self.val_batch_logs))
+            val_epoch_loss = float(np.mean(self.val_batch_losses))
             # clear the training and validation logs after the
-            self.val_batch_logs.clear()
+            self.val_batch_losses.clear()
 
             # log to ClearMl
             if self.myLogger is not None:
@@ -400,6 +402,12 @@ class SimClrModelWrapper(LightningModule):
         checkpoint['debug_augmentations'] = self.debug_augmentations
         return super().on_save_checkpoint(checkpoint)
 
+    def on_load_checkpoint(self, checkpoint: Dict):
+        # saving the epoch and the global step simply messes up the iterative training
+        del(checkpoint['epoch'])
+        del(checkpoint['global_step'])
+        return super().on_load_checkpoint(checkpoint)
+
 
 class ResnetSimClrWrapper(SimClrModelWrapper):
     def __init__(self,
@@ -421,6 +429,7 @@ class ResnetSimClrWrapper(SimClrModelWrapper):
 
                 debug_embds_vs_trans: bool,
                 debug_augmentations: Optional[List],
+                save_hps: bool = False,
 
                 # more model arguments
                 dropout: Optional[float] = None,
@@ -444,6 +453,7 @@ class ResnetSimClrWrapper(SimClrModelWrapper):
 
                 debug_embds_vs_trans=debug_embds_vs_trans,
                 debug_augmentations=debug_augmentations,
+                save_hps=save_hps
                 )
 
         self.model = ResnetSimClr(
@@ -455,4 +465,3 @@ class ResnetSimClrWrapper(SimClrModelWrapper):
                                 freeze=freeze, 
                                 architecture=architecture
                                 )
-        

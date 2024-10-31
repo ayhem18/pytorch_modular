@@ -28,7 +28,7 @@ from mypt.similarities.cosineSim import CosineSim
 
 # imports from the directory
 from .simClrWrapper import ResnetSimClrWrapper
-from .set_ds import _set_data, _set_imagenette_ds_debug
+from .set_ds import _set_data, _ds_name_ds_debug_function
 
 from .constants import (_TEMPERATURE, _OUTPUT_DIM, _OUTPUT_SHAPE, 
                         ARCHITECTURE_IMAGENETTE, ARCHITECTURE_FOOD_101, 
@@ -91,27 +91,11 @@ def _set_ckpnt_callback(val_dl: Optional[DataLoader],
                                         # save the checkpoint with the epoch and validation loss
                                         filename= ckpnt_split + '-{epoch:02d}-'+ '{' + monitor + ':06f}',
                                         # auto_insert_metric_name=True,
-                                        save_on_train_epoch_end=(val_dl is None) # if there is a validation set then check after the val epoch
+                                        # save_on_train_epoch_end=(val_dl is None) # if there is a validation set then check after the val epoch
+                                        save_on_train_epoch_end=True # since we are using the each checkpoint multiple times, it might be better to save the checkpoint with the train mode turned on                                        
                                         )
 
     return checkpnt_callback
-
-def _find_best_ckpnt(log_dir: P) -> P:
-    # this function assumes the checkpoints were 
-    # created using the checkpoint callback
-    # defined above
-    min_val_loss = float('inf')
-
-    for ckpnt_org in os.listdir(log_dir):
-        ckpnt, _ = os.path.splitext(ckpnt_org)
-        _, _, val_loss = ckpnt.split('-')
-        _, val_loss = val_loss.split('=')
-        val_loss = float(val_loss)
-        if val_loss < min_val_loss:
-            best_checkpoint = ckpnt_org
-            min_val_loss = val_loss
-
-    return os.path.join(log_dir, best_checkpoint)
 
 
 def _set_early_stopping_callback(
@@ -121,6 +105,7 @@ def _set_early_stopping_callback(
                                    min_delta:float = 0.1):
     return EarlyStopping(monitor=metric,
                          mode='min', 
+                         verbose=True,
                   min_delta=min_delta, 
                   patience=patience, 
                   strict=False, # not improving is still as bad...
@@ -155,7 +140,8 @@ def train_simClr_single_round(
         
         num_train_samples_per_cls: Union[int, float]=None, # the number of training samples per cls
         num_val_samples_per_cls: Union[int, float]=None, # the number of validation samples per cls
-        ) -> ResnetSimClrWrapper:    
+        sanity_check: Optional[bool] = None
+        ) -> Tuple[ResnetSimClrWrapper, P]:    
 
     if output_shape is None:
         output_shape = _OUTPUT_SHAPE
@@ -175,7 +161,7 @@ def train_simClr_single_round(
                                                     # dataset arguments
                                                     train_data_folder=train_data_folder,
                                                     val_data_folder=val_data_folder, 
-                                                    dataset="imagenette",
+                                                    dataset=dataset,
                                                     output_shape=output_shape,
                                                     # dataloader arguments
                                                     train_batch_size=train_batch_size,
@@ -192,7 +178,10 @@ def train_simClr_single_round(
                                             log_dir=log_dir)
 
     # set the early stopping callback
-    early_stopping_callback = _set_early_stopping_callback(metric='train_loss', at_train_epoch_end=True, min_delta=0.5)
+    early_stopping_callback = _set_early_stopping_callback(metric='train_epoch_loss', 
+                                                           at_train_epoch_end=True, 
+                                                           min_delta=0.5 # setting min_delta to 0.5 for testing purposes
+                                                           )
 
     lr = 0.3 * (train_batch_size / 256) # according to the paper's formula
 
@@ -222,8 +211,17 @@ def train_simClr_single_round(
                                   # more model parameters
                                   dropout=_DROPOUT,
                                   architecture=ARCHITECTURE_IMAGENETTE,
-                                  freeze=False
+                                  freeze=False, 
+                                  save_hps=False, # no need to save the hyperparameters, this way the model will only load the weights
                                   )
+
+    # # set the model field of the wrapper
+    # if initial_checkpoint is not None:
+    #     wrapper.load_state_dict(torch.load(initial_checkpoint)['state_dict'])
+    #     # let's see if we can load the state of optimizers and schedulers as well
+    #     wrapper.optimizers().optimizer.load_state_dict(torch.load(initial_checkpoint)['optimizer'])
+    #     wrapper.lr_schedulers().optimizer.load_state_dict(torch.load(initial_checkpoint)['lr_scheduler'])
+
 
     # get the default device
     device = pu.get_default_device()
@@ -238,21 +236,17 @@ def train_simClr_single_round(
                         max_epochs=num_epochs,
                         check_val_every_n_epoch=1,
                         log_every_n_steps=1 if len(simClr_train_dl) < 10 else 5,
-                        callbacks=[checkpnt_callback, early_stopping_callback]
+                        callbacks=[checkpnt_callback, early_stopping_callback],
+                        num_sanity_val_steps=sanity_check # the None value is converted to '2' by pytorch lightning
                         )
-
 
     trainer.fit(model=wrapper,
                 train_dataloaders=simClr_train_dl,
                 val_dataloaders=CombinedLoader([simClr_val_dl, debug_train_dl], 
                                                     mode='sequential'), 
-                ckpt_path=initial_checkpoint
-                )
+            )
 
-    # find the checkpoint
-    best_ckpnt = _find_best_ckpnt(log_dir)
-
-    return wrapper, best_ckpnt
+    return wrapper, checkpnt_callback.best_model_path
 
 
 def evaluate_augmentations(augmentations: List, 
@@ -442,7 +436,8 @@ def train_simClr(
                                             use_logging=use_logging,
 
                                             num_train_samples_per_cls=num_train_samples_per_cls,
-                                            num_val_samples_per_cls=num_val_samples_per_cls
+                                            num_val_samples_per_cls=num_val_samples_per_cls,
+                                            sanity_check=0 if counter >= 1 else None # ignore sanity checks starting from the 2nd round.
                                             )
         
         augs_per_difficulty = evaluate_augmentations(
@@ -451,7 +446,7 @@ def train_simClr(
                                             augmentation_scores=dict(wrapper.augmentations_scores), 
                                             num_categories=3)
         
-        dataloader = _set_imagenette_ds_debug(train_data_folder=train_data_folder, 
+        dataloader = _ds_name_ds_debug_function[dataset](train_data_folder=train_data_folder, 
                                     output_shape=output_shape, 
                                     batch_size=512, 
                                     num_train_samples_per_cls=num_train_samples_per_cls 
@@ -463,7 +458,6 @@ def train_simClr(
                                         process_model_output=lambda x: x[1])
 
         # make sure to increase the counter !!!!
-
         counter += 1
 
         # keep track of the total number of epochs

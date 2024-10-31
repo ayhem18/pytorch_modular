@@ -89,6 +89,32 @@ def _set_dataloaders(train_ds: Dataset,
     return train_dl, val_dl
 
 
+def _set_food101_ds_debug_ds(
+            train_data_folder: P,
+            output_shape: Tuple[int, int],
+            batch_size:int,
+            num_train_samples_per_cls:Optional[int],
+            ):
+    
+    train_path = dirf.process_path(train_data_folder, 
+                                    dir_ok=True, 
+                                    file_ok=False,
+                                    must_exist=True 
+                                    )
+    
+    train_ds = Food101GenericWrapper(root_dir=train_path, 
+                                    augmentations=[tr.ToTensor(), tr.Resize(size=output_shape)],
+                                    train=True,
+                                    samples_per_cls=num_train_samples_per_cls)
+    
+    return initialize_train_dataloader(dataset_object=train_ds, 
+                                       seed=0, 
+                                       batch_size=batch_size, 
+                                       num_workers=2, 
+                                       drop_last=False, 
+                                       warning=False, 
+                                       pin_memory=False)
+
 def _set_food101_ds(
             train_data_folder: P,
             val_data_folder: Optional[P],
@@ -232,6 +258,9 @@ def _set_imagenette_ds(
 _ds_name_ds_function = {"imagenette": _set_imagenette_ds, 
                         "food101": _set_food101_ds}
 
+_ds_name_ds_debug_function = {"imagenette": _set_imagenette_ds_debug, 
+                        "food101": _set_food101_ds_debug_ds}
+
 
 def _verify_paths(dataset: str, 
                   train_data_folder: P, 
@@ -286,15 +315,15 @@ def _set_data(
                                                        val_data_folder=val_data_folder,
                                                        output_shape=output_shape)
 
-    train_ds, val_ds = _set_imagenette_ds(
-            train_data_folder=train_path,
+    train_ds, val_ds = _ds_name_ds_function[dataset](
+                train_data_folder=train_path,
             val_data_folder=val_path,
             num_train_samples_per_cls=num_train_samples_per_cls,
             num_val_samples_per_cls=num_val_samples_per_cls,
             output_shape=output_shape,
             sampled_augs=sampled_augs,)
 
-    train_dl_debug = _set_imagenette_ds_debug(train_data_folder=train_data_folder, 
+    train_dl_debug = _ds_name_ds_debug_function[dataset] (train_data_folder=train_data_folder, 
                                               output_shape=output_shape, 
                                               batch_size=val_batch_size,
                                               num_train_samples_per_cls=num_train_samples_per_cls
