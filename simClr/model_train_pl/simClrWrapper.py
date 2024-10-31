@@ -400,12 +400,22 @@ class SimClrModelWrapper(LightningModule):
         # add the augmentation scores
         checkpoint['augmentation_scores'] = dict(self.augmentations_scores)
         checkpoint['debug_augmentations'] = self.debug_augmentations
+
+        
+        # those fields are used in the logging of the validation metrics
+        # they need to saved so that logging will be synchronized across consecutive runs
+        checkpoint['val_epoch_index'] = self.val_epoch_index
+        checkpoint['batches_per_val_epoch'] = self.batches_per_val_epoch
+        checkpoint['train_epoch_index'] = self.train_epoch_index
+
         return super().on_save_checkpoint(checkpoint)
 
     def on_load_checkpoint(self, checkpoint: Dict):
+
         # saving the epoch and the global step simply messes up the iterative training
-        del(checkpoint['epoch'])
-        del(checkpoint['global_step'])
+        # del(checkpoint['epoch'])
+        # del(checkpoint['global_step'])
+        del(checkpoint['callbacks'])
         return super().on_load_checkpoint(checkpoint)
 
 

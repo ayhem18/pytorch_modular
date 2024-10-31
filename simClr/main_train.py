@@ -22,11 +22,19 @@ def train_main():
                                          file_ok=False)
 
     # delete any empty folders in the 'train_logs' folder
-    dirf.clear_directory(ckpnt_dir_parent, condition=lambda x: os.path.isdir(x) and len(os.listdir(x)) == 0)
+    dirf.clear_directory(ckpnt_dir_parent, 
+                         condition=lambda x: os.path.isdir(x) and 
+                         len([y for y in os.listdir(x) 
+                              if not (os.path.isdir(os.path.join(x, y)) and len(os.listdir(os.path.join(x, y))) == 0)
+                              ]
+                              ) 
+                         == 0)
+    
     n = len(os.listdir(ckpnt_dir_parent))
 
     run_name = f'{TRACK_PROJECT_NAME}_iteration_{n + 1}'
 
+    
     train_simClr(
                 train_data_folder=train_data_folder,
                 val_data_folder=val_data_folder,
@@ -38,7 +46,7 @@ def train_main():
                 seed=0, 
                 use_logging=True,
                 num_warmup_epochs=0,
-                val_per_epoch=2,
+                val_per_epoch=3,
                 num_train_samples_per_cls=10,
                 num_val_samples_per_cls=10,
                 run_name=run_name,     

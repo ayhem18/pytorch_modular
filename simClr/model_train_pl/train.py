@@ -243,7 +243,8 @@ def train_simClr_single_round(
     trainer.fit(model=wrapper,
                 train_dataloaders=simClr_train_dl,
                 val_dataloaders=CombinedLoader([simClr_val_dl, debug_train_dl], 
-                                                    mode='sequential'), 
+                                                    mode='sequential'),
+                ckpt_path=initial_checkpoint
             )
 
     return wrapper, checkpnt_callback.best_model_path
@@ -423,7 +424,16 @@ def train_simClr(
 
                                             log_dir=round_log_dir,
                                             run_name=run_name,
-                                            continue_last_task=(counter > 0), # only reuse the task_id on later iterations
+
+                                            # the idea here is a bit tricky: 
+                                            # the PL checkpoint loads all the information about training: used for calculating the iteration of train values
+                                            # the iteration would be calculated correctly (taking into account the previous rround)
+                                            # however, this is not the val logs since they use additional fields
+                                            # so the final solution was to checkpoint all the fields used for iteration computation and make clearml used the same
+                                            # task however with an offset 0
+                                            # 
+
+                                            continue_last_task=False if counter == 0 else 0,  
 
                                             debug_augmentations=debug_augmentations,
                                             initial_checkpoint=last_ckpnt, # set the last checkpoint as a starting point for the new round (initially set to None)
