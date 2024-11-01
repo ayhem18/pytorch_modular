@@ -13,7 +13,7 @@ SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 
 
 def train_main():
-    dataset_name = 'food101'
+    dataset_name = 'imagenette'
     train_data_folder = os.path.join(SCRIPT_DIR, 'data', dataset_name, 'train')
     val_data_folder = os.path.join(SCRIPT_DIR, 'data', dataset_name, 'val')
     
@@ -21,7 +21,7 @@ def train_main():
                                          dir_ok=True, 
                                          file_ok=False)
 
-    # delete any empty folders in the 'train_logs' folder
+    # delete folders that either empty of have only empty sub-folders...
     dirf.clear_directory(ckpnt_dir_parent, 
                          condition=lambda x: os.path.isdir(x) and 
                          len([y for y in os.listdir(x) 
@@ -30,32 +30,32 @@ def train_main():
                               ) 
                          == 0)
     
-    n = len(os.listdir(ckpnt_dir_parent))
+    n = len([x for x in os.listdir(ckpnt_dir_parent) if dataset_name in x])
 
     run_name = f'{TRACK_PROJECT_NAME}_iteration_{n + 1}'
-
     
     train_simClr(
                 train_data_folder=train_data_folder,
                 val_data_folder=val_data_folder,
                 dataset=dataset_name,
                 log_dir=os.path.join(ckpnt_dir_parent, f'{dataset_name}_iteration_{n + 1}'),
-                num_epochs=10, 
-                train_batch_size=256,
-                val_batch_size=256,  
+                num_epochs=20, 
+                train_batch_size=400,
+                val_batch_size=1024, # the larger the validation size the better...  
                 seed=0, 
                 use_logging=True,
-                num_warmup_epochs=0,
+                num_warmup_epochs=5,
                 val_per_epoch=3,
-                num_train_samples_per_cls=10,
-                num_val_samples_per_cls=10,
+                num_train_samples_per_cls=None,
+                num_val_samples_per_cls=None,
                 run_name=run_name,     
                 debug_augmentations=_DEFAULT_DATA_AUGS                   
                 )
 
 if __name__ == '__main__':
     train_main()   
-    # define the wrapper
+
+
     # wrapper = ResnetSimClrWrapper(
     #                               # model parameters
     #                               input_shape=(3,) + (200, 200), 
@@ -85,9 +85,15 @@ if __name__ == '__main__':
     #                               save_hps=False, # no need to save the hyperparameters, this way the model will only load the weights
     #                               )    
 
+    # initial_checkpoint = os.path.join(SCRIPT_DIR, 'logs', 'train_logs', 'food101_iteration_4', 'round_1', 'val-epoch=05-val_epoch_loss=4.942599.ckpt')
+
+    # w = ResnetSimClrWrapper.load_from_checkpoint(initial_checkpoint)
+
+    # print(w.train_epoch_index)
+    # print(w.val_epoch_index)
+
     # import torch
 
-    # initial_checkpoint = os.path.join(SCRIPT_DIR, 'logs', 'train_logs', 'food101_iteration_2', 'round_1', 'val-epoch=05-val_epoch_loss=4.848253.ckpt')
     # wrapper.model.load_state_dict(torch.load(initial_checkpoint)['state_dict'])
     # # let's see if we can load the state of optimizers and schedulers as well
     # wrapper.optimizers().optimizer.load_state_dict(torch.load(initial_checkpoint)['optimizer'])

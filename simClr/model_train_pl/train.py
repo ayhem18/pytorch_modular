@@ -118,6 +118,7 @@ def train_simClr_single_round(
         val_data_folder:Optional[Union[str, Path]],
         dataset: str,
 
+        num_sampled_augs: int,
         num_epochs: int, 
         train_batch_size: int,
         val_batch_size: int,
@@ -162,6 +163,8 @@ def train_simClr_single_round(
                                                     train_data_folder=train_data_folder,
                                                     val_data_folder=val_data_folder, 
                                                     dataset=dataset,
+                                                    num_sampled_augs=num_sampled_augs,
+
                                                     output_shape=output_shape,
                                                     # dataloader arguments
                                                     train_batch_size=train_batch_size,
@@ -212,16 +215,8 @@ def train_simClr_single_round(
                                   dropout=_DROPOUT,
                                   architecture=ARCHITECTURE_IMAGENETTE,
                                   freeze=False, 
-                                  save_hps=False, # no need to save the hyperparameters, this way the model will only load the weights
+                                  save_hps=True, # saving the arguments passed to the constructor saves a lot of headache afterwards...
                                   )
-
-    # # set the model field of the wrapper
-    # if initial_checkpoint is not None:
-    #     wrapper.load_state_dict(torch.load(initial_checkpoint)['state_dict'])
-    #     # let's see if we can load the state of optimizers and schedulers as well
-    #     wrapper.optimizers().optimizer.load_state_dict(torch.load(initial_checkpoint)['optimizer'])
-    #     wrapper.lr_schedulers().optimizer.load_state_dict(torch.load(initial_checkpoint)['lr_scheduler'])
-
 
     # get the default device
     device = pu.get_default_device()
@@ -405,14 +400,15 @@ def train_simClr(
     last_ckpnt = None
     samples_weights = None # set to None on the first round
 
-    total_num_epochs = 0
+    num_sampled_augs = 2 # start with only 2 augmentations per sample
 
     while counter < total_count:
         round_log_dir = os.path.join(log_dir, f'round_{counter + 1}')
         # call the train_simClrWrapper function
         wrapper, last_ckpnt = train_simClr_single_round(train_data_folder=train_data_folder,
                                             val_data_folder=val_data_folder,
-                                            dataset=dataset, 
+                                            dataset=dataset,
+                                            num_sampled_augs=num_sampled_augs, 
                                             # for some reason, loading the model from the checkpoint, loads the number of 
                                             # the number of epochs per each round will be computed as follows: 
                                             # round * num_epochs - total_num_epochs
@@ -427,11 +423,10 @@ def train_simClr(
 
                                             # the idea here is a bit tricky: 
                                             # the PL checkpoint loads all the information about training: used for calculating the iteration of train values
-                                            # the iteration would be calculated correctly (taking into account the previous rround)
-                                            # however, this is not the val logs since they use additional fields
-                                            # so the final solution was to checkpoint all the fields used for iteration computation and make clearml used the same
-                                            # task however with an offset 0
-                                            # 
+                                            # the iteration would be calculated correctly (taking into account the previous rounds)
+                                            # however, this is not the case for validation logged valeus since they use additional fields
+                                            # so the final solution is to checkpoint all the fields used for iterations computation and make clearml use the same
+                                            # task but with an offset 0.
 
                                             continue_last_task=False if counter == 0 else 0,  
 
@@ -467,8 +462,8 @@ def train_simClr(
                                         model=wrapper.model, 
                                         process_model_output=lambda x: x[1])
 
+        # increase the number of sampled augmentations every 2 rounds
+        num_sampled_augs += int(counter % 2 == 1)
+
         # make sure to increase the counter !!!!
         counter += 1
-
-        # keep track of the total number of epochs
-        total_num_epochs += wrapper.train_epoch_index

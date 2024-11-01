@@ -411,10 +411,14 @@ class SimClrModelWrapper(LightningModule):
         return super().on_save_checkpoint(checkpoint)
 
     def on_load_checkpoint(self, checkpoint: Dict):
+        # the custom fields were not part of the checkpoint saving mechanism, can't expect them to be part of the 
+        # custom loading mechanism
 
-        # saving the epoch and the global step simply messes up the iterative training
-        # del(checkpoint['epoch'])
-        # del(checkpoint['global_step'])
+        self.val_epoch_index = checkpoint['val_epoch_index']
+        self.batches_per_val_epoch = checkpoint['batches_per_val_epoch'] 
+        self.train_epoch_index = checkpoint['train_epoch_index'] 
+
+        # no need to load callbacks (the initialized ones should do the trick)
         del(checkpoint['callbacks'])
         return super().on_load_checkpoint(checkpoint)
 
