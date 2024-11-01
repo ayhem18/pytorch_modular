@@ -183,7 +183,7 @@ def train_simClr_single_round(
     # set the early stopping callback
     early_stopping_callback = _set_early_stopping_callback(metric='train_epoch_loss', 
                                                            at_train_epoch_end=True, 
-                                                           min_delta=0.5 # setting min_delta to 0.5 for testing purposes
+                                                           min_delta=0.1
                                                            )
 
     lr = 0.3 * (train_batch_size / 256) # according to the paper's formula
@@ -224,7 +224,7 @@ def train_simClr_single_round(
     # define the trainer
     trainer = L.Trainer(
                         accelerator='gpu' if 'cuda' in device else 'cpu',     ## I don't have acess to TPUs at the time of writing this code)))
-                        devices=1, # not sure of the aftermath of setting this parameter to 'auto' (1 is the safest choice for now)
+                        devices=2, # not sure of the aftermath of setting this parameter to 'auto' (1 is the safest choice for now)
                         # strategy='ddp',
                         logger=False, # since I am not using any of the supported logging options, logger=False + using the self.log function would do the job...
                         default_root_dir=log_dir,
