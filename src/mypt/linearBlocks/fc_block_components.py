@@ -31,9 +31,13 @@ class LinearBlock(torch.nn.Module):
         super().__init__(*args, **kwargs)
 
         # the order of components mainly follows the guidelines offered in this paper: https://proceedings.mlr.press/v216/kim23a.html
-        # guideline 1: dropout vs Relu does not matter. In the original paper, dropout was applied before activation: formula in page 1993 (https://www.cs.toronto.edu/~hinton/absps/JMLRdropout.pdf)
+        # guideline 1: dropout vs Relu does not matter. In the original paper, dropout was applied before activation: formula in page 1933 (https://www.cs.toronto.edu/~hinton/absps/JMLRdropout.pdf)
+        # ==> the formula basically applies dropout, then linear layer and then the activatio function
         # guideline 2: dropout after norm layer
         
+        # the final order according using both guidelines would be: BatchNorm, dropout, linearlayer, relu
+        # This class was designed to follow a convolutional block which justifies using BatchNormalization as the first layer
+
         linear_layer = nn.Linear(in_features=in_features, out_features=out_features)
 
         if not is_final:
@@ -140,8 +144,9 @@ class ExtendedLinearBlock(ABC, nn.Module):
     def modules(self) -> Iterator[nn.Module]:
         return self.classifier.modules()
 
-    def to(self, *args, **kwargs):                
+    def to(self, *args, **kwargs) -> 'ExtendedLinearBlock':                
         # from ..code_utilities import pytorch_utilities as pu 
+        # this line is left for debugging purposes...
         self.classifier = self.classifier.to(*args, **kwargs)  # apply the changes to the classifier (don't forget the assignment operator)
         return self 
 

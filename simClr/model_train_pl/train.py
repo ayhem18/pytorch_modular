@@ -223,8 +223,8 @@ def train_simClr_single_round(
 
     # define the trainer
     trainer = L.Trainer(
-                        accelerator='gpu' if 'cuda' in device else 'cpu',     ## I don't have acess to TPUs at the time of writing this code)))
-                        devices=2, # not sure of the aftermath of setting this parameter to 'auto' (1 is the safest choice for now)
+                        accelerator='gpu' if 'cuda' in device else 'cpu', 
+                        devices=[1, 2],
                         # strategy='ddp',
                         logger=False, # since I am not using any of the supported logging options, logger=False + using the self.log function would do the job...
                         default_root_dir=log_dir,
@@ -253,7 +253,7 @@ def evaluate_augmentations(augmentations: List,
     
     for a in augmentations:
         if get_augmentation_name(a) not in augmentation_scores:
-            raise ValueError(f"Make sure the callable to generate the augmentation names is the same used in the generation of the augmentation scores")
+            raise ValueError(f"Make sure the callable generating the augmentation names is the same as one used for the `augmentation_scores` parameter")
 
     # compute the mean, std, and the quantiles, 0.25, 0.5, 0,75
     augs_stats = [(get_augmentation_name(a), 

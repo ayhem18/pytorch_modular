@@ -74,17 +74,12 @@ class ResNetFeatureExtractor(nn.Module):
 
         for name, module in modules_generator:
             # we will only consider non fully connected components of the network
-            if (not contains_fc_layer(module) or self.add_fc) and (self.add_gb_avg or module != self.__net.avgpool):
+            if (not contains_fc_layer(module)) and (self.add_gb_avg or module != self.__net.avgpool):
                 if 'layer' not in name or counter < number_of_layers:
                     modules_to_keep.append((name, module))
                     # only increment counter if the name contains 'layer': meaning it is a layer block
                     counter += int('layer' in name)
 
-        self.modules = [m for _, m in modules_to_keep]
-        if self.add_fc: 
-            # according to the official Pytorch implementation of "Resnet", the fully connected layer is proceeded with a
-            # flatten layer
-            modules_to_keep = modules_to_keep[:-1] + [('flatten', nn.Flatten()), modules_to_keep[-1]]
         fe = nn.Sequential(OrderedDict(modules_to_keep))
         return fe
 
@@ -114,7 +109,7 @@ class ResNetFeatureExtractor(nn.Module):
         counter = 0
         # the first loop will iterate through the layer blocks
         for name, module in self.feature_extractor.named_children():
-            # the 2nd loop will iterate through the Residual blocks within each layer
+            # the 2nd loop will iterate through the Residual blocks within each layer block  
             for _, sub_module in module.named_children():
                 if counter < freeze: 
                     for p in sub_module.parameters():
@@ -129,7 +124,6 @@ class ResNetFeatureExtractor(nn.Module):
     def __init__(self,
                  num_layers: int,  # the number of blocks to keep
                  add_global_average: bool = True, # whether to add the 
-                 add_fc: bool = False, # whether to add the fully connected layer
                  freeze_layers: bool = True, # whether to freeze by layer or by block
                  freeze: Optional[Union[bool, int]] = True,  # whether to freeze the chosen layers or not
                  architecture: int = 50,
@@ -143,13 +137,14 @@ class ResNetFeatureExtractor(nn.Module):
         self.transform = weights.DEFAULT.transforms()
 
         self.add_gb_avg = add_global_average
-        self.add_fc = add_fc
-        self.feature_extractor = None
-        self.modules = None
         self.feature_extractor = self.__feature_extractor_layers(self.num_layers)
 
         # freeze the weights if needed
         self._freeze(freeze=freeze, freeze_layers=freeze_layers)
+
+        # remove the self.__net field from the model
+        del(self.__net)
+
 
     def forward(self, x: torch.Tensor):
         # the forward function in the ResNet class simply calls the forward function
@@ -175,3 +170,6 @@ class ResNetFeatureExtractor(nn.Module):
     def named_children(self) -> Iterator[Tuple[str, Module]]:
         return self.feature_extractor.named_children()
 
+    def to(self, *args, **kwargs) -> 'ResNetFeatureExtractor':
+        self.feature_extractor = self.feature_extractor.to(*args, **kwargs)
+        return self 
