@@ -51,6 +51,7 @@ class SimClrModel(nn.Module):
         self.fe = self.fe.to(*args, **kwargs)
         self.flatten_layer = self.flatten_layer.to(*args, **kwargs)
         self.ph = self.ph.to(*args, **kwargs)
+        self.model = self.model.to(*args, **kwargs)
         return self 
 
     def __call__(self, x: torch.Tensor):
@@ -77,8 +78,7 @@ class ResnetSimClr(SimClrModel):
         self.fe = rfe.ResNetFeatureExtractor(num_layers=fe_num_blocks, 
                                         architecture=architecture,
                                         freeze=freeze, 
-                                        freeze_layers=freeze_layers, 
-                                        add_fc=False,)
+                                        freeze_layers=freeze_layers)
 
         dim_analyser = da.DimensionsAnalyser(method='static')
 

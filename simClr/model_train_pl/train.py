@@ -224,7 +224,7 @@ def train_simClr_single_round(
     # define the trainer
     trainer = L.Trainer(
                         accelerator='gpu' if 'cuda' in device else 'cpu', 
-                        devices=[1, 2],
+                        devices=[2, 3],
                         # strategy='ddp',
                         logger=False, # since I am not using any of the supported logging options, logger=False + using the self.log function would do the job...
                         default_root_dir=log_dir,

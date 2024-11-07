@@ -34,37 +34,19 @@ def train_main():
 
     run_name = f'{TRACK_PROJECT_NAME}_{dataset_name}_iteration_{n + 1}'
     
-    train_simClr_single_round(
-                train_data_folder=train_data_folder,
-                val_data_folder=val_data_folder,
-                dataset=dataset_name,
-                num_sampled_augs=2,
-                log_dir=os.path.join(ckpnt_dir_parent, f'{dataset_name}_iteration_{n + 1}'),
-                num_epochs=20,
-                samples_weights=None,
-                continue_last_task=False, 
-                train_batch_size=400,
-                val_batch_size=1024, # the larger the validation size the better...  
-                seed=0, 
-                use_logging=False,
-                num_warmup_epochs=5,
-                val_per_epoch=3,
-                num_train_samples_per_cls=None,
-                num_val_samples_per_cls=None,
-                run_name=run_name,     
-                debug_augmentations=_DEFAULT_DATA_AUGS                   
-                )
-
-    # train_simClr(
+    # train_simClr_single_round(
     #             train_data_folder=train_data_folder,
     #             val_data_folder=val_data_folder,
     #             dataset=dataset_name,
+    #             num_sampled_augs=2,
     #             log_dir=os.path.join(ckpnt_dir_parent, f'{dataset_name}_iteration_{n + 1}'),
-    #             num_epochs=20, 
+    #             num_epochs=20,
+    #             samples_weights=None,
+    #             continue_last_task=False, 
     #             train_batch_size=400,
     #             val_batch_size=1024, # the larger the validation size the better...  
     #             seed=0, 
-    #             use_logging=True,
+    #             use_logging=False,
     #             num_warmup_epochs=5,
     #             val_per_epoch=3,
     #             num_train_samples_per_cls=None,
@@ -72,6 +54,24 @@ def train_main():
     #             run_name=run_name,     
     #             debug_augmentations=_DEFAULT_DATA_AUGS                   
     #             )
+
+    train_simClr(
+                train_data_folder=train_data_folder,
+                val_data_folder=val_data_folder,
+                dataset=dataset_name,
+                log_dir=os.path.join(ckpnt_dir_parent, f'{dataset_name}_iteration_{n + 1}'),
+                num_epochs=20, 
+                train_batch_size=400,
+                val_batch_size=1024, # the larger the validation size the better...  
+                seed=0, 
+                use_logging=True,
+                num_warmup_epochs=5,
+                val_per_epoch=3,
+                num_train_samples_per_cls=None,
+                num_val_samples_per_cls=None,
+                run_name=run_name,     
+                debug_augmentations=_DEFAULT_DATA_AUGS                   
+                )
 
 if __name__ == '__main__':
     train_main()   

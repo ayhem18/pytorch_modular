@@ -14,6 +14,7 @@ from mypt.backbones.resnetFeatureExtractor import ResNetFeatureExtractor
 from mypt.data.datasets.genericFolderDs import GenericDsWrapper
 from mypt.shortcuts import P
 from mypt.dimensions_analysis.dimension_analyser import DimensionsAnalyser
+from mypt.models.simClr.simClrModel import ResnetSimClr
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 
@@ -25,45 +26,46 @@ class FcWrapper(LightningModule):
                  ):
         super().__init__()
 
-        self.backbone = ResNetFeatureExtractor(num_layers=1, freeze=False)
+        # self.backbone = ResNetFeatureExtractor(num_layers=1, freeze=False)
+        self.backbone = ResnetSimClr(input_shape=(3, 28, 28), output_dim=10, num_fc_layers=num_layers, fe_num_blocks=1)
+
         self.flatten_layer = torch.nn.Flatten()
         self.lr = lr
         self.loss = torch.nn.CrossEntropyLoss() 
 
-        dim_anal = DimensionsAnalyser(net=torch.nn.Sequential(self.backbone, self.flatten_layer), method='static')
+        # dim_anal = DimensionsAnalyser(net=torch.nn.Sequential(self.backbone, self.flatten_layer), method='static')
         
-        _, in_features = dim_anal.analyse_dimensions(input_shape=(10, 3, 28, 28))
+        # _, in_features = dim_anal.analyse_dimensions(input_shape=(10, 3, 28, 28))
 
-        self.fc = ExponentialFCBlock(output=10, 
-                                        in_features=in_features, 
-                                        num_layers=num_layers,
-                                        dropout=dropout
-                                        )
-        # self.model = 
+        # self.fc = ExponentialFCBlock(output=10, 
+        #                                 in_features=in_features, 
+        #                                 num_layers=num_layers,
+        #                                 dropout=dropout
+        #                                 )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.fc.forward(self.flatten_layer.forward(self.backbone.forward(x)))
-        # return self.backbone.forward(x)
+        # return self.fc.forward(self.flatten_layer.forward(self.backbone.forward(x)))
+        return self.backbone.forward(x)
 
     def configure_optimizers(self):
         # return Adam(self.backbone.parameters(), lr=0.01)
         return Adam(params=
                     [
                         {"params": self.backbone.parameters(), "lr": 0.01}, 
-                        {"params": self.fc.parameters(), "lr": 0.01}
+                        # {"params": self.fc.parameters(), "lr": 0.01}
                     ]
                     )
 
 
     def training_step(self, batch, *args, **kwargs):
         x, y = batch
-        model_output = self.forward(x)
+        model_output = self.forward(x)[1]
         return self.loss.forward(model_output, y)
     
-    # adding this to test some hypothesis    
+    # # adding this to test some hypothesis    
     def to(self, *args, **kwargs):
         self.backbone = self.backbone.to(*args, **kwargs)
-        self.fc = self.fc.to(*args, **kwargs)
+        # self.fc = self.fc.to(*args, **kwargs)
         return self
 
 
@@ -84,29 +86,7 @@ class MnsitGenericWrapper(GenericDsWrapper):
                          train=True,
                          transform=tr.Compose(self.augmentations),
                          download=True)
-
-        self._num_epochs = 3
-
-        self._num_warmup_epochs = 0
-        # logging parameters: 
-        # this parameter has to be passed since, I will be doing the logging to clearml myself 
-        self.log_per_batch = 0  
-        self.val_per_epoch = 0
-        self.myLogger = None
-
-        # logging variables
-        # a field to save the metrics logged during the training batches
-        self.train_batch_losses: List[Dict[str, float]] = []
-        # a field to save the metrics logged during the validation batches 
-        self.val_batch_losses: List[Dict[str, float]] = [] 
-
-        self.debug_embds_vs_trans = False
-
-        self.debug_augmentations = []
-        self.augmentations_scores = {}
-        get_augmentation_name = pu.get_augmentation_name        
-
-
+    
         # call the self._set_samples_per_cls method after setting the self._ds field
         if samples_per_cls is not None:
             self.samples_per_cls_map = self._set_samples_per_cls(samples_per_cls)

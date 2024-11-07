@@ -383,10 +383,10 @@ class SimClrModelWrapper(LightningModule):
 
 
     ######################### Pytorch.nn.Module methods #########################
-    # def to(self, *args, **kwargs):
-    #     self.model = self.model.to(*args, **kwargs)
-        
-    #     return self
+    def to(self, *args, **kwargs):
+        self.model = self.model.to(*args, **kwargs)        
+        self._loss = self._loss.to(*args, **kwargs)
+        return self
 
     def children(self) -> Iterator[torch.nn.Module]:
         # overloading this method to return the correct children of the wrapper: those of the self.model field
