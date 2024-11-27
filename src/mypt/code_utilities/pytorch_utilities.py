@@ -115,3 +115,10 @@ def get_augmentation_name(aug):
     return re.split("\W+", aug_cls_name)[-1]
 
 
+def get_module_num_parameters(module: nn.Module) -> int:
+    parameter_count = 0
+
+    for m in iterate(module):
+        parameter_count += sum(p.numel() for p in m.parameters())
+
+    return parameter_count
