@@ -29,3 +29,6 @@ src/tests/data/data/food101/train/imagenette2/noisy_imagenette.csv
 
 *.tar.gz
 
+
+simClr/*
+
