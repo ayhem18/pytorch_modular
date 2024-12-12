@@ -1,6 +1,6 @@
 [project]
 name = "mypt"
-version = "1.1.0"
+version = "1.2.0"
 
 authors = [
   { name="Ayhem Bouabid", email="ayhembouabid@yandex.com" },
@@ -16,11 +16,7 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 
-dependencies = ["torch", 
-"numpy", 
-"scikit-learn", 
-"matplotlib"
-]
+dependencies = []
 
 [project.urls]
 Homepage = "https://github.com/ayhem18/pytorch_modular"
