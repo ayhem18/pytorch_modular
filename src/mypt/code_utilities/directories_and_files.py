@@ -28,44 +28,46 @@ def process_path(save_path: Union[str, Path, None],
                       condition: Callable = None,
                       error_message: str = DEFAULT_ERROR_MESSAGE) -> Union[str, Path, None]:
 
-    if save_path is not None:
-        # first make the save_path absolute
-        save_path = abs_path(save_path)
+    if save_path is None:
+        return None
 
-        if not os.path.exists(save_path):
-            if must_exist:
-                raise ValueError(f"Passing a non-existing directory while setting the 'must_exist' argument to True")
+    # first make the save_path absolute
+    save_path = abs_path(save_path)
 
-            if dir_ok and not file_ok:
-                os.makedirs(save_path)
-        
-            else:
-                raise ValueError(f"when passing a non-existing file, the parameters dir_ok and file_ok must be set to True and False respectively")
+    if not os.path.exists(save_path):
+        if must_exist:
+            raise ValueError(f"Passing a non-existing directory while setting the 'must_exist' argument to True")
 
-        assert not \
-            ((not file_ok and os.path.isfile(save_path)) or
-             (not dir_ok and os.path.isdir(save_path))), \
-            f'MAKE SURE NOT TO PASS A {"directory" if not dir_ok else "file"}'
+        if dir_ok and not file_ok:
+            os.makedirs(save_path)
+    
+        else:
+            raise ValueError(f"when passing a non-existing file, the parameters dir_ok and file_ok must be set to True and False respectively")
 
-        if condition is not None:
-            condition_output = condition(save_path)
-            # check the type of the condition output
-            if not isinstance(condition_output, (tuple, bool)):
-                raise TypeError(f"The condition function must output either a tuple[bool, str] where 'str' can represent the error, or a 'bool' value. Found: {condition_output}")
+    assert not \
+        ((not file_ok and os.path.isfile(save_path)) or
+            (not dir_ok and os.path.isdir(save_path))), \
+        f'MAKE SURE NOT TO PASS A {"directory" if not dir_ok else "file"}'
 
-            if isinstance(condition_output, Tuple):
-                res, possible_error = condition_output
-                # make sure the types are correct (since we cannot use generic types with the 'isinstance' function) 
-                if not (isinstance(res, bool) and isinstance(possible_error, str)):
-                    raise TypeError(f"if the condition function outputs a tuple. The first element must be a bool and the second a str. found: {condition_output}")
+    if condition is not None:
+        condition_output = condition(save_path)
+        # check the type of the condition output
+        if not isinstance(condition_output, (tuple, bool)):
+            raise TypeError(f"The condition function must output either a tuple[bool, str] where 'str' can represent the error, or a 'bool' value. Found: {condition_output}")
 
-                if not res:
-                    raise ValueError(f"general error message: {error_message}\n specific error message: {possible_error}")
+        if isinstance(condition_output, Tuple):
+            res, possible_error = condition_output
+            # make sure the types are correct (since we cannot use generic types with the 'isinstance' function) 
+            if not (isinstance(res, bool) and isinstance(possible_error, str)):
+                raise TypeError(f"if the condition function outputs a tuple. The first element must be a bool and the second a str. found: {condition_output}")
 
-            # at this point, we know that 'condition_output' is a boolean variable 
-            # only consider the case of condition_output = False
-            elif not condition_output:
-                raise ValueError(error_message)
+            if not res:
+                raise ValueError(f"general error message: {error_message}\n specific error message: {possible_error}")
+
+        # at this point, we know that 'condition_output' is a boolean variable 
+        # only consider the case of condition_output = False
+        elif not condition_output:
+            raise ValueError(error_message)
                 
     return save_path
 

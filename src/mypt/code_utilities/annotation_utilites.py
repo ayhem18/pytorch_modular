@@ -229,7 +229,7 @@ def _yolo_2_pascal_voc(annotation: OBJ_DETECT_ANN_TYPE,
     
     x_cn, y_cn, w_n, h_n = annotation
 
-    # normalize width and height 
+    # scale width and height 
     w, h = int(round(w_n * img_shape[1])), int(round(h_n * img_shape[0]))
 
     x_min = int(round((x_cn - w_n / 2) * img_shape[1]))
@@ -275,6 +275,9 @@ def _pascal_voc_2_albumentations(annotation: OBJ_DETECT_ANN_TYPE,
 def convert_bbox_annotation(annotation: OBJ_DETECT_ANN_TYPE, current_format: str, target_format: str, img_shape: IMG_SHAPE_TYPE) -> OBJ_DETECT_ANN_TYPE:
     if current_format not in OBJ_DETECT_ANN_FORMATS or target_format not in OBJ_DETECT_ANN_FORMATS:
         raise NotImplementedError(f"currently supporting only the following formats: {OBJ_DETECT_ANN_FORMATS}")
+
+    if current_format == target_format:
+        return annotation
 
     # definitely a bad practice...
     return eval(f'_{current_format}_2_{target_format}')(annotation=annotation, img_shape=img_shape)
