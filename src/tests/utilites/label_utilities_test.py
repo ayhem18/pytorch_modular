@@ -6,7 +6,7 @@ import numpy as np
 from typing import Tuple
 from tqdm import tqdm
 
-from mypt.code_utilities import annotation_utilites as au
+from mypt.code_utilities import bbox_utilities as au
 
 ################################## utility functions ################################## 
 def _random_yolo_ann(img_shape=None):

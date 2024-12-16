@@ -6,7 +6,7 @@ import cv2 as cv
 import numpy as np
 
 from typing import List, Tuple, Union
-from mypt.code_utilities.annotation_utilites import convert_bbox_annotation, _verify_pascal_voc_format, OBJ_DETECT_ANN_TYPE
+from mypt.code_utilities.bbox_utilities import convert_bbox_annotation, _verify_pascal_voc_format, OBJ_DETECT_ANN_TYPE
 
 
 def draw_single_bounding_box(image: np.ndarray, 
@@ -47,5 +47,4 @@ def draw_multi_bbox(image: np.ndarray, bboxes: List[OBJ_DETECT_ANN_TYPE], bbox_f
         cv.rectangle(img_copy, (x_min, y_min), (x_max, y_max), color=(0, 255,0), thickness=3)
 
     return img_copy
-
-
+    

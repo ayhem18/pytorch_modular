@@ -9,7 +9,7 @@ from copy import copy
 
 from abc  import ABC, abstractmethod
 
-from mypt.code_utilities import directories_and_files as dirf, annotation_utilites as au
+from mypt.code_utilities import bbox_utilities as au, directories_and_files as dirf
 
 
 # let's define a common datatype

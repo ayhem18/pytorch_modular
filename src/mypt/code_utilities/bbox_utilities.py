@@ -3,7 +3,7 @@ This script contains some utility functions to better work with annotations of d
 """
 import itertools
 
-from typing import Tuple, List, Union
+from typing import Optional, Tuple, List, Union
 
 # let's start with verification
 IMG_SHAPE_TYPE = Tuple[int, int]
@@ -281,3 +281,124 @@ def convert_bbox_annotation(annotation: OBJ_DETECT_ANN_TYPE, current_format: str
 
     # definitely a bad practice...
     return eval(f'_{current_format}_2_{target_format}')(annotation=annotation, img_shape=img_shape)
+
+
+
+######################################################## OBJECT DETECTION BOX GEOMETRIC PROPERTIES ########################################################
+
+def calculate_bbox_area(bbox: OBJ_DETECT_ANN_TYPE, current_format: str, img_shape: Optional[Tuple[int, int]] = None) -> int:
+    # convert to the pascal_voc
+    if current_format != PASCAL_VOC and img_shape is None:
+        raise TypeError(f"calculating the area of a bounding box in a format different from {PASCAL_VOC} requires passing the `img_shape` argument.")
+    
+    b = convert_bbox_annotation(annotation=bbox, current_format=current_format, target_format=PASCAL_VOC, img_shape=img_shape)
+
+    min_x, min_y, max_x, max_y = b
+
+    return (max_x - min_x + 1) * (max_y - min_y + 1)
+
+
+def box_within_box(bbox1: OBJ_DETECT_ANN_TYPE, bbox2: OBJ_DETECT_ANN_TYPE, 
+                    bbox1_format: str, bbox2_format: str, 
+                    img_shape: Optional[Tuple[int, int]] = None) -> int:
+
+    # convert to the pascal_voc
+    if (bbox1_format != PASCAL_VOC or bbox2_format != PASCAL_VOC) and img_shape is None:
+        raise TypeError(f"calculating the area of a bounding box in a format different from {PASCAL_VOC} requires passing the `img_shape` argument.")
+
+    b1 = convert_bbox_annotation(bbox1, current_format=bbox1_format, target_format=PASCAL_VOC, img_shape=img_shape)
+    b2 = convert_bbox_annotation(bbox2, current_format=bbox2_format, target_format=PASCAL_VOC, img_shape=img_shape)
+
+    x1_min, y1_min, x1_max, y1_max = b1
+    x2_min, y2_min, x2_max, y2_max = b2
+
+    # first case b1 in b2
+    if x1_min >= x2_min and x1_max <= x2_max and y1_min >= y2_min and y1_min <= y2_max:
+        return True 
+    
+    # second case b2 in b1
+    if x2_min >= x1_min and x2_max <= x1_max and y2_min >= y1_min and y2_min <= y1_max:
+        return True
+    
+    return False
+
+
+def inner_box_wr_outer_box(outer_box: OBJ_DETECT_ANN_TYPE, inner_box: OBJ_DETECT_ANN_TYPE, outer_format: str, inner_format: str, img_shape: Optional[Tuple[int, int]] = None) -> OBJ_DETECT_ANN_TYPE: 
+    if not box_within_box(outer_box, inner_box, outer_format, inner_format, img_shape):
+        raise ValueError("The inner_box_wr_outer_box function expects to have one box inside the other...")
+
+    b1 = convert_bbox_annotation(outer_box, current_format=outer_format, target_format=PASCAL_VOC, img_shape=img_shape)
+    b2 = convert_bbox_annotation(outer_format, current_format=inner_format, target_format=PASCAL_VOC, img_shape=img_shape)
+
+    x1_min, y1_min, _, _ = b1
+    x2_min, y2_min, x2_max, y2_max = b2
+
+    # b2 in b1:  x2_min >= x1_min and x2_max <= x1_max and y2_min >= y1_min and y2_min <= y1_max:
+    return [x2_min - x1_min, y2_min - y1_min, x2_max - x1_min, y2_max - y1_min]
+
+
+# some utility functions: whether two bounding boxes interesct
+def bounding_boxes_intersect(bbox1: OBJ_DETECT_ANN_TYPE, bbox2: OBJ_DETECT_ANN_TYPE, 
+                             img_shape: Tuple[int, int],
+                             bbox1_format: str, bbox2_format: str) -> Optional[OBJ_DETECT_ANN_TYPE]:
+
+    # the idea here is simple, convert box bounding boxes to "pascal_voc"
+    b1 = convert_bbox_annotation(bbox1, current_format=bbox1_format, target_format=PASCAL_VOC, img_shape=img_shape)
+    b2 = convert_bbox_annotation(bbox2, current_format=bbox2_format, target_format=PASCAL_VOC, img_shape=img_shape)
+
+    x1_min, y1_min, x1_max, y1_max = b1
+    x2_min, y2_min, x2_max, y2_max = b2
+
+    min_x_intersection = max(x1_min, x2_min)
+    max_x_intersection = min(x1_max, x2_max)
+
+    min_y_intersection = max(y1_min, y2_min)
+    max_y_intersection = min(y1_max, y2_max)
+
+    if min_x_intersection < max_x_intersection and min_y_intersection < max_y_intersection:
+        return min_x_intersection, min_y_intersection, max_x_intersection, max_y_intersection
+    
+    return None
+
+
+def extract_unique_bounding_box(org_bbox: OBJ_DETECT_ANN_TYPE, intersection_bbox: OBJ_DETECT_ANN_TYPE, remove_by: str) -> OBJ_DETECT_ANN_TYPE:
+    _verify_pascal_voc_format(org_bbox,normalize=False)
+    _verify_pascal_voc_format(intersection_bbox, normalize=False)
+    # make sure the intersection_bbox is indeed an intersection bbox
+    x1_min, y1_min, x1_max, y1_max = org_bbox
+    x2_min, y2_min, x2_max, y2_max = intersection_bbox
+    
+    if len(set([x1_min, x2_min, x1_max, x2_max])) == 4:
+        raise ValueError(f"Make sure the two boxes do indeed intersect !!!. Found 4 different values for the x-coordinates")
+
+    if len(set([y1_min, y2_min, y1_max, y2_max])) == 4:
+        raise ValueError(f"Make sure the two boxes do indeed intersect !!!. Found 4 different values for the y-coordinates")
+
+    if remove_by.lower() not in ['x', 'y', 'area']:
+        raise NotImplementedError(f"the remove_by argument is expected to be one of the following args: {['x', 'y', 'area']}. Found: {remove_by}")
+
+    if remove_by.lower() == 'x':
+        if x1_min == x2_min:
+            return x2_max, y1_min, x1_max, y1_max
+
+        if x2_max == x2_max:
+            return x1_min, y1_min, x2_min, y1_max
+
+    if remove_by.lower() == "y":
+        if y1_min == y2_min:
+            return x1_min, y2_min, x1_max, y1_max
+
+        if y2_max == y2_max:
+            return x1_min, y1_min, x1_max, y2_min
+
+
+    # reaching this point means remove_by was set to "area"
+    nb1, nb2 = extract_unique_bounding_box(org_bbox, intersection_bbox, remove_by='x'), extract_unique_bounding_box(org_bbox, intersection_bbox, remove_by='y')
+
+    # return the bounding box with the largest area    
+    return max([nb1, nb2], key=lambda x: calculate_bbox_area(x, current_format=PASCAL_VOC, img_shape=None))
+
+
+
+
+        
