@@ -6,7 +6,7 @@ import cv2 as cv
 import numpy as np
 
 from typing import List, Tuple, Union
-from mypt.code_utilities.bbox_utilities import convert_bbox_annotation, _verify_pascal_voc_format, OBJ_DETECT_ANN_TYPE
+from mypt.code_utilities.bbox_utilities import convert_bbox_annotation, _verify_pascal_voc_format, OBJ_DETECT_ANN_TYPE, PASCAL_VOC
 
 
 def draw_single_bounding_box(image: np.ndarray, 
@@ -32,7 +32,10 @@ def draw_single_bounding_box(image: np.ndarray,
     return img_copy    
 
 
-def draw_multi_bbox(image: np.ndarray, bboxes: List[OBJ_DETECT_ANN_TYPE], bbox_format: str = "pascal_voc") -> None:
+def draw_multi_bbox(image: np.ndarray, bboxes: List[OBJ_DETECT_ANN_TYPE], bbox_format: str = PASCAL_VOC) -> None:
+    if len(image.shape) != 3:
+        raise ValueError(f"Make sure to pass a 3 dimensional image. Otherwise, the results are unpredictable")
+    
     # make a copy
     img_copy = image.copy()
 
@@ -40,7 +43,7 @@ def draw_multi_bbox(image: np.ndarray, bboxes: List[OBJ_DETECT_ANN_TYPE], bbox_f
     bboxes = [convert_bbox_annotation(b, 
                                       img_shape=image.shape,
                                       current_format=bbox_format, 
-                                      target_format="pascal_voc") for b in bboxes]
+                                      target_format=PASCAL_VOC) for b in bboxes]
 
     for b in bboxes:
         x_min, y_min, x_max, y_max = b

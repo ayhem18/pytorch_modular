@@ -277,6 +277,9 @@ def convert_bbox_annotation(annotation: OBJ_DETECT_ANN_TYPE, current_format: str
         raise NotImplementedError(f"currently supporting only the following formats: {OBJ_DETECT_ANN_FORMATS}")
 
     if current_format == target_format:
+        # if there is no conversion, make sure the passed annotation / bbox are in the current format
+        # set the normalize argument to False
+        verify_object_detection_ann_format(annotation=annotation, current_format=current_format, img_shape=img_shape, normalize=False)
         return annotation
 
     # definitely a bad practice...

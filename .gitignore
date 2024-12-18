@@ -13,7 +13,10 @@ wandb
 *.jpeg
 
 *.png
-!simClr/images/*.png
+!simClr/images/*.png 
+
+*.png
+!tests/*.png
 
 simClr/data
 
