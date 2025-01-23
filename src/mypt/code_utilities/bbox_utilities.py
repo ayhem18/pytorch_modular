@@ -3,7 +3,7 @@ This script contains some utility functions to better work with annotations of d
 """
 import itertools
 
-from typing import Optional, Tuple, List, Union
+from typing import Iterable, Optional, Tuple, List, Union
 
 # let's start with verification
 IMG_SHAPE_TYPE = Tuple[int, int]
@@ -402,6 +402,23 @@ def extract_unique_bounding_box(org_bbox: OBJ_DETECT_ANN_TYPE, intersection_bbox
     return max([nb1, nb2], key=lambda x: calculate_bbox_area(x, current_format=PASCAL_VOC, img_shape=None))
 
 
+def extract_contour_bounding_box(contour: Iterable[Tuple[int, int]]) -> OBJ_DETECT_ANN_TYPE:
+    """a function to extract the bounding box out of a given set of points. The points are assumed connected, however not necessarily representing
+    a 'countour' in the sense of the opencv contour. Each point is expected to be (y, x) (AND NOT X, Y)
 
+    Args:
+        contour (Iterable[Tuple[int, int]]): a set of connected point
 
-        
+    Returns:
+        OBJ_DETECT_ANN_TYPE: The bounding box with the PASCAL format
+    """
+    max_x, max_y, min_x, min_y = None, None, None, None
+
+    for y, x in contour:
+        max_x = max(max_x, x) if max_x is not None else x
+        min_x = min(min_x, x) if min_x is not None else x
+
+        max_y = max(max_y, y) if max_y is not None else y
+        min_y = min(min_y, y) if min_y is not None else y
+
+    return min_x, min_y, max_x, max_y    
