@@ -2,7 +2,7 @@
 This script contains the mapping between string shortcuts and different objects that can be used across diverse scenarios
 """
 
-from typing import Union
+from typing import Iterable, Union
 from pathlib import Path
 
 from .similarities.cosineSim import CosineSim
@@ -19,3 +19,6 @@ str2distance = {
 
 P = Union[Path, str]
 
+CONTOUR = Iterable[Iterable[int]]
+
+NUM = Union[float, int]

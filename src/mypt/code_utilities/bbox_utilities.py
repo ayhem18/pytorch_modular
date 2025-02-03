@@ -3,7 +3,7 @@ This script contains some utility functions to better work with annotations of d
 """
 import itertools
 
-from typing import Iterable, Optional, Tuple, List, Union
+from typing import Callable, Iterable, Optional, Tuple, List, Union
 
 # let's start with verification
 IMG_SHAPE_TYPE = Tuple[int, int]
@@ -402,9 +402,11 @@ def extract_unique_bounding_box(org_bbox: OBJ_DETECT_ANN_TYPE, intersection_bbox
     return max([nb1, nb2], key=lambda x: calculate_bbox_area(x, current_format=PASCAL_VOC, img_shape=None))
 
 
-def extract_contour_bounding_box(contour: Iterable[Tuple[int, int]]) -> OBJ_DETECT_ANN_TYPE:
+def extract_contour_bounding_box(contour: Iterable[Tuple[int, int]], 
+                                 process_function: Optional[Callable] = None,
+                                 y_x: bool = True) -> OBJ_DETECT_ANN_TYPE:
     """a function to extract the bounding box out of a given set of points. The points are assumed connected, however not necessarily representing
-    a 'countour' in the sense of the opencv contour. Each point is expected to be (y, x) (AND NOT X, Y)
+    a 'countour' in the sense of the opencv contour. Each point is expected to be (y, x) by default
 
     Args:
         contour (Iterable[Tuple[int, int]]): a set of connected point
@@ -412,9 +414,19 @@ def extract_contour_bounding_box(contour: Iterable[Tuple[int, int]]) -> OBJ_DETE
     Returns:
         OBJ_DETECT_ANN_TYPE: The bounding box with the PASCAL format
     """
+
+    if process_function is None:
+        # the default function is the identity
+        process_function = lambda x: x
+
     max_x, max_y, min_x, min_y = None, None, None, None
 
-    for y, x in contour:
+    for element in contour:
+        y, x = process_function(element)
+        if not y_x:
+            # make sure to swap them...
+            y, x = x, y
+
         max_x = max(max_x, x) if max_x is not None else x
         min_x = min(min_x, x) if min_x is not None else x
 
