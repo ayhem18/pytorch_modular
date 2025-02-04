@@ -19,6 +19,3 @@ str2distance = {
 
 P = Union[Path, str]
 
-CONTOUR = Iterable[Iterable[int]]
-
-NUM = Union[float, int]
