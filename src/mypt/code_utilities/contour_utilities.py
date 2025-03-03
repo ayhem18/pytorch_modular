@@ -2,6 +2,7 @@
 A script for contour utility functions
 """
 
+import numpy as np
 
 from typing import Iterable, Tuple, Union
 from itertools import chain
@@ -35,13 +36,17 @@ def stretch_contour_y_axis(contour: CONTOUR, coefficient: NUM, y_x: bool = True)
     # 3. rotate the contour back
     rotated_contour = [(c2, c1) for c1, c2 in contour]
     stretched_contour = stretch_contour_x_axis(rotated_contour, coefficient, y_x)
-    return [(c2, c1) for c1, c2 in stretched_contour]
+    res =  [(c2, c1) for c1, c2 in stretched_contour]
+    return res
 
 
 def stretch_contour_x_axis(contour: CONTOUR, coefficient: NUM, y_x: bool = True):
 
-    if coefficient <= 1:
+    if coefficient < 1:
         raise ValueError(f"The coefficient argument must be larger than 1. Found: {coefficient}")
+
+    if coefficient == 1:
+        return contour
 
     # normalize the contour
     if not y_x:
@@ -61,13 +66,19 @@ def stretch_contour_x_axis(contour: CONTOUR, coefficient: NUM, y_x: bool = True)
     # if the minimum value in the new_contour is less than 0, then we need to shift the contour to the right: to avoid negative values
     # compute the minimum value in the new_contour
     min_x_new_coordinate = min(new_contour, key=lambda p: p[1])[1]
+    min_y_new_coordinate = min(new_contour, key=lambda p: p[0])[0]
 
     # if the minimum value is less than 0, then we need to shift the contour to the right
     if min_x_new_coordinate < 0:
         new_contour = [(y, x + abs(min_x_new_coordinate)) for y, x in new_contour]
 
-    assert all([x >= 0 for _, x in new_contour]), f"The new contour contains negative values. Found: {new_contour}"
+    # if the minimum value is less than 0, then we need to shift the contour to the right
+    if min_y_new_coordinate < 0:
+        new_contour = [(y + abs(min_y_new_coordinate), x) for y, x in new_contour]
 
+    assert all([x >= 0 for _, x in new_contour]), f"The new contour contains negative values. Found: {new_contour}"
+    assert all([y >= 0 for y, _ in new_contour]), f"The new contour contains negative values. Found: {new_contour}"
+    
     # iterate and interpolate
     num_points = int(max(1, coefficient // 2))  
     interpolation_points = [interpolate_between_two_points(new_contour[i], new_contour[i + 1], num_points) for i in range(len(new_contour) - 1)]
@@ -77,5 +88,13 @@ def stretch_contour_x_axis(contour: CONTOUR, coefficient: NUM, y_x: bool = True)
         new_contour.extend(ip)
 
     # the final step is to sort by x_axis
-    return sorted(new_contour, key=lambda p: p[1])
+    new_contour = sorted(new_contour, key=lambda p: p[1])
+
+    x21, _, x22, _ = extract_contour_bounding_box(new_contour)
+
+    x11, _ ,x12, _ = extract_contour_bounding_box(contour)
+
+    assert np.isclose((x22 - x21) / (x12 - x11), coefficient, atol=0.1), f"The stretching did not work as expected found: {(x22 - x21) / (x12 - x11)} expected: {coefficient}"
+
+    return new_contour
 

@@ -56,10 +56,10 @@ def _verify_pascal_voc_format(annotation: OBJ_DETECT_ANN_TYPE,
         raise ValueError(f"the pascal_voc format is not normalized")
 
     if not (x_min < x_max and x_min >= 0 and x_max <= img_shape[1] and x_max >= 1):
-        raise ValueError(f"elements 1 and 3 must represent x_min and x_max. Found: x_min: {x_min}, x_max: {x_max}")
+        raise ValueError(f"elements 1 and 3 must represent x_min and x_max. Found: x_min: {x_min}, x_max: {x_max}. The image dimensions are: {img_shape}")
 
     if not (y_min < y_max and y_min >= 0 and y_max <= img_shape[0] and y_max >= 1):
-        raise ValueError(f"elements 2 and 4 must represent y_min and y_max. Found: y_min: {y_min}, y_max: {y_max}")
+        raise ValueError(f"elements 2 and 4 must represent y_min and y_max. Found: y_min: {y_min}, y_max: {y_max}. The image dimensions are: {img_shape}")
     
     if normalize:
         x_min /= img_shape[1]
