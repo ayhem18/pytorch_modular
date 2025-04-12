@@ -32,7 +32,6 @@ include = [
 ]
 
 exclude = [
-  "tests",
   "azure-pipelines",
   ".gitignore",
   ".git",
