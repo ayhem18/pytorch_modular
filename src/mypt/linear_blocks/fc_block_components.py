@@ -35,7 +35,7 @@ class LinearBlock(torch.nn.Module):
         # ==> the formula basically applies dropout, then linear layer and then the activatio function
         # guideline 2: dropout after norm layer
         
-        # the final order according using both guidelines would be: BatchNorm, dropout, linearlayer, relu
+        # the final order using both guidelines would be: BatchNorm, dropout, linearlayer, relu
         # This class was designed to follow a convolutional block which justifies using BatchNormalization as the first layer
 
         linear_layer = nn.Linear(in_features=in_features, out_features=out_features)

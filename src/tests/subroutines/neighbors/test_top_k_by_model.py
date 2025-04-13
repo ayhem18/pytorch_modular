@@ -6,7 +6,7 @@ import os, torch, shutil
 
 import torchvision.transforms as tr 
 
-from typing import Union
+from typing import Optional, Union
 from pathlib import Path
 from torch.utils.data import Dataset
 
@@ -20,7 +20,7 @@ from mypt.data.datasets.parallel_augmentation.parallel_aug_dir import ParallelAu
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 
-def _main_function(ds: Dataset, 
+def _main_function(ds: Optional[Dataset], 
                   img_class_dir,
                   img_transform,
                   res_dir: Union[str, Path],

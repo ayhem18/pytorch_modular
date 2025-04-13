@@ -30,7 +30,7 @@ class ConvBlock(nn.Module):
                 layers.append((f"bn_{i + 1}", nn.BatchNorm2d(channels[i+1])))
 
         # at the very end, add the activation layer 
-        layers.append((f"activation_{len(channels)}", activation_layer))
+        layers.append((f"activation_layer", activation_layer))
         return nn.Sequential(OrderedDict(layers))
 
 
@@ -146,12 +146,17 @@ class ConvBlock(nn.Module):
         """
         return self.block(x)
     
-    
+    def __call__(self, x: torch.Tensor) -> torch.Tensor:
+        return self.forward(x)
+
     def children(self):
         return self.block.children()
 
     def named_children(self):
         return self.block.named_children()
+
+    def modules(self) -> List[nn.Module]:
+        return self.block.modules()
 
     def parameters(self):
         return self.block.parameters()

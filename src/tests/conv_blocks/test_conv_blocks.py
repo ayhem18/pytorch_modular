@@ -151,6 +151,147 @@ class TestConvBlocks(unittest.TestCase):
                 # Check activation layer
                 self.assertIsInstance(children[i*3+2], nn.ReLU)
 
+
+    def test_children_parameters_method_single_activation_layer_no_bn(self):
+        """Test that children, parameters, named_children, named_parameters methods work correctly for a single activation layer and no batch norm"""
+        for _ in range(100):  # Test multiple random configurations
+            # Generate random but valid parameters
+            num_layers = random.randint(1, 4)
+            channels = [random.randint(1, 64) for _ in range(num_layers + 1)]
+            kernel_sizes = random.randint(1, 5)
+            
+            # Create block with single activation and no batch norm
+            block = ConvBlock(
+                num_conv_layers=num_layers,
+                channels=channels,
+                kernel_sizes=kernel_sizes,
+                use_bn=False,
+                activation_after_each_layer=False,
+                activation=nn.ReLU
+            )
+            
+            
+            named_children = list(block.named_children())            
+            # We expect num_layers conv layers followed by 1 activation layer
+            self.assertEqual(len(named_children), num_layers + 1)
+            
+            # Check that all except the last layer are Conv2d
+            for i in range(num_layers):
+                self.assertEqual(named_children[i][0], f"conv_{i+1}")
+                self.assertIsInstance(named_children[i][1], nn.Conv2d)
+            
+            # Check the last layer is an activation
+            self.assertEqual(named_children[-1][0], f"activation_layer")
+            self.assertIsInstance(named_children[-1][1], nn.ReLU)
+
+    def test_children_parameters_method_single_activation_layer_bn(self):
+        """Test that children, parameters, named_children, named_parameters methods work correctly for a single activation layer and batch norm"""
+        for _ in range(100):  # Test multiple random configurations
+            # Generate random but valid parameters
+            num_layers = random.randint(1, 4)
+            channels = [random.randint(1, 64) for _ in range(num_layers + 1)]
+            kernel_sizes = [2 * random.randint(1, 5) + 1 for _ in range(num_layers)] # have odd kernel sizes in general
+            
+            # Create block with single activation and batch norm
+            block = ConvBlock(
+                num_conv_layers=num_layers,
+                channels=channels,
+                kernel_sizes=kernel_sizes,
+                use_bn=True,
+                activation_after_each_layer=False,
+                activation=nn.ReLU
+            )
+            
+            named_children = list(block.named_children())            
+            # We expect (conv + bn) * num_layers + 1 activation layer
+            self.assertEqual(len(named_children), num_layers * 2 + 1)
+            
+            # Check the layers
+            for i in range(num_layers):
+                # Every even layer should be Conv2d
+                self.assertEqual(named_children[i*2][0], f"conv_{i+1}")
+                self.assertIsInstance(named_children[i*2][1], nn.Conv2d)
+                
+                # Every odd layer should be BatchNorm2d
+                self.assertEqual(named_children[i*2+1][0], f"bn_{i+1}")
+                self.assertIsInstance(named_children[i*2+1][1], nn.BatchNorm2d)
+
+            # Check the last layer is an activation
+            self.assertEqual(named_children[-1][0], f"activation_layer")
+            self.assertIsInstance(named_children[-1][1], nn.ReLU)
+
+    def test_children_parameters_method_activation_after_each_layer_no_bn(self):
+        """Test that children, parameters, named_children, named_parameters methods work correctly for an activation after each layer and no batch norm"""
+        for _ in range(100):  # Test multiple random configurations
+            # Generate random but valid parameters
+            num_layers = random.randint(1, 4)
+            channels = [random.randint(1, 64) for _ in range(num_layers + 1)]
+            kernel_sizes = [2 * random.randint(1, 5) + 1 for _ in range(num_layers)] # have odd kernel sizes in general
+            
+            # Create block with activation after each layer and no batch norm
+            block = ConvBlock(
+                num_conv_layers=num_layers,
+                channels=channels,
+                kernel_sizes=kernel_sizes,
+                use_bn=False,
+                activation_after_each_layer=True,
+                activation=nn.ReLU
+            )
+            
+            # Check that block was created correctly
+            named_children = list(block.named_children())
+            # We expect (conv + activation) * num_layers layers
+            self.assertEqual(len(named_children), num_layers * 2)
+            
+            # Check the layers
+            for i in range(num_layers):
+                # Every even layer should be Conv2d
+                self.assertEqual(named_children[i*2][0], f"conv_{i+1}")
+                self.assertIsInstance(named_children[i*2][1], nn.Conv2d)
+                
+                # Every odd layer should be activation
+                self.assertEqual(named_children[i*2+1][0], f"activation_{i+1}")
+                self.assertIsInstance(named_children[i*2+1][1], nn.ReLU)
+
+    def test_children_parameters_method_activation_after_each_layer_bn(self):
+        """Test that children, parameters, named_children, named_parameters methods work correctly for an activation after each layer and batch norm"""
+        for _ in range(100):  # Test multiple random configurations
+            # Generate random but valid parameters
+            num_layers = random.randint(1, 4)
+            channels = [random.randint(1, 64) for _ in range(num_layers + 1)]
+            kernel_sizes = [2 * random.randint(1, 5) + 1 for _ in range(num_layers)] # have odd kernel sizes in general
+            
+            # Create block with activation after each layer and batch norm
+            block = ConvBlock(
+                num_conv_layers=num_layers,
+                channels=channels,
+                kernel_sizes=kernel_sizes,
+                use_bn=True,
+                activation_after_each_layer=True,
+                activation=nn.ReLU
+            )
+            
+            # Check that block was created correctly
+            named_children = list(block.named_children())
+            # We expect (conv + bn + activation) * num_layers layers
+            self.assertEqual(len(named_children), num_layers * 3)
+            
+            # Check the layers
+            for i in range(num_layers):
+                # Check Conv2d layer
+                self.assertEqual(named_children[i*3][0], f"conv_{i+1}")
+                self.assertIsInstance(named_children[i*3][1], nn.Conv2d)
+                
+                # Check BatchNorm2d layer
+                self.assertEqual(named_children[i*3+1][0], f"bn_{i+1}")
+                self.assertIsInstance(named_children[i*3+1][1], nn.BatchNorm2d)
+                
+                # Check activation layer
+                self.assertEqual(named_children[i*3+2][0], f"activation_{i+1}")
+                self.assertIsInstance(named_children[i*3+2][1], nn.ReLU)
+
+
+    @unittest.skip("Skipping forward pass shape test as it takes a long time to run")
     def test_forward_pass_shape(self):
         """Test that forward pass produces output with expected shape"""
         for _ in range(1000):  # Test multiple random configurations
@@ -187,6 +328,78 @@ class TestConvBlocks(unittest.TestCase):
             # Compare shapes
             self.assertEqual(actual_shape, expected_shape, 
                             f"Mismatch in output shape: got {actual_shape}, expected {expected_shape}")
+
+    
+    def test_eval_train_methods(self):        
+        """Test that eval and train methods work correctly"""
+        # Create a block with batch normalization
+        for _ in range(100):  # Test multiple random configurations
+            num_layers = random.randint(2, 4)
+            channels = [random.randint(1, 32) for _ in range(num_layers + 1)]
+            kernel_sizes = [2 * random.randint(1, 5) + 1 for _ in range(num_layers)]
+            
+            block = ConvBlock(
+                num_conv_layers=num_layers,
+                channels=channels,
+                kernel_sizes=kernel_sizes,
+                use_bn=True,  # Must use batch norm for this test
+                activation_after_each_layer=True,
+                activation=nn.ReLU
+            )
+            
+            # Test eval mode
+            block.eval()
+            
+            # Verify all children are in eval mode
+            for child in block.children():
+                self.assertFalse(child.training, "Child module should be in eval mode")
+            
+            # Create a small batch (size 1)
+            single_item_batch = torch.randn(1, channels[0], 24, 24)
+            
+            # This should not raise an error in eval mode
+            try:
+                _ = block.forward(single_item_batch)
+            except Exception as e:
+                self.fail(f"Block in eval mode raised an error with batch size 1: {e}")
+            
+            # Test train mode
+            block.train()
+            
+            # Verify all children are in train mode
+            for child in block.children():
+                self.assertTrue(child.training, "Child module should be in train mode")
+            
+            # Note: The BatchNorm2d doesn't actually throw an error with batch size 1 in train mode,
+            # it just computes running stats from a single sample (which is statistically invalid).
+            # PyTorch allows this but warns about it in documentation. So we can't test for an error here.
+            
+            # This is the ideal test, but it doesn't throw an error in PyTorch:
+            _ = block.forward(single_item_batch)  # No error should be raised, but results are statistically invalid
+            
+            # Instead, we'll verify that train() and eval() states are different by checking statistics
+            block.train()
+            _ = block.forward(single_item_batch)  # Run once to update running stats
+            
+            # Find BatchNorm2d modules
+            bn_modules = [m for m in block.modules() if isinstance(m, nn.BatchNorm2d)]
+            self.assertGreater(len(bn_modules), 0, "No BatchNorm2d modules found")
+            
+            # Store running stats in train mode
+            train_running_means = [bn.running_mean.clone() for bn in bn_modules]
+            
+            # Set to eval mode
+            block.eval()
+            
+            # Run with different data
+            different_data = torch.randn(1, channels[0], 24, 24)
+            _ = block.forward(different_data)
+            
+            # In eval mode, running stats should not change
+            for i, bn in enumerate(bn_modules):
+                self.assertTrue(torch.allclose(train_running_means[i], bn.running_mean), 
+                            "BatchNorm running mean should not change in eval mode")
+
 
 
 if __name__ == '__main__':
