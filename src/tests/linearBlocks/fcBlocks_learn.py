@@ -15,8 +15,8 @@ import mypt.code_utilities.pytorch_utilities as pu
 
 from mypt.shortcuts import P
 from mypt.data.dataloaders.standard_dataloaders import initialize_train_dataloader
-from mypt.linearBlocks.fc_block_components  import ResidualLinearBlock
-from mypt.linearBlocks.fully_connected_blocks  import GenericFCBlock
+from mypt.linear_blocks.fc_block_components  import ResidualLinearBlock
+from mypt.linear_blocks.fully_connected_blocks  import GenericFCBlock
 
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
