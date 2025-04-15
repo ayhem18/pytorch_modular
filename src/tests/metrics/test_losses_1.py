@@ -9,8 +9,8 @@ import random, torch
 import numpy as np
 
 from tqdm import tqdm
-from mypt.losses.simClrLoss import SimClrLoss, _SimClrLossNaive
 
+from mypt.losses.simClrLoss import SimClrLoss, _SimClrLossNaive
 import mypt.code_utilities.pytorch_utilities as pu
 
 

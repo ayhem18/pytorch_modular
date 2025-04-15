@@ -4,13 +4,58 @@ A script for contour utility functions
 
 import numpy as np
 
-from typing import Iterable, Tuple, Union
-from itertools import chain
+from typing import Iterable, List, Tuple, Union
 from .bbox_utilities import extract_contour_bounding_box
 
 CONTOUR = Iterable[Iterable[int]]
 
 NUM = Union[float, int]
+
+
+
+def _squeeze_iterable(x: Iterable) -> List:
+    while len(x) == 1:
+        x = x[0]
+
+    if isinstance(x, np.ndarray):
+        return x.tolist()
+    
+    if isinstance(x, Tuple):
+        return list(x)
+    
+    return x
+
+
+def cv2_contour_format(contour: CONTOUR) -> CONTOUR:
+    # the first step is to squeeze the iterable
+    squeezed_contour = _squeeze_iterable(contour) 
+
+    # check if the length of the contour is 2
+    if len(squeezed_contour) == 2:
+        if isinstance(squeezed_contour[0], np.num) and isinstance(squeezed_contour[0], np.num):
+            # the the contour originally contained only 1 point (a point is a tuple of 2 numbers)
+            temp_array = np.array(squeezed_contour)
+            res = temp_array[np.newaxis, np.newaxis, :]
+            if res.shape != (1, 1, 2):
+                raise ValueError(f"The contour has not the correct format. Found: {res}. The expected format is: (1, 1, 2)")
+            return res
+    
+    # at this point, the contour must be a list of iteratebles where each iteratble contains 2 numbers
+    further_squeezed_contour = [_squeeze_iterable(c) for c in squeezed_contour] 
+
+    if not all([len(c) == 2 for c in further_squeezed_contour]):
+        raise ValueError(f"The contour has not the correct format. Found: {further_squeezed_contour}. The expected format is: a list of iteratebles where each iteratble contains 2 numbers")
+    
+    # at this point, the contour is a list of iteratebles where each iteratble contains 2 numbers
+    # we need to convert it to a numpy array
+    res = np.array(further_squeezed_contour)
+    res = res[:, np.newaxis, :]
+
+    if res.shape != (len(squeezed_contour), 1, 2):
+        raise ValueError(f"The contour has not the correct format. Found: {res}. The expected format is: (len(squeezed_contour), 1, 2)")
+    
+    return res
+        
 
 
 def interpolate_between_two_points(p1: Tuple[int, int], p2: Tuple[int, int], num_points: int) -> CONTOUR:
