@@ -12,7 +12,7 @@ from PIL import Image
 from collections import deque
 
 from typing import Dict
-from .bbox_utilities import OBJ_DETECT_ANN_TYPE
+from .bbox_utils import OBJ_DETECT_ANN_TYPE
 
 
 def process_segmentation_mask(segmentation_mask: Union[np.ndarray, str, Path],

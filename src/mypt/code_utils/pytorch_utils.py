@@ -57,7 +57,6 @@ def save_checkpoint(model: nn.Module,
                         error_message="Make sure the checkpoint has the correct extension")
 
 
-
 # let's define functionalities for reproducibility and random seeds
 
 def seed_everything(seed: int = 69):
@@ -110,9 +109,9 @@ def iterate(module: nn.Module) -> List[nn.Module]:
     
 
 def get_augmentation_name(aug):
-    aug_cls_name = re.sub("^[^\s\w]*", "", str(aug.__class__))
-    aug_cls_name = re.sub("[^\s\w]*$", "", aug_cls_name)
-    return re.split("\W+", aug_cls_name)[-1]
+    aug_cls_name = re.sub(r"^[^\s\w]*", "", str(aug.__class__))
+    aug_cls_name = re.sub(r"[^\s\w]*$", "", aug_cls_name)
+    return re.split(r"\W+", aug_cls_name)[-1]
 
 
 def get_module_num_parameters(module: nn.Module) -> int:

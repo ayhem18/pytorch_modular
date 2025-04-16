@@ -11,7 +11,7 @@ from typing import List, Optional
 from torch.utils.data import Dataset, DataLoader
 from torch.utils.data import WeightedRandomSampler
 
-from ...code_utilities.pytorch_utilities import set_worker_seed
+from ...code_utils.pytorch_utils import set_worker_seed
 
 
 def initialize_train_dataloader(dataset_object: Dataset, 

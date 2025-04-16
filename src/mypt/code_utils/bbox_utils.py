@@ -418,7 +418,7 @@ def extract_contour_bounding_box(contour: Iterable[Tuple[int, int]],
     if process_function is None:
         # the default function is the identity
         process_function = lambda x: x
-
+ 
     max_x, max_y, min_x, min_y = None, None, None, None
 
     for element in contour:

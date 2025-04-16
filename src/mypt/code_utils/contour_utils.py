@@ -5,7 +5,7 @@ A script for contour utility functions
 import numpy as np
 
 from typing import Iterable, List, Tuple, Union
-from .bbox_utilities import extract_contour_bounding_box
+from .bbox_utils import extract_contour_bounding_box
 
 CONTOUR = Iterable[Iterable[int]]
 
