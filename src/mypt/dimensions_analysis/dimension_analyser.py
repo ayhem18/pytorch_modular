@@ -8,29 +8,88 @@ from torch import nn
 from typing import Union, Tuple
 from torch.utils.data import DataLoader
 
-from ..code_utilities.pytorch_utilities import get_module_device
-from ..dimensions_analysis import layer_specific as lc
+from mypt.code_utils import pytorch_utils as pu
+from mypt.dimensions_analysis import layer_specific as lc
 
 _FORWARD = 'forward_pass'
 _STATIC = 'static'
 
-# this constant represents the types for which the
-_DEFAULT_TYPES = (nn.Conv2d,
-                  nn.AvgPool2d,
-                  nn.MaxPool2d,
-                  nn.AdaptiveAvgPool2d,
-                  nn.AdaptiveMaxPool2d,
-                  nn.Flatten,
-                  nn.Linear)
+# this constant represents the layer specific types for which a constant time analysis is currently implemented
+
+_DEFAULT_TYPES = (
+    # Convolutional layers
+    nn.Conv2d,
+    nn.ConvTranspose2d,
+    
+    # Pooling layers
+    nn.AvgPool2d,
+    nn.MaxPool2d,
+    nn.AdaptiveAvgPool2d,
+    nn.AdaptiveMaxPool2d,
+    
+    # Normalization layers
+    nn.BatchNorm1d,
+    nn.BatchNorm2d,
+    nn.LayerNorm,
+    nn.GroupNorm,
+    nn.InstanceNorm2d,
+    
+    # Dropout layers
+    nn.Dropout,
+    nn.Dropout2d,
+    
+    # Activation layers
+    nn.ReLU,
+    nn.LeakyReLU,
+    nn.PReLU,
+    nn.Sigmoid,
+    nn.Tanh,
+    
+    # Shape manipulation layers
+    nn.Flatten,
+    nn.Linear,
+    nn.Upsample,
+    
+    # Embedding layer
+    nn.Embedding
+)
 
 _DEFAULT_OUTPUTS = {
+    # Convolutional layers
     nn.Conv2d: lc.conv2d_output,
+    nn.ConvTranspose2d: lc.convtranspose2d_output,
+    
+    # Pooling layers
     nn.AvgPool2d: lc.pool2d_output,
     nn.MaxPool2d: lc.pool2d_output,
     nn.AdaptiveMaxPool2d: lc.adaptive_pool2d_output,
     nn.AdaptiveAvgPool2d: lc.adaptive_pool2d_output,
+    
+    # Normalization layers
+    nn.BatchNorm1d: lc.batchnorm1d_output,
+    nn.BatchNorm2d: lc.batchnorm2d_output,
+    nn.LayerNorm: lc.layernorm_output, 
+    nn.GroupNorm: lc.groupnorm_output,
+    nn.InstanceNorm2d: lc.instancenorm2d_output,
+    
+    # Dropout layers  
+    nn.Dropout: lc.dropout_output,
+    nn.Dropout2d: lc.dropout2d_output,
+    
+    # Activation layers
+    nn.ReLU: lc.activation_output,
+    nn.LeakyReLU: lc.activation_output,
+    nn.PReLU: lc.activation_output,
+    nn.Sigmoid: lc.activation_output,
+    nn.Tanh: lc.activation_output,
+    
+    # Shape manipulation layers
     nn.Flatten: lc.flatten_output,
-    nn.Linear: lc.linear_output
+    nn.Linear: lc.linear_output,
+    nn.Upsample: lc.upsample_output,
+    
+    # Embedding layer
+    nn.Embedding: lc.embedding_output
 }
 
 
@@ -43,7 +102,7 @@ class DimensionsAnalyser:
         This function computes the output dimension of the given module, by creating a random tensor,
         executing the module's forward pass and returning the dimensions of the output
         """
-        module_device = get_module_device(net)
+        module_device = pu.get_module_device(net)
         # make sure the input and the output are on the same device
         input_tensor = torch.ones(*input_shape).to(module_device)
         # set the model to the evaluation model

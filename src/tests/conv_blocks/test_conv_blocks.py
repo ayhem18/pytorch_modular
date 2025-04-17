@@ -3,7 +3,7 @@ import torch
 import random
 from torch import nn
 
-import mypt.code_utilities.pytorch_utilities as pu
+import mypt.code_utils.pytorch_utils as pu
 from mypt.convBlocks.convBlock import ConvBlock
 from mypt.dimensions_analysis.dimension_analyser import DimensionsAnalyser
 

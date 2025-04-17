@@ -4,7 +4,7 @@ import random
 from random import randint as ri
 from torch import nn
 
-import mypt.code_utilities.pytorch_utilities as pu
+import mypt.code_utils.pytorch_utils as pu
 from mypt.linear_blocks.fc_block_components import BasicLinearBlock
 from mypt.dimensions_analysis.dimension_analyser import DimensionsAnalyser
 
