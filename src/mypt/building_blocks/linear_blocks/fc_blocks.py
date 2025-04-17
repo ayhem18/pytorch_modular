@@ -6,10 +6,10 @@ design or inspired from other sources.
 import math, torch
 import numpy as np
 
-from typing import Union, List, Optional
 from collections import OrderedDict
+from typing import Union, List, Optional
 
-from .fc_block_components import FullyConnectedBlock, LinearBlock, ResidualLinearBlock, SequentialModuleListMixin
+from .components import FullyConnectedBlock, BasicLinearBlock
 
 
 class GenericBuildMixin:   
@@ -17,7 +17,7 @@ class GenericBuildMixin:
     GenericBuildMixin, given a self.units field, builds a nn.SequentialModel.
     The number of layers (n) is assumed to be self.units - 1, the first n - 1 are non-final linear blocks and the last one is final
     """
-    def _build_block(self) -> torch.nn.Sequential:
+    def _build(self) -> torch.nn.Sequential:
 
         attrs = ['units', 'activation', 'dropout']
         for att in attrs:
@@ -27,7 +27,7 @@ class GenericBuildMixin:
         if len(self.units) < 2:
             raise ValueError(f"the number of elements in the self.units must be at least 2")
 
-        blocks = [LinearBlock(in_features=self.units[i],
+        blocks = [BasicLinearBlock(in_features=self.units[i],
                                 out_features=self.units[i + 1],
                                 is_final=False,
                                 activation=self.activation,
@@ -37,7 +37,7 @@ class GenericBuildMixin:
                 ]
         
         # add the last layer by setting the 'is_final' argument to True
-        blocks.append(LinearBlock(in_features=self.units[-2],
+        blocks.append(BasicLinearBlock(in_features=self.units[-2],
                                     out_features=self.units[-1],
                                     is_final=True)
                     )
@@ -72,11 +72,12 @@ class GenericFCBlock(
 
         self.units = units
 
-        self._build_classifier()
+        self._build()
 
-    def _build_classifier(self):
+    
+    def _build(self):
         # the idea is quite simple
-        self.classifier = self._build_block()
+        self._block = self._build()
 
 
 # this mixin, given the number of input and output features sets the number of units inside in an exponential scale
@@ -140,17 +141,17 @@ class ExponentialFCBlock(
             raise ValueError(f"Please make sure the difference is large enough between the number of classes and 'in_features' argument\n"
                              f"smallest dimension: {min_dim}. Largest dimension: {max_dim}")
         
-        self._build_classifier()
+        self._build()
 
 
-    def _build_classifier(self):
+    def _build(self):
         # get the number of units using the ExponentialMixin 
         self.units = self._set_units()
-        self.classifier = self._build_block()
+        self._block = self._build()
 
 
 class ResidualMixin:
-    def _build_classifier_blocks(self) -> torch.nn.ModuleList:
+    def _build(self) -> torch.nn.ModuleList:
         attrs = ['layers_per_residual_block', 'units', 'activation', 'dropout']
         for att in attrs:
             if not hasattr(self, att):
@@ -167,7 +168,7 @@ class ResidualMixin:
             residual_range = (num_layers // self.layers_per_residual_block) * self.layers_per_residual_block
 
         blocks = [
-            ResidualLinearBlock(output=self.units[i + self.layers_per_residual_block],
+            ResidualBasicLinearBlock(output=self.units[i + self.layers_per_residual_block],
                                 in_features=self.units[i],
                                 units=self.units[i: i + self.layers_per_residual_block + 1],
                                 num_layers=self.layers_per_residual_block,
@@ -193,7 +194,7 @@ class ResidualMixin:
 class ExponentialResidualFCBlock(
                         ResidualMixin,  
                         ExponentialMixin, 
-                        SequentialModuleListMixin,
+                        ModuleListMixin,
                         FullyConnectedBlock
                         ):
     """
@@ -231,13 +232,13 @@ class ExponentialResidualFCBlock(
 
         self.units: List[int] = None
 
-        self._build_classifier()
+        self._build()
 
 
-    def _build_classifier(self):
+    def _build(self):
         # get the number of units using the ExponentialMixin 
         self.units = self._set_units()
-        self.classifier = self._build_classifier_blocks()
+        self._block = self._build()
 
     def to(self, *args, **kwargs):
         return self.module_list_to(*args, **kwargs)

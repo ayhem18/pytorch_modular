@@ -5,7 +5,7 @@ from random import randint as ri
 from torch import nn
 
 import mypt.code_utils.pytorch_utils as pu
-from mypt.linear_blocks.fc_block_components import BasicLinearBlock
+from mypt.building_blocks.linear_blocks.components import BasicLinearBlock
 from mypt.dimensions_analysis.dimension_analyser import DimensionsAnalyser
 
 
@@ -143,7 +143,6 @@ class TestBasicLinearBlock(unittest.TestCase):
             self.assertIsInstance(children[2], nn.Linear)
             self.assertTrue(type(children[3]) in self.activation_types)
 
-
     def test_without_dropout(self):
         """Test blocks without dropout"""
         for _ in range(100):
@@ -176,7 +175,7 @@ class TestBasicLinearBlock(unittest.TestCase):
             named_children = dict(block.block.named_children())
             
             # Check that each child has a name
-            self.assertEqual(len(named_children), len(list(block.children())))
+            self.assertEqual(len(named_children), len(list(block.named_children())))
             
             if config["is_final"]:
                 # Final blocks have only Linear
@@ -351,12 +350,12 @@ class TestBasicLinearBlock(unittest.TestCase):
                 block.eval()
                 _ = block(input_tensor)  # Should not raise error
                 
-                # Although pytorch allows passing only one sample for 2d batch normalization 
-                # it does not allow it for 1d batch normalization
                 block.train()
                 
                 with self.assertRaises(ValueError):
                     block.forward(input_tensor) # having an error ensures that batch normalization indeed moved to the train mode.
+
+
 
 
 if __name__ == '__main__':
