@@ -1,16 +1,16 @@
 # the main idea here is to create a convolutional block that can be used to build larger networks.
 
-from typing import List, Optional, OrderedDict, Tuple, Union
 import torch
 from torch import nn
+from typing import List, Optional, OrderedDict, Tuple, Union
 
 
-class ConvBlock(nn.Module):
+class BasicConvBlock(nn.Module):
     """
     A flexible convolutional block that can be configured with multiple layers.
     
     This class allows creating a sequence of convolutional layers with optional 
-    batch normalization, activation functions, and pooling layers.
+    batch normalization and activation functions.
     """
     
     def __build_block_single_activation(self, 
@@ -146,6 +146,7 @@ class ConvBlock(nn.Module):
         """
         return self.block(x)
     
+
     def __call__(self, x: torch.Tensor) -> torch.Tensor:
         return self.forward(x)
 

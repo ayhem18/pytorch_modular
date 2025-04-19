@@ -8,7 +8,7 @@ from torchvision.datasets import Imagenette
 from typing import Tuple, List
 
 from mypt.shortcuts import P
-from mypt.code_utilities import directories_and_files as dirf
+from mypt.code_utils import directories_and_files as dirf
 
 
 

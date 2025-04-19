@@ -32,14 +32,17 @@ class GenericFCBlock(
                          dropout=dropout)
 
         self.units = units
+        self._block = self._build() # the self._build is implemented in the GeneralLinearBlockMixin
 
-        self._build()
-
-    
-    def _build(self):
-        # the idea is quite simple
-        self._block = self._build()
-
+    def get_constructor_args(self) -> dict:
+        return {
+            'output': self.output,
+            'in_features': self.in_features,
+            'num_layers': self.num_layers,
+            'units': self.units,
+            'activation': self.activation,
+            'dropout': self.dropout,
+        }
 
 class ExponentialFCBlock(
                         GeneralLinearBlockMixin,
@@ -59,14 +62,22 @@ class ExponentialFCBlock(
                          activation=activation,
                          dropout=dropout
                          )
-                
-        self._build()
+
+        self.units = self._set_units() # implemented in the ExponentialLinearBlockMixin
+        self._block = self._build() # implemented in the GeneralLinearBlockMixin
+
+    def get_constructor_args(self) -> dict:
+        return {
+            'output': self.output,
+            'in_features': self.in_features,
+            'num_layers': self.num_layers,
+            'units': self.units,
+            'activation': self.activation,
+            'dropout': self.dropout,
+        }
 
 
-    def _build(self):
-        # get the number of units using the ExponentialMixin 
-        self.units = self._set_units()
-        self._block = self._build()
+
 
 
 # class ExponentialResidualFCBlock(

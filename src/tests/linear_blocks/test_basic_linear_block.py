@@ -324,6 +324,12 @@ class TestBasicLinearBlock(unittest.TestCase):
             named_params = dict(block.named_parameters())
             self.assertEqual(len(named_params), len(params))
 
+            for name, param in named_params.items():
+                self.assertFalse(name.startswith('_block.'), 
+                               f"Parameter name {name} does not start with '_block.'")
+                self.assertIsInstance(param, torch.nn.Parameter)
+
+
     def test_batch_size_one_handling(self):
         """Test handling of batch size 1 (important for BatchNorm)"""
         for is_final in [True, False]:
@@ -354,6 +360,8 @@ class TestBasicLinearBlock(unittest.TestCase):
                 
                 with self.assertRaises(ValueError):
                     block.forward(input_tensor) # having an error ensures that batch normalization indeed moved to the train mode.
+
+
 
 
 

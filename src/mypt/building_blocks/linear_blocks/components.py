@@ -8,11 +8,11 @@ from torch.nn import Module
 from abc import ABC, abstractmethod
 from typing import Iterable, Iterator, Union, Optional, List, Tuple
 
-from mypt.building_blocks.mixins.custom_module_mixins import WrapperLikeModuleMixin
+from mypt.building_blocks.mixins.custom_module_mixins import CloneableModuleMixin, WrapperLikeModuleMixin
 from mypt.building_blocks.mixins.residual_mixins import GeneralResidualMixin
 
 
-class BasicLinearBlock(WrapperLikeModuleMixin):
+class BasicLinearBlock(WrapperLikeModuleMixin, CloneableModuleMixin):
     _RELU = 'relu'
     _LEAKY_RELU = 'leaky_relu'
     _TANH = 'tanh'
@@ -33,7 +33,12 @@ class BasicLinearBlock(WrapperLikeModuleMixin):
                  add_activation: bool = True,
                  *args, **kwargs) -> None:
         
-        super().__init__('_block', *args, **kwargs)
+        # initialize the WrapperLikeModuleMixin parent
+        WrapperLikeModuleMixin.__init__(self, '_block', *args, **kwargs)
+
+        # initialize the CloneableModuleMixin parent
+        CloneableModuleMixin.__init__(self, '_block')
+
         # Store init parameters as read-only properties
         self._in_features = in_features
         self._out_features = out_features
@@ -44,9 +49,9 @@ class BasicLinearBlock(WrapperLikeModuleMixin):
 
         # the order of components mainly follows the guidelines offered in this paper: https://proceedings.mlr.press/v216/kim23a.html
         # guideline 1: dropout vs Relu does not matter. In the original paper, dropout was applied before activation: formula in page 1933 (https://www.cs.toronto.edu/~hinton/absps/JMLRdropout.pdf)
-        # ==> the formula basically applies dropout, then linear layer and then the activatio function
-        # guideline 2: dropout after norm layer
+        # ==> the formula basically applies dropout, then linear layer and then the activation function
         
+        # guideline 2: dropout after norm layer
         # the final order using both guidelines would be: BatchNorm, dropout, linearlayer, relu
         # This class was designed to follow a convolutional block which justifies using BatchNormalization as the first layer
 
@@ -109,12 +114,21 @@ class BasicLinearBlock(WrapperLikeModuleMixin):
         return self._block
 
     @block.setter
-    def block(self, new_block: Union[nn.Sequential, nn.Module]):
+    def block(self, _: Union[nn.Sequential, nn.Module]):
         raise ValueError("The block attribute is read-only")
 
+    def get_constructor_args(self) -> dict:
+        return {
+            'in_features': self.in_features,
+            'out_features': self.out_features,
+            'activation': self.activation,
+            'dropout': self.dropout,
+            'is_final': self.is_final,
+            'add_activation': self.add_activation
+        }
 
 
-class FullyConnectedBlock(WrapperLikeModuleMixin):
+class FullyConnectedBlock(WrapperLikeModuleMixin, CloneableModuleMixin):
     # all fully connected blocks should have the 'output' and 'in_features' attributes
     def __init__(self, 
                  output: int,
@@ -131,7 +145,11 @@ class FullyConnectedBlock(WrapperLikeModuleMixin):
         else:
             dropout = [dropout for _ in range(num_layers - 1)] # using both a list of None or floats is acceptable
 
-        super().__init__('_block')
+        # this constructor call signals that this class is a wrapper-like module to another module saved in the `_block` field
+        WrapperLikeModuleMixin.__init__(self, '_block')
+
+        # initialize the CloneableModuleMixin parent
+        CloneableModuleMixin.__init__(self, '_block')
 
         # Store init parameters as read-only properties
         self._output = output
@@ -173,9 +191,9 @@ class FullyConnectedBlock(WrapperLikeModuleMixin):
     def _build(self):
         pass
     
+    
 
-
-class ResidualFullyConnectedBlock(FullyConnectedBlock, GeneralResidualMixin):
+class ResidualFullyConnectedBlock(FullyConnectedBlock, GeneralResidualMixin, CloneableModuleMixin):
     def __init__(self, 
                  output: int,
                  in_features: int,
@@ -185,7 +203,8 @@ class ResidualFullyConnectedBlock(FullyConnectedBlock, GeneralResidualMixin):
                  force_residual:bool=False,
                  *args, **kwargs):
         
-        super().__init__(output=output,
+        FullyConnectedBlock.__init__(self,
+                         output=output,
                          in_features=in_features,
                          num_layers=num_layers,
                          activation=activation,
@@ -202,6 +221,9 @@ class ResidualFullyConnectedBlock(FullyConnectedBlock, GeneralResidualMixin):
         GeneralResidualMixin.__init__(self, 
                                       main_stream_field_name=main_stream_field_name, 
                                       residual_stream_field_name=residual_stream_field_name)
+
+        # initialize the CloneableModuleMixin parent
+        CloneableModuleMixin.__init__(self, '_block')
 
     def _build(self):
         super()._build()
@@ -237,5 +259,12 @@ class ResidualFullyConnectedBlock(FullyConnectedBlock, GeneralResidualMixin):
     def eval(self):
         return self.residual_eval()
     
-
-
+    def get_constructor_args(self) -> dict:
+        return {
+            'output': self.output,
+            'in_features': self.in_features,
+            'num_layers': self.num_layers,
+            'activation': self.activation,
+            'dropout': self.dropout,
+            'force_residual': self.force_residual
+        }

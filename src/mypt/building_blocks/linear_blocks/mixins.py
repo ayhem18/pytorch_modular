@@ -1,14 +1,12 @@
 
 import math
-from typing import List
-import numpy as np
 import torch
+import numpy as np
 
+from typing import List
 from collections import OrderedDict
 
-from mypt.building_blocks.linear_blocks.fc_blocks import GenericFCBlock
-from mypt.building_blocks.mixins.general import ModuleListMixin
-from mypt.building_blocks.linear_blocks.components import BasicLinearBlock, ResidualFullyConnectedBlock
+from mypt.building_blocks.linear_blocks.components import BasicLinearBlock
 
 
 class GeneralLinearBlockMixin:   
