@@ -35,3 +35,7 @@ src/tests/data/data/food101/train/imagenette2/noisy_imagenette.csv
 
 simClr/*
 
+
+.vscode/**
+
+

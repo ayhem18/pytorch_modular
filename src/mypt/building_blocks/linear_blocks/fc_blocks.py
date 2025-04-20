@@ -55,14 +55,14 @@ class ExponentialFCBlock(
                  dropout: Optional[Union[List[float], float]]=None,
                  activation: str = 'relu'):
         
-        # the usual parent's class call
         super().__init__(output=output, 
                          in_features=in_features,
                          num_layers=num_layers,
                          activation=activation,
                          dropout=dropout
                          )
-
+        # set the units to None first 
+        # self.units = None 
         self.units = self._set_units() # implemented in the ExponentialLinearBlockMixin
         self._block = self._build() # implemented in the GeneralLinearBlockMixin
 

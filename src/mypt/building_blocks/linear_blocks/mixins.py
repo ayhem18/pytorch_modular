@@ -15,7 +15,7 @@ class GeneralLinearBlockMixin:
     The number of layers (n) is assumed to be self.units - 1, the first n - 1 are non-final linear blocks and the last one is final
     """
 
-    def _verify_instance(self):
+    def _verify_instance_generalLinearBlockMixin(self):
         attrs = ['units', 'activation', 'dropout']
         
         for att in attrs:
@@ -28,7 +28,7 @@ class GeneralLinearBlockMixin:
 
 
     def _build(self) -> torch.nn.Sequential:
-        self._verify_instance()
+        self._verify_instance_generalLinearBlockMixin()
 
         blocks = [BasicLinearBlock(in_features=self.units[i],
                                 out_features=self.units[i + 1],
@@ -57,7 +57,7 @@ class ExponentialLinearBlockMixin:
     This mixin is used to set the number of units in a linear block in an exponential scale (linear in log2 space)
     """
 
-    def _verify_instance(self):
+    def _verify_instance_exponentialLinearBlockMixin(self):
         attrs = ['num_layers', 'output', 'in_features']
         for att in attrs:
             if not hasattr(self, att):
@@ -72,9 +72,9 @@ class ExponentialLinearBlockMixin:
         
 
     def _set_units(self) -> List[int]:
-        self._verify_instance()
+        # let's start with making sure the child class has the necessary attributes
+        self._verify_instance_exponentialLinearBlockMixin()
             
-        # let's start with making sure the child class has the necessary attribute
         if self.num_layers > 1:            
             # the log of the in_features
             log_input = np.log2(self.in_features)

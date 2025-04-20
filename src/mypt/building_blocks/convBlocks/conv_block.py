@@ -70,7 +70,7 @@ class BasicConvBlock(nn.Module):
                  activation: Optional[nn.Module] = None,
                  activation_params: Optional[dict] = None,
                 ):
-        """The block can be designed into ways: 
+        """The block can be designed in two ways: 
 
         [conv layer, bn, activation, conv layer, bn, activation ...]
         or 
