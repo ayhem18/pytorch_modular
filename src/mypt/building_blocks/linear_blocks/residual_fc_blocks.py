@@ -24,6 +24,9 @@ class GenericResidualFCBlock(GeneralLinearBlockMixin, ResidualFullyConnectedBloc
                  dropout: Optional[Union[List[float], float]]=None,
                  force_residual: bool=False):
         
+        if len(units) != num_layers + 1:
+            raise ValueError(f"The Generic Residual Fully Connected block expects the 'units' argument to contain {num_layers + 1} elements. Found: {len(units)}")
+
         # Initialize the ResidualFullyConnectedBlock first
         ResidualFullyConnectedBlock.__init__(
             self,

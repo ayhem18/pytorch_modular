@@ -7,7 +7,7 @@ from random import randint as ri
 
 import mypt.code_utils.pytorch_utils as pu
 from mypt.dimensions_analysis.dimension_analyser import DimensionsAnalyser
-from mypt.building_blocks.linear_blocks.components import BasicLinearBlock
+from mypt.building_blocks.linear_blocks.components import BasicLinearBlock, ResidualFullyConnectedBlock
 from mypt.building_blocks.linear_blocks.residual_fc_blocks import (
     GenericResidualFCBlock, 
     ExponentialResidualFCBlock
@@ -29,7 +29,7 @@ class ResidualFCBlockTestBase(unittest.TestCase):
                                            activation=None,
                                            dropout=None, 
                                            force_residual=None,
-                                           matching_dimensions=None):
+                                           matching_dimensions=None) -> ResidualFullyConnectedBlock:
         """Generate a random residual FC block with configurable parameters"""
         raise NotImplementedError("Subclasses must implement this method")
     
@@ -77,34 +77,37 @@ class ResidualFCBlockTestBase(unittest.TestCase):
     def _test_residual_forward_pass(self):
         """Test that the residual forward pass works correctly"""
         # Test with matching dimensions
-        block = self._generate_random_residual_fc_block(matching_dimensions=True, force_residual=False)
-        x = torch.randn(2, block.in_features)
-        
-        # Forward through main block manually to compare
-        main_output = block._block(x)
-        residual_output = x  # Identity for matching dimensions
-        
-        # The output should be main_output + residual_output
-        expected_output = main_output + residual_output
-        actual_output = block(x)
-        
-        self.assertTrue(torch.allclose(actual_output, expected_output, rtol=1e-5, atol=1e-5),
-                        "Residual forward pass should add main output and input when dimensions match")
-        
-        # Test with non-matching dimensions or force_residual=True
-        block = self._generate_random_residual_fc_block(matching_dimensions=False, force_residual=False)
-        x = torch.randn(2, block.in_features)
-        
-        # Forward through components manually to compare
-        main_output = block._block(x)
-        residual_output = block._adaptive_layer(x)
-        
-        # The output should be main_output + residual_output
-        expected_output = main_output + residual_output
-        actual_output = block(x)
-        
-        self.assertTrue(torch.allclose(actual_output, expected_output, rtol=1e-5, atol=1e-5),
-                        "Residual forward pass should add main output and adaptive layer output")
+        for _ in range(100):
+            block = self._generate_random_residual_fc_block(matching_dimensions=True, force_residual=False)
+            block.eval() # make sure to set the block to eval mode for consistent output
+            x = torch.randn(2, block.in_features)
+            
+            # Forward through main block manually to compare
+            main_output = block._block(x)
+            residual_output = x  # Identity for matching dimensions
+            
+            # The output should be main_output + residual_output
+            expected_output = main_output + residual_output
+            actual_output = block(x)
+            
+            self.assertTrue(torch.allclose(actual_output, expected_output, rtol=1e-5, atol=1e-5),
+                            "Residual forward pass should add main output and input when dimensions match")
+            
+            # Test with non-matching dimensions or force_residual=True
+            block = self._generate_random_residual_fc_block(matching_dimensions=False, force_residual=False)
+            block.eval() # make sure to set the block to eval mode for consistent output
+            x = torch.randn(2, block.in_features)
+            
+            # Forward through components manually to compare
+            main_output = block._block(x)
+            residual_output = block._adaptive_layer(x)
+            
+            # The output should be main_output + residual_output
+            expected_output = main_output + residual_output
+            actual_output = block(x)
+            
+            self.assertTrue(torch.allclose(actual_output, expected_output, rtol=1e-5, atol=1e-5),
+                            "Residual forward pass should add main output and adaptive layer output")
     
     def _test_different_activations(self):
         """Test different activation functions"""
@@ -344,16 +347,23 @@ class ResidualFCBlockTestBase(unittest.TestCase):
             # Should have an adaptive layer
             self.assertTrue(hasattr(block, '_adaptive_layer'), 
                             "Block should have adaptive layer when force_residual=True")
-            
+
+            block.eval() # make sure to set the block to eval mode for consistent output
+
             # Test forward pass
-            x = torch.randn(2, block.in_features)
+            x = torch.randn(2, block.in_features, requires_grad=False)
+
+            ms, rs = block._get_main_stream(), block._get_residual_stream()
+
+            self.assertTrue(ms is block._block, "Main stream should be the block")
+            self.assertTrue(rs is block._adaptive_layer, "Residual stream should be the adaptive layer")
+
             block_output, adaptive_layer_output, output = block.forward(x, debug=True)
-            
             # Manually compute the expected output
             main_output = block._block.forward(x)
             residual_output = block._adaptive_layer.forward(x)
             expected_output = main_output + residual_output
-            
+
             self.assertTrue(torch.allclose(block_output, main_output),
                             "Block output should be main output")
 
@@ -374,6 +384,7 @@ class ResidualFCBlockTestBase(unittest.TestCase):
 
             self.assertEqual(block.in_features, block.output)
 
+            block.eval() # make sure to set the block to eval mode for consistent output
             # Test forward pass
             x = torch.randn(2, block.in_features)
             output = block(x)
@@ -394,9 +405,10 @@ class ResidualFCBlockTestBase(unittest.TestCase):
                 self.assertNotEqual(block.in_features, block.output)
                 self.assertIsNotNone(block._adaptive_layer)
 
+                block.eval() # make sure to set the block to eval mode for consistent output
+
                 # Test forward pass
                 x = torch.randn(2, block.in_features, requires_grad=False)
-                block.eval()
                 output = block(x)
                 
                 # Manually compute the expected output
@@ -578,113 +590,115 @@ class TestGenericResidualFCBlock(ResidualFCBlockTestBase):
         self._test_different_dimensions()
 
 
-# class TestExponentialResidualFCBlock(ResidualFCBlockTestBase):
-#     """
-#     Tests for ExponentialResidualFCBlock
-#     """
-#     def _generate_random_residual_fc_block(self, 
-#                                          num_layers=None, 
-#                                          activation=None, 
-#                                          dropout=None, 
-#                                          force_residual=None,
-#                                          matching_dimensions=None):
-#         """Generate an ExponentialResidualFCBlock for testing"""
-#         if num_layers is None:
-#             num_layers = ri(2, 5)
+class TestExponentialResidualFCBlock(ResidualFCBlockTestBase):
+    """
+    Tests for ExponentialResidualFCBlock
+    """
+    def _generate_random_residual_fc_block(self, 
+                                         num_layers=None, 
+                                         activation=None, 
+                                         dropout=None, 
+                                         force_residual=None,
+                                         matching_dimensions=None):
+        """Generate an ExponentialResidualFCBlock for testing"""
+        if num_layers is None:
+            num_layers = ri(2, 5)
             
-#         # Set default in_features and output
-#         in_features = ri(32, 1024)  # Use powers of 2 to ensure good exponential scaling
-#         output = ri(2, 16)
+        # Set default in_features and output
+        in_features = ri(32, 1024)  # Use powers of 2 to ensure good exponential scaling
+        output = ri(2, 16)
         
         
-#         if activation is None:
-#             activation = random.choice(self.activation_names)
+        if activation is None:
+            activation = random.choice(self.activation_names)
             
-#         if dropout is None:
-#             if random.choice([True, False]):
-#                 # Use a single dropout value
-#                 dropout_value = random.uniform(0.1, 0.5)
-#             else:
-#                 # Use a list of dropout values
-#                 dropout_value = [random.uniform(0.1, 0.5) for _ in range(num_layers - 1)]
-#         elif dropout is False:
-#             dropout_value = None
-#         else:
-#             dropout_value = dropout
+        if dropout is None:
+            if random.choice([True, False]):
+                # Use a single dropout value
+                dropout_value = random.uniform(0.1, 0.5)
+            else:
+                # Use a list of dropout values
+                dropout_value = [random.uniform(0.1, 0.5) for _ in range(num_layers - 1)]
+        elif dropout is False:
+            dropout_value = None
+        else:
+            dropout_value = dropout
             
-#         if force_residual is None:
-#             force_residual = random.choice([True, False])
+        if force_residual is None:
+            force_residual = random.choice([True, False])
             
-#         return ExponentialResidualFCBlock(
-#             output=output,
-#             in_features=in_features,
-#             num_layers=num_layers,
-#             activation=activation,
-#             dropout=dropout_value,
-#             force_residual=force_residual
-#         )
+        return ExponentialResidualFCBlock(
+            output=output,
+            in_features=in_features,
+            num_layers=num_layers,
+            activation=activation,
+            dropout=dropout_value,
+            force_residual=force_residual
+        )
     
-#     def test_exponential_scaling(self):
-#         """Test that the block uses exponential scaling for units"""
-#         for _ in range(10):
-#             block = self._generate_random_residual_fc_block()
+    def test_exponential_scaling(self):
+        """Test that the block uses exponential scaling for units"""
+        for _ in range(10):
+            block = self._generate_random_residual_fc_block()
             
-#             # Check that exponential scaling is applied
-#             # Units should decrease roughly exponentially from in_features to output
-#             units = block.units
+            # Check that exponential scaling is applied
+            # Units should decrease roughly exponentially from in_features to output
+            units = block.units
             
-#             # First unit should be in_features
-#             self.assertEqual(units[0], block.in_features)
+            # First unit should be in_features
+            self.assertEqual(units[0], block.in_features)
             
-#             # Last unit should be output
-#             self.assertEqual(units[-1], block.output)
+            # Last unit should be output
+            self.assertEqual(units[-1], block.output)
             
-#             # Check that units are monotonically decreasing
-#             for i in range(len(units) - 1):
-#                 if units[i] < units[i+1]:
-#                     self.fail("Units should be monotonically decreasing in exponential block")
-    
-#     # Run all the tests from the base class
-#     def test_block_structure(self):
-#         self._test_block_structure()
+            # Check that units are monotonically decreasing
+            if units[0] > units[-1]:
+                for i in range(len(units) - 1):
+                    if units[i] < units[i+1]:
+                        self.fail("The values of the units should be monotonincally decreasing or increasing depending on the input and output dimensions")
+            else:
+                for i in range(len(units) - 1):
+                    if units[i] > units[i+1]:
+                        self.fail("The values of the units should be monotonincally decreasing or increasing depending on the input and output dimensions")
 
 
-#     def test_residual_forward_pass(self):
-#         self._test_residual_forward_pass()
+    # Run all the tests from the base class
+    def test_block_structure(self):
+        self._test_block_structure()
     
-#     def test_different_activations(self):
-#         self._test_different_activations()
+    def test_different_activations(self):
+        self._test_different_activations()
     
-#     def test_with_scalar_dropout(self):
-#         self._test_with_scalar_dropout()
+    def test_with_scalar_dropout(self):
+        self._test_with_scalar_dropout()
     
-#     def test_with_list_dropout(self):
-#         self._test_with_list_dropout()
+    def test_with_list_dropout(self):
+        self._test_with_list_dropout()
     
-#     def test_without_dropout(self):
-#         self._test_without_dropout()
+    def test_without_dropout(self):
+        self._test_without_dropout()
     
-#     def test_forward_pass_shape(self):
-#         self._test_forward_pass_shape()
+    def test_forward_pass_shape(self):
+        self._test_forward_pass_shape()
     
-#     def test_train_and_eval_modes(self):
-#         self._test_train_and_eval_modes()
+    def test_train_and_eval_modes(self):
+        self._test_train_and_eval_modes()
     
-#     def test_to_device(self):
-#         self._test_to_device()
+    def test_to_device(self):
+        self._test_to_device()
     
-#     def test_parameters_access(self):
-#         self._test_parameters_access()
+    def test_parameters_access(self):
+        self._test_parameters_access()
     
-#     def test_batch_size_one_handling(self):
-#         self._test_batch_size_one_handling()
+    def test_batch_size_one_handling(self):
+        self._test_batch_size_one_handling()
     
 
-#     # since the input and output dimensions are always different for the ExponentialResidualFCBlock, 
-#     # there is no need to test the force_residual or the case where the dimensions match
+    # since the input and output dimensions are always different for the ExponentialResidualFCBlock, 
+    # there is no need to test the force_residual or the case where the dimensions match
 
-#     def test_different_dimensions(self):
-#         self._test_different_dimensions()
+    def test_different_dimensions(self):
+        self._test_different_dimensions()
 
 
 if __name__ == '__main__':

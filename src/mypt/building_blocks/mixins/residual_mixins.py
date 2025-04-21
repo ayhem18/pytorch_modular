@@ -52,10 +52,7 @@ class GeneralResidualMixin:
 
 
     def residual_forward(self, x: torch.Tensor, debug:bool=False) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]:
-        # first get the main stream output
-        if debug:
-            ms = self._get_main_stream() 
-            
+        # first get the main stream output            
         main_stream_output = self._get_main_stream().forward(x)
 
         # if the residual stream is not set, then we can assume it is an identity function 
