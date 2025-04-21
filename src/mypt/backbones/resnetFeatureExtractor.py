@@ -10,10 +10,9 @@ in pretrained network. I am applying the same framework on the resnet architectu
 import torch
 import warnings
 
-import torchvision.transforms as tr
 
-from typing import Iterator, Union, Tuple, Any, Optional
 from collections import OrderedDict
+from typing import Iterator, Union, Tuple, Any, Optional
 
 from torch import nn
 from torch.nn.modules.module import Module
@@ -22,15 +21,6 @@ from torchvision.models import ResNet18_Weights, ResNet34_Weights, ResNet50_Weig
 from torchvision.models.resnet import Bottleneck
 
 
-_DEFAULT_IMAGE_TRANSFORMS = [tr.CenterCrop(size=(232, 232)), 
-                             tr.Resize(size=(224, 224)), # using the default interpolation 
-                             tr.Normalize(mean=[0.485, 0.456, 0.406], 
-                                          std=[0.229, 0.224, 0.225])
-                            ]
-
-LAYER_BLOCK = 'layer'
-RESIDUAL_BLOCK = 'residual'
-DEFAUL_NUM_CLASSES = 1000
 
 # let's create a utility function real quick
 def contains_fc_layer(module: nn.Module) -> bool:
@@ -42,8 +32,6 @@ def contains_fc_layer(module: nn.Module) -> bool:
     return m and sub_m
 
 
-# _Resnet_DEFAULT_AUGMENTATIONS = [tr.Resize(size=(224, 224)), tr.Normalize(), tr.ToTensor()]
-
 
 class ResNetFeatureExtractor(nn.Module):
     __archs__ = [18, 34, 50, 101, 152]
@@ -53,7 +41,12 @@ class ResNetFeatureExtractor(nn.Module):
                      50: (resnet50, ResNet50_Weights), 
                      101: (resnet101, ResNet101_Weights), 
                      152: (resnet152, ResNet152_Weights)}
-    
+
+    LAYER_BLOCK = 'layer'
+    RESIDUAL_BLOCK = 'residual'
+    DEFAUL_NUM_CLASSES = 1000
+
+
     @classmethod    
     def get_model(cls, architecture: int) -> Tuple[nn.Module, Any]:
         if architecture not in cls.__archs__:
