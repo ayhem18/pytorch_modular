@@ -9,27 +9,25 @@ in pretrained network. I am applying the same framework on the resnet architectu
 
 import warnings
 
-
-from collections import OrderedDict
-from typing import Union, Tuple, Any, Optional
-
 from torch import nn
-from torch.nn.modules.module import Module
-from torchvision.models.resnet import Bottleneck
+from collections import OrderedDict, defaultdict
+from typing import Union, Tuple, Any
 from torchvision.models import resnet18, resnet34, resnet50, resnet101, resnet152
 from torchvision.models import ResNet18_Weights, ResNet34_Weights, ResNet50_Weights, ResNet101_Weights, ResNet152_Weights
+from torchvision.models.resnet import Bottleneck, BasicBlock
+
 
 from mypt.building_blocks.mixins.custom_module_mixins import WrapperLikeModuleMixin  
 
 
 class ResnetFE(WrapperLikeModuleMixin):
-    __archs__ = [18, 34, 50, 101, 152]
+    __archs__ = [50, 101, 152]
     
-    archs_dict = {18: (resnet18, ResNet18_Weights), 
-                     34: (resnet34, ResNet34_Weights), 
-                     50: (resnet50, ResNet50_Weights), 
-                     101: (resnet101, ResNet101_Weights), 
-                     152: (resnet152, ResNet152_Weights)}
+    # archs_dict = {18: (resnet18, ResNet18_Weights), # the resnet18 model does not use the bottleck block apparently 
+    # archs_dict = {34: (resnet34, ResNet34_Weights), 
+    archs_dict = {50: (resnet50, ResNet50_Weights), 
+                 101: (resnet101, ResNet101_Weights), 
+                 152: (resnet152, ResNet152_Weights)}
 
     LAYER_BLOCK = 'layer'
     RESIDUAL_BLOCK = 'residual'
@@ -44,19 +42,21 @@ class ResnetFE(WrapperLikeModuleMixin):
         return cls.archs_dict[architecture]
 
 
-
     def __extract_feature_extractory_by_layer(self):
         """
         This method build a feature extractor using the "layer" as a building block.
         """
+
+        # at this point, the module has children
+        layer_blocks_counter = 0
+        extracted_modules = []
+
         for module_name, module in self.__net.named_children():
             # there are 3 types of immediate children for the resnet model:
             # either a layer block
             # either a relu, maxpool, or a convolutional layer: those appear at the very beginning of the network
             # either an average pooling layer: this appears right after the last_layer_block
 
-            # check1: if the current module is an average pooling layer
-            extracted_modules = []
 
             if isinstance(module, nn.AdaptiveAvgPool2d) and self._add_global_average:
                 extracted_modules.append((module_name, module))
@@ -73,12 +73,11 @@ class ResnetFE(WrapperLikeModuleMixin):
                 extracted_modules.append((module_name, module))
                 continue
             
-            # at this point, the module has children
-            layer_blocks_counter = 0
-            
             # the assumption here is that the child is a layer block
             if self.LAYER_BLOCK.lower() not in module_name.lower():
                 raise TypeError("The class is based on the wrong assumptions. Found a block with children that is not a layer block !!! it is named: {name}")
+
+            self.bottleneck_per_layer[layer_blocks_counter + 1] = len(list(module.children()))
 
             # at this point, the child is a layer block
             if layer_blocks_counter >= self._num_extracted_block:
@@ -96,14 +95,14 @@ class ResnetFE(WrapperLikeModuleMixin):
         """
         This method build a feature extractor using the "bottleneck" as a building block.
         """
+        layer_counter = 0
+        extracted_modules = []
+
         for module_name, module in self.__net.named_children():
             # there are 3 types of immediate children for the resnet model:
             # either a layer block
             # either a relu, maxpool, or a convolutional layer: those appear at the very beginning of the network
             # either an average pooling layer: this appears right after the last_layer_block
-
-            # check1: if the current module is an average pooling layer
-            extracted_modules = []
 
             if isinstance(module, nn.AdaptiveAvgPool2d) and self._add_global_average:
                 extracted_modules.append((module_name, module))
@@ -122,13 +121,15 @@ class ResnetFE(WrapperLikeModuleMixin):
             
             # at this point, the module has children
             bottleneck_counter = 0
-            
+
             # the assumption here is that the child is a layer block
             if self.LAYER_BLOCK.lower() not in module_name.lower():
                 raise TypeError("The class is based on the wrong assumptions. Found a block with children that is not a layer block !!! it is named: {name}")
 
+            layer_counter += 1
+
             for name, child in mc:
-                if self.RESIDUAL_BLOCK.lower() not in name.lower():
+                if not isinstance(child, Bottleneck):
                     raise TypeError("The class is based on the wrong assumptions. Found a block with children that is not a layer block !!! it is named: {name}")
 
                 # at this point, the child is a residual block
@@ -136,9 +137,14 @@ class ResnetFE(WrapperLikeModuleMixin):
                     # we use break since, within the layer block, we will not add any more residual blocks to the feature extractor.
                     break
 
+                if self.RESIDUAL_BLOCK.lower() not in name.lower():
+                    name = self.RESIDUAL_BLOCK.lower() + '_' + f'{bottleneck_counter:02d}'
+                
                 # add the residual block to the feature extractor  
                 extracted_modules.append((name, child))
-                bottleneck_counter += 1   
+                bottleneck_counter += 1    
+
+                self.bottleneck_per_layer[layer_counter] += 1
 
         self._feature_extractor = nn.Sequential(OrderedDict(extracted_modules))
 
@@ -173,6 +179,8 @@ class ResnetFE(WrapperLikeModuleMixin):
 
         self._build_by_layer = build_by_layer
 
+        self._architecture = architecture
+
         if  build_by_layer and num_extracted_layers == 0:
             raise ValueError("The number of extracted layers cannot be zeor. Negative values indicate all layers should be extracted.")
 
@@ -180,7 +188,7 @@ class ResnetFE(WrapperLikeModuleMixin):
             raise ValueError("The number of extracted blocks cannot be zeor. Negative values indicate all blocks should be extracted.")
 
         self._num_extracted_layers = num_extracted_layers if num_extracted_layers > 0 else float('inf') 
-        self._num_extracted_bottlenecks = num_extracted_bottlenecks
+        self._num_extracted_bottlenecks = num_extracted_bottlenecks if num_extracted_bottlenecks > 0 else float('inf') 
         
         self._freeze = freeze
         self._freeze_by_layer = freeze_by_layer
@@ -191,7 +199,9 @@ class ResnetFE(WrapperLikeModuleMixin):
         constructor, weights = self.get_model(architecture=architecture)
         self.__net = constructor(weights=weights.DEFAULT) 
         self.default_transform = weights.DEFAULT.transforms()
-    
+
+        self.bottleneck_per_layer = defaultdict(lambda: 0)
+
         # at this point, build the feature extractor
         if self._build_by_layer:
             self.__extract_feature_extractory_by_layer()
@@ -201,32 +211,10 @@ class ResnetFE(WrapperLikeModuleMixin):
         del(self.__net) # remove the original network as it is no longer needed    
 
 
-    # def __init__(self,
-    #              num_layers: int,  # the number of blocks to keep
-    #              add_global_average: bool = True, # whether to add the 
-    #              freeze_layers: bool = True, # whether to freeze by layer or by block
-    #              freeze: Optional[Union[bool, int]] = True,  # whether to freeze the chosen layers or not
-    #              architecture: int = 50,
-    #              *args, **kwargs):
-        
-    #     super().__init__(*args, **kwargs)
-    #     self.num_layers = num_layers
-
-
-    #     self.add_gb_avg = add_global_average
-    #     self.feature_extractor = self.__feature_extractor_layers(self.num_layers)
-
-    #     # freeze the weights if needed
-    #     self._freeze(freeze=freeze, freeze_layers=freeze_layers)
-
-    #     # remove the self.__net field from the model
-    #     del(self.__net)
-
-
 
 if __name__ == "__main__":
-    # res = resnet50(weights=ResNet50_Weights.DEFAULT)    
-    # for name, child in res.named_children():
-    #     print(name, child, sep=" : ")
+    res = resnet50(weights=ResNet50_Weights.DEFAULT)    
+    for name, child in res.named_children():
+        print(name, child, sep=" : ")
     pass    
     
