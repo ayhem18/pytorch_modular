@@ -72,6 +72,12 @@ class WrapperLikeModuleMixin(nn.Module):
     def forward(self, x: torch.Tensor, *args, **kwargs) -> torch.Tensor:
         return getattr(self, self._inner_model_field_name)(x, *args, **kwargs) 
     
+    def __str__(self) -> str:
+        return getattr(self, self._inner_model_field_name).__str__() 
+    
+    def __repr__(self) -> str:
+        return getattr(self, self._inner_model_field_name).__repr__() 
+    
 
 
 class CloneableModuleMixin(ABC):

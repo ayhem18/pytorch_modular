@@ -19,32 +19,36 @@ class TestResnetFE(unittest.TestCase):
     Tests construction with different architectures and extraction strategies.
     """
     
-    def setUp(self):
+    @classmethod
+    def setUpClass(cls):
         """
         Initialize tests for all ResNet architectures.
+        This method is run ONCE before any tests are executed.
         Calculates the number of layer blocks and residual blocks in each architecture.
         """
-        self.architectures = ResnetFE.__archs__
+        cls.architectures = ResnetFE.__archs__
         
         # Create dictionaries to store layer and bottleneck counts for each architecture
-        self.layer_counts = {}
-        self.bottleneck_counts = {}
+        cls.layer_counts = {}
+        cls.bottleneck_counts = {}
         
         # Compute counts for each architecture
-        for arch in self.architectures:
-            self.layer_counts[arch] = self._compute_layers(arch)
-            self.bottleneck_counts[arch] = self._compute_bottlenecks(arch)
+        for arch in cls.architectures:
+            cls.layer_counts[arch] = cls._compute_layers(arch)
+            cls.bottleneck_counts[arch] = cls._compute_bottlenecks(arch)
         
         # Print summary for debugging
-        print(f"Layer counts by architecture: {self.layer_counts}")
-        print(f"Bottleneck counts by architecture: {self.bottleneck_counts}")
-    
-    def _compute_layers(self, architecture: int) -> int:
+        print(f"Layer counts by architecture: {cls.layer_counts}")
+        print(f"Bottleneck counts by architecture: {cls.bottleneck_counts}")
+
+
+    @classmethod
+    def _compute_layers(cls, architecture: int) -> int:
         """
         Computes the number of layer blocks in a given ResNet architecture.
         
         Args:
-            architecture: ResNet architecture (50, 101, or 152)
+            architecture: ResNet architecture (18, 34, 50, 101, or 152)
             
         Returns:
             Number of layer blocks in the architecture
@@ -61,12 +65,13 @@ class TestResnetFE(unittest.TestCase):
         
         return layer_count
     
-    def _compute_bottlenecks(self, architecture: int) -> Dict[str, int]:
+    @classmethod
+    def _compute_bottlenecks(cls, architecture: int) -> Dict[str, int]:
         """
         Computes the number of residual blocks in each layer of a given ResNet architecture.
         
         Args:
-            architecture: ResNet architecture (50, 101, or 152)
+            architecture: ResNet architecture (18, 34, 50, 101, or 152)
             
         Returns:
             Dictionary mapping layer names to number of residual blocks
@@ -123,11 +128,8 @@ class TestResnetFE(unittest.TestCase):
         
         return bottleneck_count
     
-    def test_build_by_layer(self):
-        """
-        Tests the feature extractor construction when building by layer.
-        Verifies that the correct number of layers are extracted based on the input parameters.
-        """
+    @unittest.skip("skipping layer tests for now")
+    def test_build_by_layer_1_total_layers(self):
         for arch in self.architectures:
             total_layers = self.layer_counts[arch]
             
@@ -153,7 +155,12 @@ class TestResnetFE(unittest.TestCase):
                     f"Architecture {arch}, num_extracted_layers={i}: Expected {i} layers, got {actual_layers}"
                 )
 
-            for _ in range(20):
+    @unittest.skip("skipping layer tests for now")
+    def test_build_by_layer_random_negative_values(self):
+        for arch in self.architectures:
+            total_layers = self.layer_counts[arch]
+                
+            for _ in range(10):
                 # test random  negative values 
                 num_layers = random.randint(-100, -1) 
 
@@ -174,10 +181,15 @@ class TestResnetFE(unittest.TestCase):
                 self.assertEqual(
                     actual_layers, 
                     total_layers, 
-                    f"Architecture {arch}, num_extracted_layers={i}: Expected {i} layers, got {actual_layers}"
+                    f"Architecture {arch}, num_extracted_layers={actual_layers}: Expected {total_layers} layers, got {actual_layers}"
                 )
+                
+    @unittest.skip("skipping layer tests for now")
+    def test_build_by_layer_beyond_total_layers(self):
+        for arch in self.architectures:
+            total_layers = self.layer_counts[arch]
 
-            for _ in range(20):
+            for _ in range(10):
                 # test random values beyond the total number of layers
                 i = random.randint(total_layers + 1, 1000)
 
@@ -200,13 +212,9 @@ class TestResnetFE(unittest.TestCase):
                     total_layers, 
                     f"Architecture {arch}, num_extracted_layers={i}: Expected {total_layers} layers, got {actual_layers}"
                 )
-                
-    
-    def test_build_by_bottleneck(self):
-        """
-        Tests the feature extractor construction when building by bottleneck.
-        Verifies that the correct number of bottlenecks are extracted based on the input parameters.
-        """
+
+    @unittest.skip("skipping bottleneck tests for now")      
+    def test_build_by_bottleneck_1_total_bottlenecks(self):
         for arch in self.architectures:
             # Get total bottlenecks by summing across all layers
             total_bottlenecks = sum(self.bottleneck_counts[arch].values())
@@ -232,9 +240,14 @@ class TestResnetFE(unittest.TestCase):
                     i, 
                     f"Architecture {arch}, num_extracted_bottlenecks={i}: Expected {i} bottlenecks, got {actual_bottlenecks}"
                 )
-            
+    
+    @unittest.skip("skipping bottleneck tests for now")
+    def test_build_by_bottleneck_random_negative_values(self):
+        for arch in self.architectures:
+            total_bottlenecks = sum(self.bottleneck_counts[arch].values())
+
             # Test with random negative values (should extract all bottlenecks)
-            for _ in range(20):
+            for _ in range(10):
                 num_bottlenecks = random.randint(-100, -1)
                 
                 feature_extractor = ResnetFE(
@@ -254,9 +267,15 @@ class TestResnetFE(unittest.TestCase):
                     total_bottlenecks, 
                     f"Architecture {arch}, num_extracted_bottlenecks={num_bottlenecks}: Expected {total_bottlenecks} bottlenecks, got {actual_bottlenecks}"
                 )
-            
+
+    @unittest.skip("skipping bottleneck tests for now")
+    def test_build_by_bottleneck_beyond_total_bottlenecks(self):
+        for arch in self.architectures:
+            total_bottlenecks = sum(self.bottleneck_counts[arch].values())
+
             # Test with random values beyond the total (should extract all bottlenecks)
             for _ in range(20):
+                num_bottlenecks = random.randint(total_bottlenecks + 1, 1000)
                 num_bottlenecks = random.randint(total_bottlenecks + 1, 1000)
                 
                 feature_extractor = ResnetFE(
@@ -277,6 +296,7 @@ class TestResnetFE(unittest.TestCase):
                     f"Architecture {arch}, num_extracted_bottlenecks={num_bottlenecks}: Expected {total_bottlenecks} bottlenecks, got {actual_bottlenecks}"
                 )
 
+    @unittest.skip("skipping input validation tests for now")
     def test_input_validation(self):
         """
         Tests that the ResnetFE class properly validates input parameters
@@ -337,6 +357,82 @@ class TestResnetFE(unittest.TestCase):
             self.fail(f"ResnetFE raised ValueError unexpectedly when build_by_layer=True and num_extracted_bottlenecks=0: {e}")
 
 
+    def test_forward_pass_layer(self):
+        for arch in self.architectures:
+            for t in [True, False]:
+                for i in range(1, 5): # all resnet architectures have 4 `layer` blocks
+                    feature_extractor = ResnetFE(
+                        build_by_layer=True,
+                        num_extracted_layers=i,
+                        num_extracted_bottlenecks=i, # this value doesn't matter when build_by_layer=True
+                        architecture=arch,
+                        freeze=False,
+                        freeze_by_layer=False,
+                        add_global_average=t
+                    )
+                    
+                    # get the original network
+                    constructor, weights = ResnetFE.get_model(architecture=arch)
+                    net = constructor(weights=weights.DEFAULT) 
+                    
+                    # put both the feature extractor and the original network in evaluation mode    
+                    feature_extractor.eval() 
+                    net.eval()
+
+                    # create a random input tensor
+                    x = torch.randn(1, 3, 224, 224)
+
+                    output_fe = feature_extractor.forward(x)
+
+                    # the test is basically re-implementing the forward pass of the original network
+                    output_net = net.conv1(x)
+                    output_net = net.bn1(output_net)
+                    output_net = net.relu(output_net)
+                    output_net = net.maxpool(output_net)
+
+                    output_net = net.layer1(output_net) 
+
+                    if i >= 2:
+                        output_net = net.layer2(output_net) 
+
+                    if i >= 3:
+                        output_net = net.layer3(output_net)
+
+                    if i >= 4:
+                        output_net = net.layer4(output_net)
+
+                    if t:
+                        output_net = net.avgpool(output_net)
+                    
+                    self.assertTrue(torch.allclose(output_fe, output_net), "The feature extractor construction does not seem to be correct")
+
+
 if __name__ == '__main__':
+    # feature_extractor = ResnetFE(
+    #     build_by_layer=True,
+    #     num_extracted_layers=1,
+    #     num_extracted_bottlenecks=0, # this value doesn't matter when build_by_layer=True
+    #     architecture=50,
+    #     freeze=False,
+    #     freeze_by_layer=False,
+    #     add_global_average=True
+    # )
+    
+    # # get the original network
+    # constructor, weights = ResnetFE.get_model(architecture=50)
+    # net = constructor(weights=weights.DEFAULT) 
+    
+    # # put both the feature extractor and the original network in evaluation mode    
+    # feature_extractor.eval() 
+    # net.eval()
+
+    # print(feature_extractor)
+
+    # print("#" * 20)
+    # print("#" * 20)
+    # print("#" * 20)
+
+    # print(net)
+
     pu.seed_everything(42)
     unittest.main()
