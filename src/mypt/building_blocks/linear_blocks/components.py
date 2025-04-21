@@ -36,9 +36,6 @@ class BasicLinearBlock(WrapperLikeModuleMixin, CloneableModuleMixin):
         # initialize the WrapperLikeModuleMixin parent
         WrapperLikeModuleMixin.__init__(self, '_block', *args, **kwargs)
 
-        # initialize the CloneableModuleMixin parent
-        CloneableModuleMixin.__init__(self, '_block')
-
         # Store init parameters as read-only properties
         self._in_features = in_features
         self._out_features = out_features
@@ -128,6 +125,7 @@ class BasicLinearBlock(WrapperLikeModuleMixin, CloneableModuleMixin):
         }
 
 
+
 class FullyConnectedBlock(WrapperLikeModuleMixin, CloneableModuleMixin):
     # all fully connected blocks should have the 'output' and 'in_features' attributes
     def __init__(self, 
@@ -147,9 +145,6 @@ class FullyConnectedBlock(WrapperLikeModuleMixin, CloneableModuleMixin):
 
         # this constructor call signals that this class is a wrapper-like module to another module saved in the `_block` field
         WrapperLikeModuleMixin.__init__(self, '_block')
-
-        # initialize the CloneableModuleMixin parent
-        CloneableModuleMixin.__init__(self, '_block')
 
         # Store init parameters as read-only properties
         self._output = output
@@ -193,7 +188,7 @@ class FullyConnectedBlock(WrapperLikeModuleMixin, CloneableModuleMixin):
     
     
 
-class ResidualFullyConnectedBlock(FullyConnectedBlock, GeneralResidualMixin, CloneableModuleMixin):
+class ResidualFullyConnectedBlock(GeneralResidualMixin, FullyConnectedBlock, CloneableModuleMixin):
     def __init__(self, 
                  output: int,
                  in_features: int,
@@ -211,6 +206,8 @@ class ResidualFullyConnectedBlock(FullyConnectedBlock, GeneralResidualMixin, Clo
                          dropout=dropout, *args, **kwargs)
 
         self._force_residual = force_residual 
+        self._adaptive_layer = None 
+
         main_stream_field_name = '_block'
 
         if self.output != self.in_features or self._force_residual:
@@ -222,18 +219,14 @@ class ResidualFullyConnectedBlock(FullyConnectedBlock, GeneralResidualMixin, Clo
                                       main_stream_field_name=main_stream_field_name, 
                                       residual_stream_field_name=residual_stream_field_name)
 
-        # initialize the CloneableModuleMixin parent
-        CloneableModuleMixin.__init__(self, '_block')
 
-    def _build(self):
-        super()._build()
 
-        if self._residual_stream_field_name is not None:
-            self._adaptive_layer = nn.Linear(in_features=self._in_features, out_features=self._output) 
+    def __call__(self, x: torch.Tensor) -> torch.Tensor:
+        return self.forward(x, debug=False)
 
     
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.residual_forward(x) 
+    def forward(self, x: torch.Tensor, debug:bool=False) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]:
+        return self.residual_forward(x, debug=debug) 
     
     def children(self) -> Iterator[Module]:
         return self.residual_children()

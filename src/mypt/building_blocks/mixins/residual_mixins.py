@@ -21,44 +21,51 @@ class GeneralResidualMixin:
     """
 
     def __init__(self, main_stream_field_name: str, residual_stream_field_name: Optional[str] = None):
-        super().__init__()
         self._main_stream_field_name = main_stream_field_name
         self._residual_stream_field_name = residual_stream_field_name
 
-    def _verify_instance(self):
+
+
+    def _get_main_stream(self) -> Union[nn.Module, nn.Sequential]:
+        """Get the main stream component"""
         if not hasattr(self, self._main_stream_field_name):
             raise AttributeError(f"The class {self.__class__.__name__} expects the attribute '{self._main_stream_field_name}' to be set")
 
         if not isinstance(getattr(self, self._main_stream_field_name), nn.Module):
             raise TypeError(f"The attribute '{self._main_stream_field_name}' must be an instance of {nn.Module}")
-        
-        if self._residual_stream_field_name is not None:
-            if not hasattr(self, self._residual_stream_field_name):
-                raise AttributeError(f"The class {self.__class__.__name__} expects the attribute '{self._residual_stream_field_name}' to be set")
 
-            if not isinstance(getattr(self, self._residual_stream_field_name), nn.Module):
-                raise TypeError(f"The attribute '{self._residual_stream_field_name}' must be an instance of {nn.Module}")
-
-    def _get_main_stream(self) -> Union[nn.Module, nn.Sequential]:
-        """Get the main stream component"""
         return getattr(self, self._main_stream_field_name)
     
     def _get_residual_stream(self) -> Optional[Union[nn.Module, nn.Sequential]]:
         """Get the residual stream component"""
+
         if self._residual_stream_field_name is None:
             return None
+
+        if not hasattr(self, self._residual_stream_field_name):
+            raise AttributeError(f"The class {self.__class__.__name__} expects the attribute '{self._residual_stream_field_name}' to be set")
+
+        if not isinstance(getattr(self, self._residual_stream_field_name), nn.Module):
+            raise TypeError(f"The attribute '{self._residual_stream_field_name}' must be an instance of {nn.Module}")
+
         return getattr(self, self._residual_stream_field_name)
 
 
-    def residual_forward(self, x: torch.Tensor) -> torch.Tensor:
+    def residual_forward(self, x: torch.Tensor, debug:bool=False) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]:
         # first get the main stream output
+        if debug:
+            ms = self._get_main_stream() 
+            
         main_stream_output = self._get_main_stream().forward(x)
 
         # if the residual stream is not set, then we can assume it is an identity function 
         if self._residual_stream_field_name is None:
             if main_stream_output.shape != x.shape:
                 raise ValueError(f"The main stream output shape {main_stream_output.shape} does not match the input shape {x.shape}")
-            
+
+            if debug:
+                return main_stream_output, x, main_stream_output + x 
+
             return main_stream_output + x 
         
         # otherwise, get the residual stream output
@@ -67,6 +74,9 @@ class GeneralResidualMixin:
         if residual_stream_output.shape != main_stream_output.shape:
             raise ValueError(f"The residual stream output shape {residual_stream_output.shape} does not match the main stream output shape {main_stream_output.shape}")
         
+        if debug:
+            return main_stream_output, residual_stream_output, main_stream_output + residual_stream_output
+
         return main_stream_output + residual_stream_output
         
     

@@ -13,12 +13,12 @@ class WrapperLikeModuleMixin(nn.Module):
         super().__init__()
         self._inner_model_field_name = inner_model_field_name
 
-    def _verify_instance(self):
+    def _verify_instance_wrapperLikeModuleMixin(self):
         if not hasattr(self, self._inner_model_field_name):
             raise AttributeError(f"the child class is expected to have the attribute '{self._inner_model_field_name}'")
 
         if not isinstance(getattr(self, self._inner_model_field_name), nn.Module):
-            raise TypeError(f"The CustomModuleMixin expects the self._block attribute to be of type {nn.Module}. Found: {type(getattr(self, self._inner_model_field_name))}")
+            raise TypeError(f"The WrapperLikeModuleMixin expects the self._block attribute to be of type {nn.Module}. Found: {type(getattr(self, self._inner_model_field_name))}")
 
     # the children-related methods
     def children(self) -> Iterator[nn.Module]:
@@ -78,17 +78,6 @@ class CloneableModuleMixin(ABC):
     """
     This Mixin is used to override the __call__ method of a module to return a clone of the module.
     """
-    def __init__(self, inner_model_field_name: str):
-        super().__init__()
-        self._inner_model_field_name = inner_model_field_name
-
-    def _verify_instance(self):
-        if not hasattr(self, self._inner_model_field_name):
-            raise AttributeError(f"the child class is expected to have the attribute '{self._inner_model_field_name}'")
-
-        if not isinstance(getattr(self, self._inner_model_field_name), nn.Module):
-            raise TypeError(f"The CloneableModuleMixin expects the self._block attribute to be of type {nn.Module}. Found: {type(getattr(self, self._inner_model_field_name))}")
-
     @abstractmethod
     def get_constructor_args(self) -> dict:
         """
@@ -96,9 +85,13 @@ class CloneableModuleMixin(ABC):
         """
         pass
 
+    def _verify_instance_cloneableModuleMixin(self):
+        if not isinstance(self, nn.Module):
+            raise TypeError(f"the child class is expected to be a subclass of {nn.Module}")
+
     def clone(self) -> 'CloneableModuleMixin':
-        self._verify_instance()
-        # create the 
+        self._verify_instance_cloneableModuleMixin()
+        # get the constructor arguments with their values
         constructor_args = self.get_constructor_args() 
 
         # define the module

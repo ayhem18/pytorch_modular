@@ -186,10 +186,15 @@ class FCBlockTestBase(unittest.TestCase):
             bn_modules = [m for m in block.modules() if isinstance(m, nn.BatchNorm1d)]
             
             if bn_modules:
+                # in train mode, a batch of size 1 should raise a ValueError
+                input_tensor = torch.randn(1, block.in_features)
+                with self.assertRaises(ValueError):
+                    _ = block(input_tensor)
+
                 # In train mode with batch size > 1 should work
                 input_tensor = torch.randn(2, block.in_features)
                 _ = block(input_tensor)  # No error
-                
+
                 # Store running stats
                 train_running_means = [bn.running_mean.clone() for bn in bn_modules]
                 
@@ -293,7 +298,6 @@ class FCBlockTestBase(unittest.TestCase):
             )
             self.assertEqual(analyzed_shape, expected_shape,
                             f"Dimension analyzer shape mismatch: got {analyzed_shape}, expected {expected_shape}")
-
 
 
 class TestGenericFCBlock(FCBlockTestBase):
@@ -459,7 +463,7 @@ class TestGenericFCBlock(FCBlockTestBase):
         super()._test_parameters_access()
 
 
-class TestExponentialLinearBlock(FCBlockTestBase):
+class TestExponentialFCBlock(FCBlockTestBase):
     def setUp(self):
         self.dim_analyser = DimensionsAnalyser()
         self.activation_types = [type(BasicLinearBlock._ACTIVATION_MAP[t]) for t in BasicLinearBlock._ACTIVATIONS]

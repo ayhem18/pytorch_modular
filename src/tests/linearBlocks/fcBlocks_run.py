@@ -7,9 +7,9 @@ import random, torch
 import torch.nn.backends
 from tqdm import tqdm
 from torch.optim.adam import Adam
-import mypt.code_utilities.pytorch_utilities as pu
+import mypt.code_utils.pytorch_utils as pu
 
-from mypt.linearBlocks import fully_connected_blocks as fcb, fc_block_components as fcbc
+from mypt.building_blocks.linear_blocks import fully_connected_blocks as fcb, fc_block_components as fcbc
 
 
 #################### Generic & exponential ####################
