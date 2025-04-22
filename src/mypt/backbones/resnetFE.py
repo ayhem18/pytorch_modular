@@ -23,8 +23,8 @@ from mypt.building_blocks.mixins.custom_module_mixins import WrapperLikeModuleMi
 class ResnetFE(WrapperLikeModuleMixin):
     __archs__ = [50, 101, 152]
     
-    # archs_dict = {18: (resnet18, ResNet18_Weights), # the resnet18 model does not use the bottleck block apparently 
-    # archs_dict = {34: (resnet34, ResNet34_Weights), 
+    # archs_dict = {18: (resnet18, ResNet18_Weights), # the resnet18 model does not use the bottleck block  
+    # archs_dict = {34: (resnet34, ResNet34_Weights), # the resnet34 model does not use the bottleck block 
     archs_dict = {50: (resnet50, ResNet50_Weights), 
                  101: (resnet101, ResNet101_Weights), 
                  152: (resnet152, ResNet152_Weights)}
@@ -94,7 +94,6 @@ class ResnetFE(WrapperLikeModuleMixin):
         self._feature_extractor = nn.Sequential(OrderedDict(extended_modules))
             
 
-
     def __extract_feature_extractory_by_bottleneck(self):
         """
         This method build a feature extractor using the "bottleneck" as a building block.
@@ -152,6 +151,114 @@ class ResnetFE(WrapperLikeModuleMixin):
         extended_modules = list(extracted_modules)
         self._feature_extractor = nn.Sequential(OrderedDict(extended_modules))
 
+
+    def __freeze_by_building_block(self, num_blocks: int):
+        """
+        This method freezes the weights of the feature extractor when build_by_layer and freeze_by_layer are of the same value (both true or both false)
+
+        Args:
+            num_blocks (int): the number of blocks to freeze
+        """
+        block_counter = 0
+
+        for module in self._feature_extractor.children():
+            # there are 3 types of immediate children for the resnet model:
+            # either a layer block
+            # either a relu, maxpool, or a convolutional layer: those appear at the very beginning of the network
+            # either an average pooling layer: this appears right after the last_layer_block
+
+            if isinstance(module, nn.AdaptiveAvgPool2d) or isinstance(module, (nn.Linear, nn.LazyLinear)):                    
+                # linear and adaptive average pooling layers are not frozen
+                continue
+            
+            mc = list(module.named_children())
+
+            if len(mc) == 0:
+                # the module is a simple layer and must be one of the layers before the first layer block 
+                # freeze it
+                for param in module.parameters():
+                    param.requires_grad = False
+
+                continue
+                        
+
+            # at this point, the child is a layer block
+            if block_counter >= num_blocks:
+                continue
+
+            # freeze the block    
+            for param in module.parameters():
+                param.requires_grad = False
+
+            block_counter += 1   
+
+
+    def __freeze_by_bottleneck_build_by_layer(self, num_bottlenecks: int):
+        """
+        This method freezes the weights of the feature extractor when build_by_layer = True and freeze_by_layer = False
+        """
+        bottleneck_counter = 0 
+
+        for name, module in self._feature_extractor.named_children():
+            if isinstance(module, nn.AdaptiveAvgPool2d) or isinstance(module, (nn.Linear, nn.LazyLinear)):                    
+                # linear and adaptive average pooling layers are not frozen
+                continue
+            
+            mc = list(module.named_children())
+
+            if len(mc) == 0:
+                # the module is a simple layer and must be one of the layers before the first layer block 
+                # freeze it
+                for param in module.parameters():
+                    param.requires_grad = False
+
+            # at this point, the code assumes that the module is a layer
+            if not self.LAYER_BLOCK.lower() in name.lower():
+                raise TypeError("The class is based on the wrong assumptions. Found a block with children that is not a layer block !!! it is named: {name}")
+
+            if bottleneck_counter >= num_bottlenecks:
+                continue
+
+            # at this point, we need to either freeze the entire block or some bottleneck layers within the block
+            # compute the number of frozen bottleneck layers if we are to freeze the entire block
+            next_frozen_num_bottlenecks = bottleneck_counter + self.bottleneck_per_layer[bottleneck_counter + 1]
+
+            if next_frozen_num_bottlenecks <= num_bottlenecks:
+                # in this case, then freeze the entire block
+                for param in module.parameters():
+                    param.requires_grad = False
+
+                bottleneck_counter += next_frozen_num_bottlenecks
+                continue
+                
+            # at this point, freezing the entire block would exceed the number of frozen bottleneck layers 
+            # we need to freeze some bottleneck layers within the block 
+            for bottleneck in module.children():
+                if bottleneck_counter >= num_bottlenecks:
+                    break
+
+                for param in bottleneck.parameters():
+                    param.requires_grad = False
+
+                bottleneck_counter += 1
+
+        def _freeze(self):
+            # if the freeze is a boolean variable, then either freeze all parameters or leave them trainable 
+            if isinstance(self._freeze, bool):
+                if self._freeze:
+                    for param in self._feature_extractor.parameters():
+                        param.requires_grad = False
+
+                return 
+            
+            if self._build_by_layer == self._freeze_by_layer:
+                # in this case, the freeze and build_by_layer are of the same value
+                # we need to freeze the weights of the feature extractor
+                self.__freeze_by_building_block(self._freeze)
+                return 
+            
+            # in this case, we know that freeze_by_layer is true and build_by_layer is false (guaranteed by the initialization code)
+            self.__freeze_by_bottleneck_build_by_layer(self._freeze)
     def __init__(self, 
                  build_by_layer: bool,
                  num_extracted_layers: int,
@@ -178,6 +285,9 @@ class ResnetFE(WrapperLikeModuleMixin):
         # don't forget that this is a WrapperLikeModuleMixin object and we need specify the name of the attribute that will be wrapped
         # in this case: "_feature_extractor"
         super().__init__("_feature_extractor", *args, **kwargs)
+
+        if not build_by_layer and freeze_by_layer:
+            raise ValueError("The feature extractor cannot be built by bottleneck and frozen by layer at the same time. However, it can be build by layers and frozen by bottleneck.")
 
         self._feature_extractor: nn.Module = None
 
@@ -214,11 +324,4 @@ class ResnetFE(WrapperLikeModuleMixin):
 
         del(self.__net) # remove the original network as it is no longer needed    
     
-
-# if __name__ == "__main__":
-    res = resnet101(weights=ResNet101_Weights.DEFAULT)
-    
-#     # for name, module in res.named_modules():
-#     #     print(name, module, sep=' : ')
-#     fe = ResnetFE(build_by_layer=False, num_extracted_bottlenecks=10, num_extracted_layers=0, architecture=101, freeze=False, freeze_by_layer=False, add_global_average=True) 
-#     print(fe)    
+        self._freeze()

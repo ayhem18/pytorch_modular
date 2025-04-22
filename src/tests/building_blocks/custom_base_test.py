@@ -1,5 +1,5 @@
-import unittest
 import torch
+import unittest
 
 
 class CustomModuleBaseTest(unittest.TestCase):
@@ -177,6 +177,6 @@ class CustomModuleBaseTest(unittest.TestCase):
                             "Corresponding parameters should have the same shape")
             self.assertIsNot(p1, p2, "Parameters should be different objects")
             # Values should be initially the same
-            self.assertTrue(torch.allclose(p1, p2, rtol=1e-5, atol=1e-5),
+            self.assertTrue(torch.allclose(p1, p2),
                            "Parameters should have the same values after cloning")
     

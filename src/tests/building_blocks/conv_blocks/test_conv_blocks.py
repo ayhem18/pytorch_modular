@@ -17,7 +17,8 @@ class TestConvBlocks(CustomModuleBaseTest):
     def _generate_random_conv_block(self, 
                                     use_bn=True, 
                                     activation_after_each_layer=False, 
-                                    activation=nn.ReLU) -> Tuple[BasicConvBlock, int, List[int]]:
+                                    activation=nn.ReLU,
+                                    final_bn_layer=False) -> Tuple[BasicConvBlock, int, List[int]]:
         num_layers = random.randint(1, 4)
         channels = [random.randint(1, 64) for _ in range(num_layers + 1)]
         kernel_sizes = random.randint(1, 5)
@@ -27,182 +28,187 @@ class TestConvBlocks(CustomModuleBaseTest):
                               kernel_sizes=kernel_sizes, 
                               use_bn=use_bn, 
                               activation_after_each_layer=activation_after_each_layer, 
-                              activation=activation), num_layers, channels
+                              activation=activation,
+                              final_bn_layer=final_bn_layer), num_layers, channels
 
 
     def test_conv_block_single_activation_no_bn(self):
         """Test that conv block with single activation at the end and no batch norm works correctly"""
-        for _ in range(10):  # Test multiple random configurations
-            block, num_layers, channels = self._generate_random_conv_block(use_bn=False, activation_after_each_layer=False, activation=nn.ReLU)
-            
-            # Check that block was created correctly
-            children = list(block.children())
-            # We expect num_layers conv layers followed by 1 activation layer
-            self.assertEqual(len(children), num_layers + 1)
-            
-            # Check that all except the last layer are Conv2d
-            for i in range(num_layers):
-                self.assertIsInstance(children[i], nn.Conv2d)
-                self.assertEqual(children[i].in_channels, channels[i])
-                self.assertEqual(children[i].out_channels, channels[i+1])
-            
-            # Check the last layer is an activation
-            self.assertIsInstance(children[-1], nn.ReLU)
+        # Case 1: Without final batch normalization
+        with self.subTest("Without final batch normalization"):
+            for _ in range(10):  # Test multiple random configurations
+                block, num_layers, channels = self._generate_random_conv_block(
+                    use_bn=False, 
+                    activation_after_each_layer=False, 
+                    activation=nn.ReLU,
+                    final_bn_layer=False
+                )
+                
+                # Check that block was created correctly
+                children = list(block.children())
+                # We expect num_layers conv layers followed by 1 activation layer
+                self.assertEqual(len(children), num_layers + 1)
+                
+                # Check that all except the last layer are Conv2d
+                for i in range(num_layers):
+                    self.assertIsInstance(children[i], nn.Conv2d)
+                    self.assertEqual(children[i].in_channels, channels[i])
+                    self.assertEqual(children[i].out_channels, channels[i+1])
+                
+                # Check the last layer is an activation
+                self.assertIsInstance(children[-1], nn.ReLU)
+        
+        # Case 2: With final batch normalization
+        with self.subTest("With final batch normalization"):
+            for _ in range(10):  # Test multiple random configurations
+                block, num_layers, channels = self._generate_random_conv_block(
+                    use_bn=False, 
+                    activation_after_each_layer=False, 
+                    activation=nn.ReLU,
+                    final_bn_layer=True
+                )
+                
+                # Check that block was created correctly
+                children = list(block.children())
+                # We expect num_layers conv layers + 1 final batch norm + 1 activation layer
+                self.assertEqual(len(children), num_layers + 2)
+                
+                # Check that initial layers are Conv2d
+                for i in range(num_layers):
+                    self.assertIsInstance(children[i], nn.Conv2d)
+                    self.assertEqual(children[i].in_channels, channels[i])
+                    self.assertEqual(children[i].out_channels, channels[i+1])
+                
+                # Check for final batch norm before activation
+                self.assertIsInstance(children[-2], nn.BatchNorm2d)
+                self.assertEqual(children[-2].num_features, channels[-1])
+                
+                # Check the last layer is an activation
+                self.assertIsInstance(children[-1], nn.ReLU)
 
     def test_conv_block_single_activation_bn(self):
         """Test that conv block with single activation at the end and batch norm works correctly"""
-        for _ in range(10):  # Test multiple random configurations            
-            block, num_layers, channels = self._generate_random_conv_block(use_bn=True, activation_after_each_layer=False, activation=nn.ReLU)
+        # Case 1: Without additional final batch normalization (use_bn=True already adds BN)
+        with self.subTest("With batch norm after each conv, no additional final BN"):
+            for v in [True, False]:
+                for _ in range(10):  # Test multiple random configurations            
+                    block, num_layers, channels = self._generate_random_conv_block(
+                        use_bn=True, 
+                        activation_after_each_layer=False, 
+                        activation=nn.ReLU,
+                        final_bn_layer=v
+                    )
 
-            # Check that block was created correctly
-            children = list(block.children())
-            # We expect (conv + bn) * num_layers + 1 activation layer
-            self.assertEqual(len(children), num_layers * 2 + 1)
-            
-            # Check the layers
-            for i in range(num_layers):
-                # Every even layer should be Conv2d
-                self.assertIsInstance(children[i*2], nn.Conv2d)
-                self.assertEqual(children[i*2].in_channels, channels[i])
-                self.assertEqual(children[i*2].out_channels, channels[i+1])
-                
-                # Every odd layer should be BatchNorm2d
-                self.assertIsInstance(children[i*2+1], nn.BatchNorm2d)
-                self.assertEqual(children[i*2+1].num_features, channels[i+1])
-            
-            # Check the last layer is an activation
-            self.assertIsInstance(children[-1], nn.ReLU)
+                    # Check that block was created correctly
+                    children = list(block.children())
+                    # We expect (conv + bn) * num_layers + 1 activation layer
+                    self.assertEqual(len(children), num_layers * 2 + 1)
+                    
+                    # Check the layers
+                    for i in range(num_layers):
+                        # Every even layer should be Conv2d
+                        self.assertIsInstance(children[i*2], nn.Conv2d)
+                        self.assertEqual(children[i*2].in_channels, channels[i])
+                        self.assertEqual(children[i*2].out_channels, channels[i+1])
+                        
+                        # Every odd layer should be BatchNorm2d
+                        self.assertIsInstance(children[i*2+1], nn.BatchNorm2d)
+                        self.assertEqual(children[i*2+1].num_features, channels[i+1])
+                    
+                    # Check the last layer is an activation
+                    self.assertIsInstance(children[-1], nn.ReLU)
+        
 
     def test_conv_block_activation_after_each_layer_no_bn(self):
         """Test that conv block with activation after each layer and no batch norm works correctly"""
-        for _ in range(10):  # Test multiple random configurations            
-            block, num_layers, channels = self._generate_random_conv_block(use_bn=False, activation_after_each_layer=True, activation=nn.ReLU)
+        # Case 1: Without final batch normalization
+        with self.subTest("Without final batch normalization"):
+            for _ in range(10):  # Test multiple random configurations            
+                block, num_layers, channels = self._generate_random_conv_block(
+                    use_bn=False, 
+                    activation_after_each_layer=True, 
+                    activation=nn.ReLU,
+                    final_bn_layer=False
+                )
 
-            # Check that block was created correctly
-            children = list(block.children())
-            # We expect (conv + activation) * num_layers layers
-            self.assertEqual(len(children), num_layers * 2)
-            
-            # Check the layers
-            for i in range(num_layers):
-                # Every even layer should be Conv2d
-                self.assertIsInstance(children[i*2], nn.Conv2d)
-                self.assertEqual(children[i*2].in_channels, channels[i])
-                self.assertEqual(children[i*2].out_channels, channels[i+1])
+                # Check that block was created correctly
+                children = list(block.children())
+                # We expect (conv + activation) * num_layers layers
+                self.assertEqual(len(children), num_layers * 2)
                 
-                # Every odd layer should be activation
-                self.assertIsInstance(children[i*2+1], nn.ReLU)
+                # Check the layers
+                for i in range(num_layers):
+                    # Every even layer should be Conv2d
+                    self.assertIsInstance(children[i*2], nn.Conv2d)
+                    self.assertEqual(children[i*2].in_channels, channels[i])
+                    self.assertEqual(children[i*2].out_channels, channels[i+1])
+                    
+                    # Every odd layer should be an activation
+                    self.assertIsInstance(children[i*2+1], nn.ReLU)
+        
+        # Case 2: With final batch normalization
+        with self.subTest("With final batch normalization"):
+            for _ in range(10):  # Test multiple random configurations            
+                block, num_layers, channels = self._generate_random_conv_block(
+                    use_bn=False, 
+                    activation_after_each_layer=True, 
+                    activation=nn.ReLU,
+                    final_bn_layer=True
+                )
+
+                # Check that block was created correctly
+                children = list(block.children())
+                # We expect (conv + activation) * num_layers + 1 final bn
+                self.assertEqual(len(children), num_layers * 2 + 1)
+                
+                # Check the regular layers
+                for i in range(num_layers - 1):
+                    # Every even layer should be Conv2d
+                    self.assertIsInstance(children[i*2], nn.Conv2d)
+                    self.assertEqual(children[i*2].in_channels, channels[i])
+                    self.assertEqual(children[i*2].out_channels, channels[i+1])
+                    
+                    # Every odd layer should be an activation
+                    self.assertIsInstance(children[i*2+1], nn.ReLU)
+                
+                # Check the final batch norm layer
+                self.assertIsInstance(children[-2], nn.BatchNorm2d)
+                self.assertEqual(children[-2].num_features, channels[-1])
+
+                self.assertIsInstance(children[-1], nn.ReLU)    
 
     def test_conv_block_activation_after_each_layer_bn(self):
         """Test that conv block with activation after each layer and batch norm works correctly"""
-        for _ in range(10):  # Test multiple random configurations            
-            block, num_layers, channels = self._generate_random_conv_block(use_bn=True, activation_after_each_layer=True, activation=nn.ReLU)
-
-            # Check that block was created correctly
-            children = list(block.children())
-            # We expect (conv + bn + activation) * num_layers layers
-            self.assertEqual(len(children), num_layers * 3)
-            
-            # Check the layers
-            for i in range(num_layers):
-                # Check Conv2d layer
-                self.assertIsInstance(children[i*3], nn.Conv2d)
-                self.assertEqual(children[i*3].in_channels, channels[i])
-                self.assertEqual(children[i*3].out_channels, channels[i+1])
-                
-                # Check BatchNorm2d layer
-                self.assertIsInstance(children[i*3+1], nn.BatchNorm2d)
-                self.assertEqual(children[i*3+1].num_features, channels[i+1])
-                
-                # Check activation layer
-                self.assertIsInstance(children[i*3+2], nn.ReLU)
-
-
-    def test_children_parameters_method_single_activation_layer_no_bn(self):
-        """Test that children, parameters, named_children, named_parameters methods work correctly for a single activation layer and no batch norm"""
-        for _ in range(10):  # Test multiple random configurations            
-            block, num_layers, channels = self._generate_random_conv_block(use_bn=False, activation_after_each_layer=False, activation=nn.ReLU)
-
-            named_children = list(block.named_children())            
-            # We expect num_layers conv layers followed by 1 activation layer
-            self.assertEqual(len(named_children), num_layers + 1)
-            
-            # Check that all except the last layer are Conv2d
-            for i in range(num_layers):
-                self.assertEqual(named_children[i][0], f"conv_{i+1}")
-                self.assertIsInstance(named_children[i][1], nn.Conv2d)
-            
-            # Check the last layer is an activation
-            self.assertEqual(named_children[-1][0], f"activation_layer")
-            self.assertIsInstance(named_children[-1][1], nn.ReLU)
-
-    def test_children_parameters_method_single_activation_layer_bn(self):
-        """Test that children, parameters, named_children, named_parameters methods work correctly for a single activation layer and batch norm"""
-        for _ in range(10):  # Test multiple random configurations
-            block, num_layers, _ = self._generate_random_conv_block(use_bn=True, activation_after_each_layer=False, activation=nn.ReLU)
-
-            named_children = list(block.named_children())            
-            # We expect (conv + bn) * num_layers + 1 activation layer
-            self.assertEqual(len(named_children), num_layers * 2 + 1)
-            
-            # Check the layers
-            for i in range(num_layers):
-                # Every even layer should be Conv2d
-                self.assertEqual(named_children[i*2][0], f"conv_{i+1}")
-                self.assertIsInstance(named_children[i*2][1], nn.Conv2d)
-                
-                # Every odd layer should be BatchNorm2d
-                self.assertEqual(named_children[i*2+1][0], f"bn_{i+1}")
-                self.assertIsInstance(named_children[i*2+1][1], nn.BatchNorm2d)
-
-            # Check the last layer is an activation
-            self.assertEqual(named_children[-1][0], f"activation_layer")
-            self.assertIsInstance(named_children[-1][1], nn.ReLU)
-
-    def test_children_parameters_method_activation_after_each_layer_no_bn(self):
-        """Test that children, parameters, named_children, named_parameters methods work correctly for an activation after each layer and no batch norm"""
-        for _ in range(10):  # Test multiple random configurations
-            block, num_layers, _ = self._generate_random_conv_block(use_bn=False, activation_after_each_layer=True, activation=nn.ReLU)
-            
-            # Check that block was created correctly
-            named_children = list(block.named_children())
-            # We expect (conv + activation) * num_layers layers
-            self.assertEqual(len(named_children), num_layers * 2)
-            
-            # Check the layers
-            for i in range(num_layers):
-                # Every even layer should be Conv2d
-                self.assertEqual(named_children[i*2][0], f"conv_{i+1}")
-                self.assertIsInstance(named_children[i*2][1], nn.Conv2d)
-                
-                # Every odd layer should be activation
-                self.assertEqual(named_children[i*2+1][0], f"activation_{i+1}")
-                self.assertIsInstance(named_children[i*2+1][1], nn.ReLU)
-
-    def test_children_parameters_method_activation_after_each_layer_bn(self):
-        """Test that children, parameters, named_children, named_parameters methods work correctly for an activation after each layer and batch norm"""
-        for _ in range(10):  # Test multiple random configurations
-            block, num_layers, channels = self._generate_random_conv_block(use_bn=True, activation_after_each_layer=True, activation=nn.ReLU)
-            
-            # Check that block was created correctly
-            named_children = list(block.named_children())
-            # We expect (conv + bn + activation) * num_layers layers
-            self.assertEqual(len(named_children), num_layers * 3)
-            
-            # Check the layers
-            for i in range(num_layers):
-                # Check Conv2d layer
-                self.assertEqual(named_children[i*3][0], f"conv_{i+1}")
-                self.assertIsInstance(named_children[i*3][1], nn.Conv2d)
-                
-                # Check BatchNorm2d layer
-                self.assertEqual(named_children[i*3+1][0], f"bn_{i+1}")
-                self.assertIsInstance(named_children[i*3+1][1], nn.BatchNorm2d)
-                
-                # Check activation layer
-                self.assertEqual(named_children[i*3+2][0], f"activation_{i+1}")
-                self.assertIsInstance(named_children[i*3+2][1], nn.ReLU)
-
+        # Case 1: Without additional final batch normalization
+        with self.subTest("With batch norm after each conv, no additional final BN"):
+            for v in [True, False]:
+                for _ in range(10):  # Test multiple random configurations
+                    block, num_layers, channels = self._generate_random_conv_block(
+                        use_bn=True, 
+                        activation_after_each_layer=True, 
+                        activation=nn.ReLU,
+                        final_bn_layer=v
+                    )
+                    
+                    # Check that block was created correctly
+                    children = list(block.children())
+                    # We expect (conv + bn + activation) * num_layers layers
+                    self.assertEqual(len(children), num_layers * 3)
+                    
+                    # Check the layers
+                    for i in range(num_layers):
+                        # Check Conv2d layer
+                        self.assertIsInstance(children[i*3], nn.Conv2d)
+                        self.assertEqual(children[i*3].in_channels, channels[i])
+                        self.assertEqual(children[i*3].out_channels, channels[i+1])
+                        
+                        # Check BatchNorm2d layer
+                        self.assertIsInstance(children[i*3+1], nn.BatchNorm2d)
+                        self.assertEqual(children[i*3+1].num_features, channels[i+1])
+                        
+                        # Check activation layer
+                        self.assertIsInstance(children[i*3+2], nn.ReLU)
+        
 
     @unittest.skip("Skipping forward pass shape test as it takes a long time to run")
     def test_forward_pass_shape(self):
@@ -241,7 +247,6 @@ class TestConvBlocks(CustomModuleBaseTest):
             # Compare shapes
             self.assertEqual(actual_shape, expected_shape, 
                             f"Mismatch in output shape: got {actual_shape}, expected {expected_shape}")
-
 
     def test_eval_train_methods(self):        
         """Test that eval and train methods work correctly"""
@@ -302,13 +307,13 @@ class TestConvBlocks(CustomModuleBaseTest):
                 self.assertTrue(torch.allclose(train_running_means[i], bn.running_mean), 
                             "BatchNorm running mean should not change in eval mode")
 
+    # Custom module base tests
     def _get_valid_input(self, batch_size:int, in_features:int) -> torch.Tensor:
         """
         Generate a random input tensor with the correct shape.
         """
         return torch.randn(batch_size, in_features, 224, 224) # 224 should be large enough for all random blocks in this test suit.
 
-    # Custom module base tests
     def test_eval_mode(self):
         """Test that eval mode is correctly set across the conv block"""
         with self.subTest("Test eval mode with ReLU activation"):
@@ -391,7 +396,6 @@ class TestConvBlocks(CustomModuleBaseTest):
                 input_tensor = self._get_valid_input(random.randint(1, 10), block.channels[0])
                 super()._test_consistent_output_in_eval_mode(block, input_tensor)
         
-    
     def test_batch_size_one_in_train_mode(self):
         """Test that the conv block handles batch size 1 in train mode"""
         with self.subTest("Test batch size 1 in train mode with ReLU activation"):
@@ -422,7 +426,6 @@ class TestConvBlocks(CustomModuleBaseTest):
                 input_tensor = self._get_valid_input(1, block.channels[0])
                 super()._test_batch_size_one_in_train_mode(block, input_tensor)
 
-    
     def test_batch_size_one_in_eval_mode(self):
         """Test that the conv block handles batch size 1 in eval mode"""
         with self.subTest("Test batch size 1 in eval mode with ReLU activation"):
@@ -452,7 +455,6 @@ class TestConvBlocks(CustomModuleBaseTest):
                 block, _, _ = self._generate_random_conv_block(use_bn=False, activation_after_each_layer=False, activation=activation)   
                 input_tensor = self._get_valid_input(1, block.channels[0])
                 super()._test_batch_size_one_in_eval_mode(block, input_tensor)
-
     
     def test_named_parameters_length(self):
         """Test that named_parameters and parameters have the same length"""
