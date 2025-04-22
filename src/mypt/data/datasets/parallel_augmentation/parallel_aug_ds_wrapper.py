@@ -107,7 +107,7 @@ class Food101Wrapper(ParallelAugWrapperDS):
         return mapping
 
 
-class ImagenetterWrapper(ParallelAugWrapperDS):
+class ImagenetteWrapper(ParallelAugWrapperDS):
     def __init__(self, 
                 root_dir: Union[str, Path], 
                 output_shape: Tuple[int, int],

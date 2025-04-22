@@ -589,6 +589,37 @@ class TestGenericResidualFCBlock(ResidualFCBlockTestBase):
     def test_different_dimensions(self):
         self._test_different_dimensions()
 
+    # Custom module base tests for TestGenericResidualFCBlock
+    def test_module_eval_mode(self):
+        for _ in range(5):
+            block = self._generate_random_residual_fc_block()
+            self._test_eval_mode(block)
+    
+    def test_module_train_mode(self):
+        for _ in range(5):
+            block = self._generate_random_residual_fc_block()
+            self._test_train_mode(block)
+    
+    def test_module_consistent_output_in_eval_mode(self):
+        for _ in range(5):
+            block = self._generate_random_residual_fc_block()
+            self._test_consistent_output_in_eval_mode(block)
+    
+    def test_module_batch_size_one_in_train_mode(self):
+        for _ in range(5):
+            block = self._generate_random_residual_fc_block()
+            self._test_batch_size_one_in_train_mode(block)
+    
+    def test_module_batch_size_one_in_eval_mode(self):
+        for _ in range(5):
+            block = self._generate_random_residual_fc_block()
+            self._test_batch_size_one_in_eval_mode(block)
+    
+    def test_module_named_parameters_length(self):
+        for _ in range(5):
+            block = self._generate_random_residual_fc_block()
+            self._test_named_parameters_length(block)
+
 
 class TestExponentialResidualFCBlock(ResidualFCBlockTestBase):
     """
@@ -699,6 +730,37 @@ class TestExponentialResidualFCBlock(ResidualFCBlockTestBase):
 
     def test_different_dimensions(self):
         self._test_different_dimensions()
+
+    # Custom module base tests for TestExponentialResidualFCBlock
+    def test_module_eval_mode(self):
+        for _ in range(5):
+            block = self._generate_random_residual_fc_block()
+            self._test_eval_mode(block)
+    
+    def test_module_train_mode(self):
+        for _ in range(5):
+            block = self._generate_random_residual_fc_block()
+            self._test_train_mode(block)
+    
+    def test_module_consistent_output_in_eval_mode(self):
+        for _ in range(5):
+            block = self._generate_random_residual_fc_block()
+            self._test_consistent_output_in_eval_mode(block)
+    
+    def test_module_batch_size_one_in_train_mode(self):
+        for _ in range(5):
+            block = self._generate_random_residual_fc_block()
+            self._test_batch_size_one_in_train_mode(block)
+    
+    def test_module_batch_size_one_in_eval_mode(self):
+        for _ in range(5):
+            block = self._generate_random_residual_fc_block()
+            self._test_batch_size_one_in_eval_mode(block)
+    
+    def test_module_named_parameters_length(self):
+        for _ in range(5):
+            block = self._generate_random_residual_fc_block()
+            self._test_named_parameters_length(block)
 
 
 if __name__ == '__main__':

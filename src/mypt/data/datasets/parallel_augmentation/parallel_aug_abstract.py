@@ -11,7 +11,7 @@ from pathlib import Path
 from PIL import Image
 from abc import ABC, abstractmethod
 
-from ....code_utilities import pytorch_utilities as pu
+from mypt.code_utils import pytorch_utilities as pu
 
 
 class AbstractParallelAugsDs(Dataset, ABC):

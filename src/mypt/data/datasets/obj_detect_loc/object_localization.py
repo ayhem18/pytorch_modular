@@ -9,7 +9,7 @@ from torchvision import transforms as tr
 from pathlib import Path
 from typing import Union, Optional, Dict, List, Tuple
 
-from mypt.code_utilities import pytorch_utilities as pu
+from mypt.code_utils import pytorch_utilities as pu
 from .abstract_ds import ObjectDataset
 
 class ObjectLocalizationDs(ObjectDataset):

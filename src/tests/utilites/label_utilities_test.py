@@ -6,7 +6,7 @@ import numpy as np
 from typing import Tuple
 from tqdm import tqdm
 
-from mypt.code_utilities import bbox_utilities as au
+from mypt.code_utils import bbox_utilities as au
 
 ################################## utility functions ################################## 
 def _random_yolo_ann(img_shape=None):
@@ -97,7 +97,7 @@ def _test_conversion_single_format(format: str, num_tests:int = 5 * 10 ** 4):
 
 def _test_conversion(num_tests:int = 5 * 10 ** 4):
     # set the seed for reproducibility
-    from mypt.code_utilities import pytorch_utilities as pu
+    from mypt.code_utils import pytorch_utilities as pu
     pu.seed_everything(seed=0)
     for f in au.OBJ_DETECT_ANN_FORMATS:
         _test_conversion_single_format(format=f, num_tests=num_tests)

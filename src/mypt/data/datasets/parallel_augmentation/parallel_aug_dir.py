@@ -10,7 +10,7 @@ from typing import Union, List, Tuple, Optional
 from pathlib import Path
 
 from .parallel_aug_abstract import AbstractParallelAugsDs
-from ....code_utilities import directories_and_files as dirf
+from mypt.code_utils import directories_and_files as dirf
 
 
 class ParallelAugDirDs(AbstractParallelAugsDs):

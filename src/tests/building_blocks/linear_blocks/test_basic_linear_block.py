@@ -1,15 +1,18 @@
 import unittest
 import torch
 import random
-from random import randint as ri
+
 from torch import nn
+from random import randint as ri
 
 import mypt.code_utils.pytorch_utils as pu
+
 from mypt.building_blocks.linear_blocks.components import BasicLinearBlock
 from mypt.dimensions_analysis.dimension_analyser import DimensionsAnalyser
+from mypt.tests.building_blocks.custom_base_test import CustomModuleBaseTest
 
 
-class TestBasicLinearBlock(unittest.TestCase):
+class TestBasicLinearBlock(CustomModuleBaseTest):
     def setUp(self):
         self.dim_analyser = DimensionsAnalyser()
         self.activation_types = [type(BasicLinearBlock._ACTIVATION_MAP[t]) for t in BasicLinearBlock._ACTIVATIONS]
@@ -329,7 +332,6 @@ class TestBasicLinearBlock(unittest.TestCase):
                                f"Parameter name {name} does not start with '_block.'")
                 self.assertIsInstance(param, torch.nn.Parameter)
 
-
     def test_batch_size_one_handling(self):
         """Test handling of batch size 1 (important for BatchNorm)"""
         for is_final in [True, False]:
@@ -361,9 +363,42 @@ class TestBasicLinearBlock(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     block.forward(input_tensor) # having an error ensures that batch normalization indeed moved to the train mode.
 
-
-
-
+    # Custom module base tests
+    def test_eval_mode(self):
+        for _ in range(10):
+            block = self._generate_random_linear_block()
+            self._test_eval_mode(block)
+    
+    def test_train_mode(self):
+        for _ in range(10):
+            block = self._generate_random_linear_block()
+            self._test_train_mode(block)
+    
+    def test_consistent_output_without_dropout_bn(self):
+        # This shouldn't pass with BatchNorm, so we'll use final blocks
+        for _ in range(10):
+            block = self._generate_random_linear_block(is_final=True, dropout=None)
+            self._test_consistent_output_without_dropout_bn(block)
+    
+    def test_consistent_output_in_eval_mode(self):
+        for _ in range(10):
+            block = self._generate_random_linear_block()
+            self._test_consistent_output_in_eval_mode(block)
+    
+    def test_batch_size_one_in_train_mode(self):
+        for _ in range(10):
+            block = self._generate_random_linear_block(is_final=False)  # Include BatchNorm
+            self._test_batch_size_one_in_train_mode(block)
+    
+    def test_batch_size_one_in_eval_mode(self):
+        for _ in range(10):
+            block = self._generate_random_linear_block()
+            self._test_batch_size_one_in_eval_mode(block)
+    
+    def test_named_parameters_length(self):
+        for _ in range(10):
+            block = self._generate_random_linear_block()
+            self._test_named_parameters_length(block)
 
 
 if __name__ == '__main__':

@@ -5,7 +5,7 @@ This script contains utilities to facilitate working with image classification d
 import warnings, os
 
 from torchvision.datasets import Imagenette
-from typing import Tuple, List
+from typing import Optional, Tuple, List
 
 from mypt.shortcuts import P
 from mypt.code_utils import directories_and_files as dirf
@@ -15,7 +15,7 @@ from mypt.code_utils import directories_and_files as dirf
 def builtin_imagenette2img_cls_ds(ds_folder: P, 
                                   des_folder: P,
                                   allow_download: bool = False,
-                                  split_names: List[str] = None,
+                                  split_names: Optional[List[str]] = None,
                                   **ds_kwargs) -> Tuple[P, P]:
     # basically this function takes a folder where the imagenette dataset is already installed
     # and conve    

@@ -453,14 +453,35 @@ class TestGenericFCBlock(FCBlockTestBase):
     def test_parameters_access(self):
         super()._test_parameters_access()        
 
-    def test_train_and_eval_modes(self):
-        super()._test_train_and_eval_modes()
-
-    def test_to_device(self):
-        super()._test_to_device()
-
-    def test_parameters_access(self):
-        super()._test_parameters_access()
+    def test_eval_mode(self):
+        for _ in range(5):
+            block = self._generate_random_fc_block()
+            self._test_eval_mode(block)
+    
+    def test_train_mode(self):
+        for _ in range(5):
+            block = self._generate_random_fc_block()
+            self._test_train_mode(block)
+    
+    def test_consistent_output_in_eval_mode(self):
+        for _ in range(5):
+            block = self._generate_random_fc_block()
+            self._test_consistent_output_in_eval_mode(block)
+    
+    def test_batch_size_one_in_train_mode(self):
+        for _ in range(5):
+            block = self._generate_random_fc_block()
+            self._test_batch_size_one_in_train_mode(block)
+    
+    def test_batch_size_one_in_eval_mode(self):
+        for _ in range(5):
+            block = self._generate_random_fc_block()
+            self._test_batch_size_one_in_eval_mode(block)
+    
+    def test_named_parameters_length(self):
+        for _ in range(5):
+            block = self._generate_random_fc_block()
+            self._test_named_parameters_length(block)
 
 
 class TestExponentialFCBlock(FCBlockTestBase):
@@ -543,14 +564,35 @@ class TestExponentialFCBlock(FCBlockTestBase):
     def test_parameters_access(self):
         super()._test_parameters_access()        
 
-    def test_train_and_eval_modes(self):
-        super()._test_train_and_eval_modes()
-
-    def test_to_device(self):
-        super()._test_to_device()
-
-    def test_parameters_access(self):
-        super()._test_parameters_access()
+    def test_eval_mode(self):
+        for _ in range(5):
+            block = self._generate_random_fc_block()
+            self._test_eval_mode(block)
+    
+    def test_train_mode(self):
+        for _ in range(5):
+            block = self._generate_random_fc_block()
+            self._test_train_mode(block)
+    
+    def test_consistent_output_in_eval_mode(self):
+        for _ in range(5):
+            block = self._generate_random_fc_block()
+            self._test_consistent_output_in_eval_mode(block)
+    
+    def test_batch_size_one_in_train_mode(self):
+        for _ in range(5):
+            block = self._generate_random_fc_block()
+            self._test_batch_size_one_in_train_mode(block)
+    
+    def test_batch_size_one_in_eval_mode(self):
+        for _ in range(5):
+            block = self._generate_random_fc_block()
+            self._test_batch_size_one_in_eval_mode(block)
+    
+    def test_named_parameters_length(self):
+        for _ in range(5):
+            block = self._generate_random_fc_block()
+            self._test_named_parameters_length(block)
 
 
 

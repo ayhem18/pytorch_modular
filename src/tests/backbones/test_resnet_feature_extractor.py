@@ -6,11 +6,7 @@ import mypt.code_utils.pytorch_utils as pu
 from torch import nn
 from typing import Dict
 from mypt.backbones.resnetFE import ResnetFE
-
-from torchvision.models.resnet import Bottleneck, BasicBlock
-from torchvision.models import resnet18, resnet34, resnet50, resnet101, resnet152
-from torchvision.models import ResNet18_Weights, ResNet34_Weights, ResNet50_Weights, ResNet101_Weights, ResNet152_Weights
-
+from torchvision.models.resnet import Bottleneck
 
 
 class TestResnetFE(unittest.TestCase):
@@ -380,7 +376,7 @@ class TestResnetFE(unittest.TestCase):
                     net.eval()
 
                     # create a random input tensor
-                    x = torch.randn(1, 3, 224, 224)
+                    x = torch.randn(1, 3, 224, 224, requires_grad=False)
 
                     output_fe = feature_extractor.forward(x)
 
@@ -406,33 +402,82 @@ class TestResnetFE(unittest.TestCase):
                     
                     self.assertTrue(torch.allclose(output_fe, output_net), "The feature extractor construction does not seem to be correct")
 
+    # Custom module base tests for ResnetFE
+    def test_eval_mode(self):
+        """Test that eval mode is correctly set across the feature extractor"""
+        for arch in self.architectures[:1]:  # Test with just one architecture
+            feature_extractor = ResnetFE(
+                build_by_layer=True,
+                num_extracted_layers=2,
+                num_extracted_bottlenecks=2,
+                freeze=False,
+                freeze_by_layer=True,
+                add_global_average=True,
+                architecture=arch
+            )
+            self._test_eval_mode(feature_extractor)
+    
+    def test_train_mode(self):
+        """Test that train mode is correctly set across the feature extractor"""
+        for arch in self.architectures[:1]:  # Test with just one architecture
+            feature_extractor = ResnetFE(
+                build_by_layer=True,
+                num_extracted_layers=2,
+                num_extracted_bottlenecks=2,
+                freeze=False,
+                freeze_by_layer=True,
+                add_global_average=True,
+                architecture=arch
+            )
+            self._test_train_mode(feature_extractor)
+    
+    def test_consistent_output_in_eval_mode(self):
+        """Test that the feature extractor produces consistent output in eval mode"""
+        for arch in self.architectures[:1]:  # Test with just one architecture
+            feature_extractor = ResnetFE(
+                build_by_layer=True,
+                num_extracted_layers=2,
+                num_extracted_bottlenecks=2,
+                freeze=False,
+                freeze_by_layer=True,
+                add_global_average=True,
+                architecture=arch
+            )
+            # Override the _get_valid_input_shape method for this test
+            self._get_valid_input_shape = lambda block, batch_size=2: (batch_size, 3, 224, 224)
+            self._test_consistent_output_in_eval_mode(feature_extractor)
+    
+    def test_batch_size_one_in_eval_mode(self):
+        """Test that the feature extractor handles batch size 1 in eval mode"""
+        for arch in self.architectures[:1]:  # Test with just one architecture
+            feature_extractor = ResnetFE(
+                build_by_layer=True,
+                num_extracted_layers=2,
+                num_extracted_bottlenecks=2,
+                freeze=False,
+                freeze_by_layer=True,
+                add_global_average=True,
+                architecture=arch
+            )
+            # Override the _get_valid_input_shape method for this test
+            self._get_valid_input_shape = lambda block, batch_size=1: (batch_size, 3, 224, 224)
+            self._test_batch_size_one_in_eval_mode(feature_extractor)
+    
+    def test_named_parameters_length(self):
+        """Test that named_parameters and parameters have the same length"""
+        for arch in self.architectures[:1]:  # Test with just one architecture
+            feature_extractor = ResnetFE(
+                build_by_layer=True,
+                num_extracted_layers=2,
+                num_extracted_bottlenecks=2,
+                freeze=False,
+                freeze_by_layer=True,
+                add_global_average=True,
+                architecture=arch
+            )
+            self._test_named_parameters_length(feature_extractor)
+
 
 if __name__ == '__main__':
-    # feature_extractor = ResnetFE(
-    #     build_by_layer=True,
-    #     num_extracted_layers=1,
-    #     num_extracted_bottlenecks=0, # this value doesn't matter when build_by_layer=True
-    #     architecture=50,
-    #     freeze=False,
-    #     freeze_by_layer=False,
-    #     add_global_average=True
-    # )
-    
-    # # get the original network
-    # constructor, weights = ResnetFE.get_model(architecture=50)
-    # net = constructor(weights=weights.DEFAULT) 
-    
-    # # put both the feature extractor and the original network in evaluation mode    
-    # feature_extractor.eval() 
-    # net.eval()
-
-    # print(feature_extractor)
-
-    # print("#" * 20)
-    # print("#" * 20)
-    # print("#" * 20)
-
-    # print(net)
-
     pu.seed_everything(42)
     unittest.main()

@@ -3,7 +3,7 @@ This script contains the code to test bbox_utility functions.
 """
 import os
 import numpy as np
-from mypt.code_utilities.bbox_utilities import bounding_boxes_intersect, PASCAL_VOC
+from mypt.code_utils.bbox_utils import bounding_boxes_intersect, PASCAL_VOC
 
 def test_positive_intersection():
     # using the bounding boxes to generate the image samples
