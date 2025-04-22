@@ -8,8 +8,10 @@ from typing import Dict
 from mypt.backbones.resnetFE import ResnetFE
 from torchvision.models.resnet import Bottleneck
 
+from tests.building_blocks.custom_base_test import CustomModuleBaseTest
 
-class TestResnetFE(unittest.TestCase):
+
+class TestResnetFE(CustomModuleBaseTest):
     """
     Test class for ResnetFE feature extractor implementation.
     Tests construction with different architectures and extraction strategies.
@@ -405,7 +407,7 @@ class TestResnetFE(unittest.TestCase):
     # Custom module base tests for ResnetFE
     def test_eval_mode(self):
         """Test that eval mode is correctly set across the feature extractor"""
-        for arch in self.architectures[:1]:  # Test with just one architecture
+        for arch in self.architectures:  
             feature_extractor = ResnetFE(
                 build_by_layer=True,
                 num_extracted_layers=2,
@@ -415,11 +417,12 @@ class TestResnetFE(unittest.TestCase):
                 add_global_average=True,
                 architecture=arch
             )
-            self._test_eval_mode(feature_extractor)
+
+            super()._test_eval_mode(feature_extractor)
     
     def test_train_mode(self):
         """Test that train mode is correctly set across the feature extractor"""
-        for arch in self.architectures[:1]:  # Test with just one architecture
+        for arch in self.architectures:  
             feature_extractor = ResnetFE(
                 build_by_layer=True,
                 num_extracted_layers=2,
@@ -429,11 +432,11 @@ class TestResnetFE(unittest.TestCase):
                 add_global_average=True,
                 architecture=arch
             )
-            self._test_train_mode(feature_extractor)
+            super()._test_train_mode(feature_extractor)
     
     def test_consistent_output_in_eval_mode(self):
         """Test that the feature extractor produces consistent output in eval mode"""
-        for arch in self.architectures[:1]:  # Test with just one architecture
+        for arch in self.architectures:  
             feature_extractor = ResnetFE(
                 build_by_layer=True,
                 num_extracted_layers=2,
@@ -443,13 +446,12 @@ class TestResnetFE(unittest.TestCase):
                 add_global_average=True,
                 architecture=arch
             )
-            # Override the _get_valid_input_shape method for this test
-            self._get_valid_input_shape = lambda block, batch_size=2: (batch_size, 3, 224, 224)
-            self._test_consistent_output_in_eval_mode(feature_extractor)
+            input_tensor = torch.randn(random.randint(1, 10), 3, 224, 224)
+            super()._test_consistent_output_in_eval_mode(feature_extractor, input_tensor)
     
     def test_batch_size_one_in_eval_mode(self):
         """Test that the feature extractor handles batch size 1 in eval mode"""
-        for arch in self.architectures[:1]:  # Test with just one architecture
+        for arch in self.architectures:  
             feature_extractor = ResnetFE(
                 build_by_layer=True,
                 num_extracted_layers=2,
@@ -459,13 +461,12 @@ class TestResnetFE(unittest.TestCase):
                 add_global_average=True,
                 architecture=arch
             )
-            # Override the _get_valid_input_shape method for this test
-            self._get_valid_input_shape = lambda block, batch_size=1: (batch_size, 3, 224, 224)
-            self._test_batch_size_one_in_eval_mode(feature_extractor)
+            input_tensor = torch.randn(1, 3, 224, 224)
+            super()._test_batch_size_one_in_eval_mode(feature_extractor, input_tensor)
     
     def test_named_parameters_length(self):
         """Test that named_parameters and parameters have the same length"""
-        for arch in self.architectures[:1]:  # Test with just one architecture
+        for arch in self.architectures:  
             feature_extractor = ResnetFE(
                 build_by_layer=True,
                 num_extracted_layers=2,
@@ -475,7 +476,7 @@ class TestResnetFE(unittest.TestCase):
                 add_global_average=True,
                 architecture=arch
             )
-            self._test_named_parameters_length(feature_extractor)
+            super()._test_named_parameters_length(feature_extractor)
 
 
 if __name__ == '__main__':

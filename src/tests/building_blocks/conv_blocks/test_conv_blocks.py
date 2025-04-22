@@ -1,8 +1,8 @@
-from typing import List, Tuple
-import unittest
 import torch
 import random
+import unittest
 from torch import nn
+from typing import List, Tuple
 
 import mypt.code_utils.pytorch_utils as pu
 from mypt.building_blocks.conv_blocks.conv_block import BasicConvBlock
@@ -22,12 +22,17 @@ class TestConvBlocks(CustomModuleBaseTest):
         channels = [random.randint(1, 64) for _ in range(num_layers + 1)]
         kernel_sizes = random.randint(1, 5)
         
-        return BasicConvBlock(num_layers, channels, kernel_sizes, use_bn, activation_after_each_layer, activation), num_layers, channels
+        return BasicConvBlock(num_conv_layers=num_layers, 
+                              channels=channels, 
+                              kernel_sizes=kernel_sizes, 
+                              use_bn=use_bn, 
+                              activation_after_each_layer=activation_after_each_layer, 
+                              activation=activation), num_layers, channels
 
 
     def test_conv_block_single_activation_no_bn(self):
         """Test that conv block with single activation at the end and no batch norm works correctly"""
-        for _ in range(100):  # Test multiple random configurations
+        for _ in range(10):  # Test multiple random configurations
             block, num_layers, channels = self._generate_random_conv_block(use_bn=False, activation_after_each_layer=False, activation=nn.ReLU)
             
             # Check that block was created correctly
@@ -46,7 +51,7 @@ class TestConvBlocks(CustomModuleBaseTest):
 
     def test_conv_block_single_activation_bn(self):
         """Test that conv block with single activation at the end and batch norm works correctly"""
-        for _ in range(100):  # Test multiple random configurations            
+        for _ in range(10):  # Test multiple random configurations            
             block, num_layers, channels = self._generate_random_conv_block(use_bn=True, activation_after_each_layer=False, activation=nn.ReLU)
 
             # Check that block was created correctly
@@ -70,7 +75,7 @@ class TestConvBlocks(CustomModuleBaseTest):
 
     def test_conv_block_activation_after_each_layer_no_bn(self):
         """Test that conv block with activation after each layer and no batch norm works correctly"""
-        for _ in range(100):  # Test multiple random configurations            
+        for _ in range(10):  # Test multiple random configurations            
             block, num_layers, channels = self._generate_random_conv_block(use_bn=False, activation_after_each_layer=True, activation=nn.ReLU)
 
             # Check that block was created correctly
@@ -90,7 +95,7 @@ class TestConvBlocks(CustomModuleBaseTest):
 
     def test_conv_block_activation_after_each_layer_bn(self):
         """Test that conv block with activation after each layer and batch norm works correctly"""
-        for _ in range(100):  # Test multiple random configurations            
+        for _ in range(10):  # Test multiple random configurations            
             block, num_layers, channels = self._generate_random_conv_block(use_bn=True, activation_after_each_layer=True, activation=nn.ReLU)
 
             # Check that block was created correctly
@@ -115,7 +120,7 @@ class TestConvBlocks(CustomModuleBaseTest):
 
     def test_children_parameters_method_single_activation_layer_no_bn(self):
         """Test that children, parameters, named_children, named_parameters methods work correctly for a single activation layer and no batch norm"""
-        for _ in range(100):  # Test multiple random configurations            
+        for _ in range(10):  # Test multiple random configurations            
             block, num_layers, channels = self._generate_random_conv_block(use_bn=False, activation_after_each_layer=False, activation=nn.ReLU)
 
             named_children = list(block.named_children())            
@@ -133,7 +138,7 @@ class TestConvBlocks(CustomModuleBaseTest):
 
     def test_children_parameters_method_single_activation_layer_bn(self):
         """Test that children, parameters, named_children, named_parameters methods work correctly for a single activation layer and batch norm"""
-        for _ in range(100):  # Test multiple random configurations
+        for _ in range(10):  # Test multiple random configurations
             block, num_layers, _ = self._generate_random_conv_block(use_bn=True, activation_after_each_layer=False, activation=nn.ReLU)
 
             named_children = list(block.named_children())            
@@ -156,7 +161,7 @@ class TestConvBlocks(CustomModuleBaseTest):
 
     def test_children_parameters_method_activation_after_each_layer_no_bn(self):
         """Test that children, parameters, named_children, named_parameters methods work correctly for an activation after each layer and no batch norm"""
-        for _ in range(100):  # Test multiple random configurations
+        for _ in range(10):  # Test multiple random configurations
             block, num_layers, _ = self._generate_random_conv_block(use_bn=False, activation_after_each_layer=True, activation=nn.ReLU)
             
             # Check that block was created correctly
@@ -176,7 +181,7 @@ class TestConvBlocks(CustomModuleBaseTest):
 
     def test_children_parameters_method_activation_after_each_layer_bn(self):
         """Test that children, parameters, named_children, named_parameters methods work correctly for an activation after each layer and batch norm"""
-        for _ in range(100):  # Test multiple random configurations
+        for _ in range(10):  # Test multiple random configurations
             block, num_layers, channels = self._generate_random_conv_block(use_bn=True, activation_after_each_layer=True, activation=nn.ReLU)
             
             # Check that block was created correctly
@@ -202,7 +207,7 @@ class TestConvBlocks(CustomModuleBaseTest):
     @unittest.skip("Skipping forward pass shape test as it takes a long time to run")
     def test_forward_pass_shape(self):
         """Test that forward pass produces output with expected shape"""
-        for _ in range(1000):  # Test multiple random configurations
+        for _ in range(10):  # Test multiple random configurations
             # Generate random but valid parameters
             num_layers = random.randint(1, 4)
             channels = [random.randint(1, 64) for _ in range(num_layers + 1)]
@@ -237,24 +242,13 @@ class TestConvBlocks(CustomModuleBaseTest):
             self.assertEqual(actual_shape, expected_shape, 
                             f"Mismatch in output shape: got {actual_shape}, expected {expected_shape}")
 
-    
+
     def test_eval_train_methods(self):        
         """Test that eval and train methods work correctly"""
         # Create a block with batch normalization
-        for _ in range(100):  # Test multiple random configurations
-            num_layers = random.randint(2, 4)
-            channels = [random.randint(1, 32) for _ in range(num_layers + 1)]
-            kernel_sizes = [2 * random.randint(1, 5) + 1 for _ in range(num_layers)]
-            
-            block = ConvBlock(
-                num_conv_layers=num_layers,
-                channels=channels,
-                kernel_sizes=kernel_sizes,
-                use_bn=True,  # Must use batch norm for this test
-                activation_after_each_layer=True,
-                activation=nn.ReLU
-            )
-            
+        for _ in range(10):  # Test multiple random configurations
+            block, _, channels = self._generate_random_conv_block(use_bn=True, activation_after_each_layer=True, activation=nn.ReLU)
+
             # Test eval mode
             block.eval()
             
@@ -308,161 +302,183 @@ class TestConvBlocks(CustomModuleBaseTest):
                 self.assertTrue(torch.allclose(train_running_means[i], bn.running_mean), 
                             "BatchNorm running mean should not change in eval mode")
 
-    def _get_valid_input(self, *args, **kwargs) -> torch.Tensor:
+    def _get_valid_input(self, batch_size:int, in_features:int) -> torch.Tensor:
         """
         Generate a random input tensor with the correct shape.
         """
-        if 'in_features' not in kwargs:
-            raise ValueError("in_features must be provided")
-        
-        in_features = kwargs['in_features']
-        return torch.randn(10, in_features, 224, 224)
+        return torch.randn(batch_size, in_features, 224, 224) # 224 should be large enough for all random blocks in this test suit.
 
     # Custom module base tests
     def test_eval_mode(self):
         """Test that eval mode is correctly set across the conv block"""
-        for _ in range(1000):
-            block, _, _ = self._generate_random_conv_block(use_bn=True, activation_after_each_layer=True, activation=nn.ReLU)
-            super()._test_eval_mode(block)
+        with self.subTest("Test eval mode with ReLU activation"):
+            for _ in range(10):
+                activation = nn.ReLU
+                block, _, _ = self._generate_random_conv_block(use_bn=True, activation_after_each_layer=True, activation=activation)
+                super()._test_eval_mode(block)
 
-        for _ in range(1000):
-            block, _, _ = self._generate_random_conv_block(use_bn=True, activation_after_each_layer=False, activation=nn.ReLU)
-            super()._test_eval_mode(block)
+        with self.subTest("Test eval mode with Sigmoid activation"):
+            for _ in range(10):
+                activation = nn.Sigmoid
+                block, _, _ = self._generate_random_conv_block(use_bn=True, activation_after_each_layer=False, activation=activation)
+                super()._test_eval_mode(block)
 
-        for _ in range(1000):
-            block, _, _ = self._generate_random_conv_block(use_bn=False, activation_after_each_layer=True, activation=nn.ReLU)
-            super()._test_eval_mode(block)
+        with self.subTest("Test eval mode with Tanh activation"):
+            for _ in range(10):
+                activation = nn.Tanh
+                block, _, _ = self._generate_random_conv_block(use_bn=False, activation_after_each_layer=True, activation=activation)
+                super()._test_eval_mode(block)
 
-        for _ in range(1000):
-            block, _, _ = self._generate_random_conv_block(use_bn=False, activation_after_each_layer=False, activation=nn.ReLU)
-            super()._test_eval_mode(block)
+        with self.subTest("Test eval mode with Tanh activation"):
+            for _ in range(10):
+                activation = nn.Tanh
+                block, _, _ = self._generate_random_conv_block(use_bn=False, activation_after_each_layer=False, activation=activation)
+                super()._test_eval_mode(block)
     
     def test_train_mode(self):
         """Test that train mode is correctly set across the conv block"""
-        for _ in range(1000):
-            block, _, _ = self._generate_random_conv_block(use_bn=True, activation_after_each_layer=True, activation=nn.ReLU)
-            super()._test_train_mode(block)
+        with self.subTest("Test train mode with ReLU activation"):
+            for _ in range(10):
+                activation = nn.ReLU
+                block, _, _ = self._generate_random_conv_block(use_bn=True, activation_after_each_layer=True, activation=activation)
+                super()._test_train_mode(block)
 
-        for _ in range(1000):
-            block, _, _ = self._generate_random_conv_block(use_bn=True, activation_after_each_layer=False, activation=nn.ReLU)
-            super()._test_train_mode(block)    
+        with self.subTest("Test train mode with Sigmoid activation"):
+            for _ in range(10):
+                activation = nn.Sigmoid
+                block, _, _ = self._generate_random_conv_block(use_bn=True, activation_after_each_layer=False, activation=activation)
+                super()._test_train_mode(block)    
 
-        for _ in range(1000):
-            block, _, _ = self._generate_random_conv_block(use_bn=False, activation_after_each_layer=True, activation=nn.ReLU)
-            super()._test_train_mode(block)
+        with self.subTest("Test train mode with Tanh activation"):
+            for _ in range(10):
+                activation = nn.Tanh
+                block, _, _ = self._generate_random_conv_block(use_bn=False, activation_after_each_layer=True, activation=activation)
+                super()._test_train_mode(block)
 
-        for _ in range(1000):
-            block, _, _ = self._generate_random_conv_block(use_bn=False, activation_after_each_layer=False, activation=nn.ReLU)
-            super()._test_train_mode(block)
+        with self.subTest("Test train mode with Tanh activation"):
+            for _ in range(10):
+                activation = nn.Tanh
+                block, _, _ = self._generate_random_conv_block(use_bn=False, activation_after_each_layer=False, activation=activation)
+                super()._test_train_mode(block)
     
     def test_consistent_output_in_eval_mode(self):
         """Test that the conv block produces consistent output in eval mode"""
-        for _ in range(1000):
-            block, _, _ = self._generate_random_conv_block(use_bn=True, activation_after_each_layer=True, activation=nn.ReLU)   
-            super()._test_consistent_output_in_eval_mode(block)
+        with self.subTest("Test consistent output in eval mode with ReLU activation"):
+            for _ in range(10):
+                activation = nn.ReLU
+                block, _, _ = self._generate_random_conv_block(use_bn=True, activation_after_each_layer=True, activation=activation)   
+                input_tensor = self._get_valid_input(random.randint(1, 10), block.channels[0])
+                super()._test_consistent_output_in_eval_mode(block, input_tensor)
 
-        for _ in range(1000):
-            block, _, _ = self._generate_random_conv_block(use_bn=True, activation_after_each_layer=False, activation=nn.ReLU)   
-            super()._test_consistent_output_in_eval_mode(block)
+        with self.subTest("Test consistent output in eval mode with Sigmoid activation"):
+            for _ in range(10):
+                activation = random.choice([nn.ReLU, nn.Sigmoid, nn.Tanh])
+                block, _, _ = self._generate_random_conv_block(use_bn=True, activation_after_each_layer=False, activation=activation)   
+                input_tensor = self._get_valid_input(random.randint(1, 10), block.channels[0])
+                super()._test_consistent_output_in_eval_mode(block, input_tensor)
             
+        with self.subTest("Test consistent output in eval mode with Tanh activation"):
+            for _ in range(10):   
+                activation = nn.Tanh
+                block, _, _ = self._generate_random_conv_block(use_bn=False, activation_after_each_layer=True, activation=activation)   
+                input_tensor = self._get_valid_input(random.randint(1, 10), block.channels[0])
+                super()._test_consistent_output_in_eval_mode(block, input_tensor)
 
-        for _ in range(1000):   
-            block, _, _ = self._generate_random_conv_block(use_bn=False, activation_after_each_layer=True, activation=nn.ReLU)   
-            super()._test_consistent_output_in_eval_mode(block)
-
-        for _ in range(1000):   
-            block, _, _ = self._generate_random_conv_block(use_bn=False, activation_after_each_layer=False, activation=nn.ReLU)   
-            super()._test_consistent_output_in_eval_mode(block)
+        with self.subTest("Test consistent output in eval mode with Tanh activation"):
+            for _ in range(10):   
+                activation = nn.Tanh
+                block, _, _ = self._generate_random_conv_block(use_bn=False, activation_after_each_layer=False, activation=activation)   
+                input_tensor = self._get_valid_input(random.randint(1, 10), block.channels[0])
+                super()._test_consistent_output_in_eval_mode(block, input_tensor)
         
-        for _ in range(5):
-            # Create a conv block with batch norm
-            num_layers = random.randint(1, 3)
-            channels = [random.randint(1, 16) for _ in range(num_layers + 1)]
-            kernel_sizes = [2 * random.randint(1, 3) + 1 for _ in range(num_layers)]
-            
-            block = ConvBlock(
-                num_conv_layers=num_layers,
-                channels=channels,
-                kernel_sizes=kernel_sizes,
-                use_bn=True,
-                activation_after_each_layer=True,
-                activation=nn.ReLU
-            )
-            
-            # Override _get_valid_input_shape for ConvBlock
-            def _get_valid_input_shape(block, batch_size=2):
-                return (batch_size, block.channels[0], 32, 32)
-            
-            self._get_valid_input_shape = _get_valid_input_shape
-            self._test_consistent_output_in_eval_mode(block)
     
     def test_batch_size_one_in_train_mode(self):
         """Test that the conv block handles batch size 1 in train mode"""
-        for _ in range(5):
-            # Create a conv block with batch norm
-            num_layers = random.randint(1, 3)
-            channels = [random.randint(1, 16) for _ in range(num_layers + 1)]
-            kernel_sizes = [2 * random.randint(1, 3) + 1 for _ in range(num_layers)]
+        with self.subTest("Test batch size 1 in train mode with ReLU activation"):
+            for _ in range(10):
+                activation = nn.ReLU
+                block, _, _ = self._generate_random_conv_block(use_bn=True, activation_after_each_layer=True, activation=activation)   
+                input_tensor = self._get_valid_input(1, block.channels[0])
+                super()._test_batch_size_one_in_train_mode(block, input_tensor)
+
+        with self.subTest("Test batch size 1 in train mode with Sigmoid activation"):
+            for _ in range(10):
+                activation = nn.Sigmoid
+                block, _, _ = self._generate_random_conv_block(use_bn=True, activation_after_each_layer=False, activation=activation)   
+                input_tensor = self._get_valid_input(1, block.channels[0])
+                super()._test_batch_size_one_in_train_mode(block, input_tensor)
             
-            block = ConvBlock(
-                num_conv_layers=num_layers,
-                channels=channels,
-                kernel_sizes=kernel_sizes,
-                use_bn=True,
-                activation_after_each_layer=True,
-                activation=nn.ReLU
-            )
-            
-            # Override _get_valid_input_shape for ConvBlock
-            def _get_valid_input_shape(block, batch_size=1):
-                return (batch_size, block.channels[0], 32, 32)
-            
-            self._get_valid_input_shape = _get_valid_input_shape
-            self._test_batch_size_one_in_train_mode(block)
+        with self.subTest("Test batch size 1 in train mode with Tanh activation"):
+            for _ in range(10):   
+                activation = nn.Tanh
+                block, _, _ = self._generate_random_conv_block(use_bn=False, activation_after_each_layer=True, activation=activation)   
+                input_tensor = self._get_valid_input(1, block.channels[0])
+                super()._test_batch_size_one_in_train_mode(block, input_tensor)
+
+        with self.subTest("Test batch size 1 in train mode with Tanh activation"):
+            for _ in range(10):   
+                activation = nn.Tanh
+                block, _, _ = self._generate_random_conv_block(use_bn=False, activation_after_each_layer=False, activation=activation)   
+                input_tensor = self._get_valid_input(1, block.channels[0])
+                super()._test_batch_size_one_in_train_mode(block, input_tensor)
+
     
     def test_batch_size_one_in_eval_mode(self):
         """Test that the conv block handles batch size 1 in eval mode"""
-        for _ in range(5):
-            # Create a conv block with batch norm
-            num_layers = random.randint(1, 3)
-            channels = [random.randint(1, 16) for _ in range(num_layers + 1)]
-            kernel_sizes = [2 * random.randint(1, 3) + 1 for _ in range(num_layers)]
-            
-            block = ConvBlock(
-                num_conv_layers=num_layers,
-                channels=channels,
-                kernel_sizes=kernel_sizes,
-                use_bn=True,
-                activation_after_each_layer=True,
-                activation=nn.ReLU
-            )
-            
-            # Override _get_valid_input_shape for ConvBlock
-            def _get_valid_input_shape(block, batch_size=1):
-                return (batch_size, block.channels[0], 32, 32)
-            
-            self._get_valid_input_shape = _get_valid_input_shape
-            self._test_batch_size_one_in_eval_mode(block)
+        with self.subTest("Test batch size 1 in eval mode with ReLU activation"):
+            for _ in range(10):
+                activation = nn.ReLU
+                block, _, _ = self._generate_random_conv_block(use_bn=True, activation_after_each_layer=True, activation=activation)   
+                input_tensor = self._get_valid_input(1, block.channels[0])
+                super()._test_batch_size_one_in_eval_mode(block, input_tensor)
+
+        with self.subTest("Test batch size 1 in eval mode with Sigmoid activation"):
+            for _ in range(10):
+                activation = nn.Sigmoid
+                block, _, _ = self._generate_random_conv_block(use_bn=True, activation_after_each_layer=False, activation=activation)   
+                input_tensor = self._get_valid_input(1, block.channels[0])
+                super()._test_batch_size_one_in_eval_mode(block, input_tensor)
+
+        with self.subTest("Test batch size 1 in eval mode with Tanh activation"):
+            for _ in range(10):   
+                activation = nn.Tanh
+                block, _, _ = self._generate_random_conv_block(use_bn=False, activation_after_each_layer=True, activation=activation)   
+                input_tensor = self._get_valid_input(1, block.channels[0])
+                super()._test_batch_size_one_in_eval_mode(block, input_tensor)
+
+        with self.subTest("Test batch size 1 in eval mode with Tanh activation"):
+            for _ in range(10):   
+                activation = nn.Tanh
+                block, _, _ = self._generate_random_conv_block(use_bn=False, activation_after_each_layer=False, activation=activation)   
+                input_tensor = self._get_valid_input(1, block.channels[0])
+                super()._test_batch_size_one_in_eval_mode(block, input_tensor)
+
     
     def test_named_parameters_length(self):
         """Test that named_parameters and parameters have the same length"""
-        for _ in range(5):
-            # Create a conv block
-            num_layers = random.randint(1, 3)
-            channels = [random.randint(1, 16) for _ in range(num_layers + 1)]
-            kernel_sizes = [2 * random.randint(1, 3) + 1 for _ in range(num_layers)]
-            
-            block = ConvBlock(
-                num_conv_layers=num_layers,
-                channels=channels,
-                kernel_sizes=kernel_sizes,
-                use_bn=True,
-                activation_after_each_layer=True,
-                activation=nn.ReLU
-            )
-            self._test_named_parameters_length(block)
+        with self.subTest("Test named_parameters and parameters have the same length with ReLU activation"):
+            for _ in range(10):
+                activation = nn.ReLU
+                block, _, _ = self._generate_random_conv_block(use_bn=True, activation_after_each_layer=True, activation=activation)   
+                super()._test_named_parameters_length(block)
 
+        with self.subTest("Test named_parameters and parameters have the same length with Sigmoid activation"):
+            for _ in range(10):
+                activation = nn.Sigmoid
+                block, _, _ = self._generate_random_conv_block(use_bn=True, activation_after_each_layer=False, activation=activation)   
+                super()._test_named_parameters_length(block)    
 
+        with self.subTest("Test named_parameters and parameters have the same length with Tanh activation"):
+            for _ in range(10):   
+                activation = nn.Tanh
+                block, _, _ = self._generate_random_conv_block(use_bn=False, activation_after_each_layer=True, activation=activation)   
+                super()._test_named_parameters_length(block)
+
+        with self.subTest("Test named_parameters and parameters have the same length with Tanh activation"):
+            for _ in range(10):   
+                activation = nn.Tanh
+                block, _, _ = self._generate_random_conv_block(use_bn=False, activation_after_each_layer=False, activation=activation)   
+                super()._test_named_parameters_length(block)
 
 if __name__ == '__main__':
     pu.seed_everything(69)

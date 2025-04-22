@@ -4,8 +4,10 @@ import torch
 from torch import nn
 from typing import List, Optional, OrderedDict, Tuple, Union
 
+from mypt.building_blocks.mixins.custom_module_mixins import WrapperLikeModuleMixin
 
-class BasicConvBlock(nn.Module):
+
+class BasicConvBlock(WrapperLikeModuleMixin):
     """
     A flexible convolutional block that can be configured with multiple layers.
     
@@ -90,7 +92,8 @@ class BasicConvBlock(nn.Module):
             TypeError: _description_
             ValueError: _description_
         """
-        super().__init__()
+        # the BasicConvBlock is a wrapper around a nn.Sequential module saved in the '_block' field
+        super().__init__("_block")
 
         if not isinstance(channels, Union[List, Tuple]):
             raise TypeError(f"The 'channels' argument must be a list or a tuple. Found: {type(channels)}")
@@ -120,58 +123,49 @@ class BasicConvBlock(nn.Module):
                 raise ValueError(f"The number of paddings must be the number of conv layers. Found: {len(paddings)} paddings for {num_conv_layers} conv layers.")
 
         # set the fields
-        self.num_conv_layers = num_conv_layers  
-        self.channels = channels
-        self.kernel_sizes = kernel_sizes
-        self.strides = strides
-        self.paddings = paddings
-        self.use_bn = use_bn
-        self.activation_after_each_layer = activation_after_each_layer
+        self._num_conv_layers = num_conv_layers  
+        self._channels = channels
+        self._kernel_sizes = kernel_sizes
+        self._strides = strides
+        self._paddings = paddings
+        self._use_bn = use_bn
+        self._activation_after_each_layer = activation_after_each_layer
+
+        if activation is None:
+            activation = nn.ReLU
+
+        if activation_params is None:
+            activation_params = {}
+
+        self._activation = activation
+        self._activation_params = activation_params
 
         if activation_after_each_layer:
-            self.block = self.__build_block_activation_after_each_layer(channels, kernel_sizes, strides, paddings, use_bn, activation, activation_params) 
+            self._block = self.__build_block_activation_after_each_layer(channels, kernel_sizes, strides, paddings, use_bn, activation, activation_params) 
         else:
-            self.block = self.__build_block_single_activation(channels, kernel_sizes, strides, paddings, use_bn, activation, activation_params) 
+            self._block = self.__build_block_single_activation(channels, kernel_sizes, strides, paddings, use_bn, activation, activation_params) 
 
     
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        Forward pass through the convolutional block.
-        
-        Args:
-            x (torch.Tensor): Input tensor
-            
-        Returns:
-            torch.Tensor: Output after passing through all layers
-        """
-        return self.block(x)
-    
-
     def __call__(self, x: torch.Tensor) -> torch.Tensor:
         return self.forward(x)
 
-    def children(self):
-        return self.block.children()
+    # all the necessary methods are inherited from the WrapperLikeModuleMixin
+    # train(), eval(), to(), forward(), __str__(), __repr__(), etc...   
 
-    def named_children(self):
-        return self.block.named_children()
-
-    def modules(self) -> List[nn.Module]:
-        return self.block.modules()
-
-    def parameters(self):
-        return self.block.parameters()
-
-    def named_parameters(self):
-        return self.block.named_parameters()
+    # add properties for the fields 
+    @property
+    def num_conv_layers(self) -> int:
+        return self._num_conv_layers
     
-    def to(self, device: torch.device):
-        self.block.to(device)
-        return self
+    @property
+    def channels(self) -> List[int]:
+        return self._channels  
     
-    def eval(self):
-        self.block.eval()
-        return self
+    @property
+    def kernel_sizes(self) -> List[int]:
+        return self._kernel_sizes 
     
-    def train(self):
-        self.block.train()
+    @property
+    def block(self) -> nn.Sequential:
+        return self._block
+    

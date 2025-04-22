@@ -43,7 +43,7 @@ class CustomModuleBaseTest(unittest.TestCase):
                 return True
         return False
     
-    def _test_consistent_output_without_dropout_bn(self, block: torch.nn.Module) -> None:
+    def _test_consistent_output_without_dropout_bn(self, block: torch.nn.Module, input_tensor: torch.Tensor) -> None:
         """
         Test that modules without dropout or batch normalization 
         produce consistent output for the same input
@@ -52,10 +52,6 @@ class CustomModuleBaseTest(unittest.TestCase):
             return  # Skip test if the module has stochastic layers
         
         block.train()
-
-        # Generate a random input
-        input_shape = self._get_valid_input_shape(block)
-        input_tensor = torch.randn(input_shape)
         
         # Get outputs from multiple forward passes
         output1 = block(input_tensor)
@@ -65,14 +61,10 @@ class CustomModuleBaseTest(unittest.TestCase):
         self.assertTrue(torch.allclose(output1, output2),
                          "Module without stochastic layers should produce consistent outputs")
     
-    def _test_consistent_output_in_eval_mode(self, block: torch.nn.Module) -> None:
+    def _test_consistent_output_in_eval_mode(self, block: torch.nn.Module, input_tensor: torch.Tensor) -> None:
         """Test that all modules in eval mode produce consistent output for the same input"""
         # Set to eval mode
         block.eval()
-        
-        # Generate a random input
-        input_shape = self._get_valid_input_shape(block)
-        input_tensor = torch.randn(input_shape)
         
         # Get outputs from multiple forward passes
         output1 = block(input_tensor)
@@ -82,7 +74,7 @@ class CustomModuleBaseTest(unittest.TestCase):
         self.assertTrue(torch.allclose(output1, output2),
                          "Module in eval mode should produce consistent outputs")
     
-    def _test_batch_size_one_in_train_mode(self, block: torch.nn.Module) -> None:
+    def _test_batch_size_one_in_train_mode(self, block: torch.nn.Module, input_tensor: torch.Tensor) -> None:
         """
         Test that modules with batch normalization layers might raise errors 
         with batch size 1 in train mode
@@ -100,9 +92,6 @@ class CustomModuleBaseTest(unittest.TestCase):
         # Set to train mode
         block.train()
         
-        # Generate an input with batch size 1
-        input_shape = self._get_valid_input_shape(block, batch_size=1)
-        input_tensor = torch.randn(input_shape)
         
         # In train mode, BatchNorm1d with batch size 1 might raise an error
         # since variance can't be computed properly
@@ -111,17 +100,13 @@ class CustomModuleBaseTest(unittest.TestCase):
             # If it doesn't raise an error, it's acceptable
         except Exception as e:
             # Check if the error is related to batch size and BatchNorm
-            self.assertIn("BatchNorm", str(e), 
+            self.assertIn('Expected more than 1 value per channel when training', str(e), 
                           "Module with BatchNorm in train mode may raise errors with batch size 1")
     
-    def _test_batch_size_one_in_eval_mode(self, block: torch.nn.Module) -> None:
+    def _test_batch_size_one_in_eval_mode(self, block: torch.nn.Module, input_tensor: torch.Tensor) -> None:
         """Test that modules in eval mode should not raise errors for batch size 1"""
         # Set to eval mode
         block.eval()
-        
-        # Generate an input with batch size 1
-        input_shape = self._get_valid_input_shape(block, batch_size=1)
-        input_tensor = torch.randn(input_shape)
         
         # This should not raise an error
         try:

@@ -9,7 +9,7 @@ import mypt.code_utils.pytorch_utils as pu
 
 from mypt.building_blocks.linear_blocks.components import BasicLinearBlock
 from mypt.dimensions_analysis.dimension_analyser import DimensionsAnalyser
-from mypt.tests.building_blocks.custom_base_test import CustomModuleBaseTest
+from tests.building_blocks.custom_base_test import CustomModuleBaseTest
 
 
 class TestBasicLinearBlock(CustomModuleBaseTest):
@@ -363,42 +363,46 @@ class TestBasicLinearBlock(CustomModuleBaseTest):
                 with self.assertRaises(ValueError):
                     block.forward(input_tensor) # having an error ensures that batch normalization indeed moved to the train mode.
 
-    # Custom module base tests
     def test_eval_mode(self):
-        for _ in range(10):
+        for _ in range(100):
             block = self._generate_random_linear_block()
             self._test_eval_mode(block)
     
     def test_train_mode(self):
-        for _ in range(10):
+        for _ in range(100):
             block = self._generate_random_linear_block()
             self._test_train_mode(block)
     
+    # Custom module base tests
     def test_consistent_output_without_dropout_bn(self):
         # This shouldn't pass with BatchNorm, so we'll use final blocks
-        for _ in range(10):
+        for _ in range(100):
             block = self._generate_random_linear_block(is_final=True, dropout=None)
-            self._test_consistent_output_without_dropout_bn(block)
+            input_tensor = torch.randn(random.randint(1, 10), block.in_features)
+            super()._test_consistent_output_without_dropout_bn(block, input_tensor)
     
     def test_consistent_output_in_eval_mode(self):
-        for _ in range(10):
+        for _ in range(100):
             block = self._generate_random_linear_block()
-            self._test_consistent_output_in_eval_mode(block)
+            input_tensor = torch.randn(random.randint(1, 10), block.in_features)
+            super()._test_consistent_output_in_eval_mode(block, input_tensor)
     
     def test_batch_size_one_in_train_mode(self):
-        for _ in range(10):
+        for _ in range(100):
             block = self._generate_random_linear_block(is_final=False)  # Include BatchNorm
-            self._test_batch_size_one_in_train_mode(block)
+            input_tensor = torch.randn(1, block.in_features)
+            super()._test_batch_size_one_in_train_mode(block, input_tensor)
     
     def test_batch_size_one_in_eval_mode(self):
-        for _ in range(10):
+        for _ in range(100):
             block = self._generate_random_linear_block()
-            self._test_batch_size_one_in_eval_mode(block)
+            input_tensor = torch.randn(1, block.in_features)
+            super()._test_batch_size_one_in_eval_mode(block, input_tensor)
     
     def test_named_parameters_length(self):
-        for _ in range(10):
+        for _ in range(100):
             block = self._generate_random_linear_block()
-            self._test_named_parameters_length(block)
+            super()._test_named_parameters_length(block)
 
 
 if __name__ == '__main__':

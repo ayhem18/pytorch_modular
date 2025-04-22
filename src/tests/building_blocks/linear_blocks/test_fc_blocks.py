@@ -1,20 +1,20 @@
-import numpy as np
 import torch
 import random
 import unittest
+import numpy as np
 
-from abc import ABC, abstractmethod
 from torch import nn
 from random import randint as ri
 
 import mypt.code_utils.pytorch_utils as pu
 
+from tests.building_blocks.custom_base_test import CustomModuleBaseTest
 from mypt.building_blocks.linear_blocks.components import BasicLinearBlock
 from mypt.dimensions_analysis.dimension_analyser import DimensionsAnalyser
 from mypt.building_blocks.linear_blocks.fc_blocks import GenericFCBlock, ExponentialFCBlock
 
 
-class FCBlockTestBase(unittest.TestCase):
+class FCBlockTestBase(CustomModuleBaseTest):
     """
     Abstract base class for testing FC block implementations.
     This class provides common test methods but should not be run directly.
@@ -216,7 +216,7 @@ class FCBlockTestBase(unittest.TestCase):
         if not torch.cuda.is_available():
             self.skipTest("CUDA not available")
         
-        for _ in range(5):
+        for _ in range(100):
             # Create a random block
             block = self._generate_random_fc_block()
             
@@ -440,13 +440,14 @@ class TestGenericFCBlock(FCBlockTestBase):
     def test_without_dropout(self):
         super()._test_without_dropout()
 
-
     def test_batch_size_one_handling(self):
         super()._test_batch_size_one_handling()
 
     def test_train_and_eval_modes(self):
         super()._test_train_and_eval_modes()
 
+
+    # tests from the CustomBaseTest class
     def test_to_device(self):
         super()._test_to_device()
 
@@ -454,34 +455,37 @@ class TestGenericFCBlock(FCBlockTestBase):
         super()._test_parameters_access()        
 
     def test_eval_mode(self):
-        for _ in range(5):
+        for _ in range(100):
             block = self._generate_random_fc_block()
-            self._test_eval_mode(block)
+            super()._test_eval_mode(block)
     
     def test_train_mode(self):
-        for _ in range(5):
+        for _ in range(100):
             block = self._generate_random_fc_block()
-            self._test_train_mode(block)
+            super()._test_train_mode(block)
     
     def test_consistent_output_in_eval_mode(self):
-        for _ in range(5):
+        for _ in range(100):
             block = self._generate_random_fc_block()
-            self._test_consistent_output_in_eval_mode(block)
+            input_tensor = torch.randn(random.randint(1, 10), block.in_features)
+            super()._test_consistent_output_in_eval_mode(block, input_tensor)
     
     def test_batch_size_one_in_train_mode(self):
-        for _ in range(5):
+        for _ in range(100):
             block = self._generate_random_fc_block()
-            self._test_batch_size_one_in_train_mode(block)
+            input_tensor = torch.randn(1, block.in_features)
+            super()._test_batch_size_one_in_train_mode(block, input_tensor)
     
     def test_batch_size_one_in_eval_mode(self):
-        for _ in range(5):
+        for _ in range(100):
             block = self._generate_random_fc_block()
-            self._test_batch_size_one_in_eval_mode(block)
+            input_tensor = torch.randn(1, block.in_features)
+            super()._test_batch_size_one_in_eval_mode(block, input_tensor)
     
     def test_named_parameters_length(self):
-        for _ in range(5):
+        for _ in range(100):
             block = self._generate_random_fc_block()
-            self._test_named_parameters_length(block)
+            super()._test_named_parameters_length(block)
 
 
 class TestExponentialFCBlock(FCBlockTestBase):
@@ -565,32 +569,35 @@ class TestExponentialFCBlock(FCBlockTestBase):
         super()._test_parameters_access()        
 
     def test_eval_mode(self):
-        for _ in range(5):
+        for _ in range(100):
             block = self._generate_random_fc_block()
             self._test_eval_mode(block)
     
     def test_train_mode(self):
-        for _ in range(5):
+        for _ in range(100):
             block = self._generate_random_fc_block()
             self._test_train_mode(block)
     
     def test_consistent_output_in_eval_mode(self):
-        for _ in range(5):
+        for _ in range(100):
             block = self._generate_random_fc_block()
-            self._test_consistent_output_in_eval_mode(block)
+            input_tensor = torch.randn(random.randint(1, 10), block.in_features)
+            super()._test_consistent_output_in_eval_mode(block, input_tensor)
     
     def test_batch_size_one_in_train_mode(self):
-        for _ in range(5):
+        for _ in range(100):
             block = self._generate_random_fc_block()
-            self._test_batch_size_one_in_train_mode(block)
+            input_tensor = torch.randn(1, block.in_features)
+            super()._test_batch_size_one_in_train_mode(block, input_tensor)
     
     def test_batch_size_one_in_eval_mode(self):
-        for _ in range(5):
+        for _ in range(100):
             block = self._generate_random_fc_block()
-            self._test_batch_size_one_in_eval_mode(block)
+            input_tensor = torch.randn(1, block.in_features)
+            super()._test_batch_size_one_in_eval_mode(block, input_tensor)
     
     def test_named_parameters_length(self):
-        for _ in range(5):
+        for _ in range(100):
             block = self._generate_random_fc_block()
             self._test_named_parameters_length(block)
 

@@ -9,7 +9,7 @@ class WrapperLikeModuleMixin(nn.Module):
     This Mixin is used to override the most important methods of a the nn.Module class when creating a custom module.
     Methods such as children(), named_children(), modules(), named_modules(), parameters(), named_parameters(), etc. are overridden to return the appropriate values.
     """
-    def __init__(self, inner_model_field_name: str = '_block'):
+    def __init__(self, inner_model_field_name: str):
         super().__init__()
         self._inner_model_field_name = inner_model_field_name
 
@@ -55,12 +55,14 @@ class WrapperLikeModuleMixin(nn.Module):
 
     # the states-related methods
     def train(self, mode: bool = True) -> 'WrapperLikeModuleMixin':
+        self.training = mode
         # assign the wrapped module to its new state
         setattr(self, self._inner_model_field_name, getattr(self, self._inner_model_field_name).train(mode)) 
         # and then return the entire object
         return self
 
     def eval(self) -> 'WrapperLikeModuleMixin':
+        self.training = False
         setattr(self, self._inner_model_field_name, getattr(self, self._inner_model_field_name).eval())
         return self
     
