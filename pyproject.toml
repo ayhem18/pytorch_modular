@@ -32,10 +32,8 @@ include = [
 ]
 
 exclude = [
-  "azure-pipelines",
   ".gitignore",
   ".git",
-  "demo",
 ]
 
 [tool.hatch.build.targets.wheel]
