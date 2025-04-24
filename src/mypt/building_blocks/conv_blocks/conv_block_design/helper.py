@@ -64,13 +64,16 @@ def get_combs_with_rep_range(min_n: int, max_n: int, elements: List[int]) -> Dic
 
 
 
-def get_possible_kernel_combs(min_n: int, max_n: int, max_kernel_size: int) -> List[List[int]]:
+def get_possible_kernel_combs(min_n: int, max_n: int, max_kernel_size: int, min_kernel_size: int) -> List[List[int]]:
     """
     Get all possible kernel combinations for the convolutional block design.
     """
     min_n, max_n = sorted([min_n, max_n])
 
-    ks = [k for k in [3, 5, 7] if k <= max_kernel_size]
+    ks = [k for k in [3, 5, 7] if min_kernel_size <= k <= max_kernel_size]
+    if len(ks) == 0:
+        raise ValueError(f"No kernel sizes in the range {min_kernel_size} to {max_kernel_size}") 
+    
     res_dict = get_combs_with_rep_range(min_n, max_n, ks)
 
     res = []
@@ -179,9 +182,18 @@ def get_input_dim(output_dim: int, conv_reps: List[Dict]) -> List[int]:
 _kernel_size_to_index = {3: 0, 5: 1, 7: 2}
 
 
+def _get_cost_function(block: List[Dict]) -> int:
+    """
+    Get the cost of the block.
+    """
+    n = len(block)
+    return np.mean([conv_rep["kernel_size"] for conv_rep in block]) + np.sqrt(n)
+
+
+
 def _build_base_cases(output_dim: int, min_n: int, max_n: int, memo_cost: List[List[int]], memo_block: List[List[List[int]]]):
     # the first step is to generate all possible kernel combinations
-    kernel_combs = get_possible_kernel_combs(min_n, max_n, max_kernel_size=7) 
+    kernel_combs = get_possible_kernel_combs(min_n, max_n, max_kernel_size=7, min_kernel_size=3) 
 
     # build convolutional blocks
     conv_blocks = [_get_conv_representation(kc) for kc in kernel_combs]
@@ -200,15 +212,118 @@ def _build_base_cases(output_dim: int, min_n: int, max_n: int, memo_cost: List[L
     # no pool case
     for (counts, cb, max_ks) in possible_counts_no_pool:
         for c in counts:
-            memo_cost[c - output_dim][_kernel_size_to_index[max_ks]] = np.nan # some cost function in terms of the block that led to this count
-            memo_block[(c, _kernel_size_to_index[max_ks])] = cb
+            if c - output_dim > len(memo_cost):
+                continue
+
+            cost = _get_cost_function(cb) 
+            # if the cost is already computed, update it if the new cost is lower
+            if memo_cost[c - output_dim][_kernel_size_to_index[max_ks]] != -1: 
+                # check if the cost needs to be updated
+                if cost < memo_cost[c - output_dim][_kernel_size_to_index[max_ks]]:
+                    memo_cost[c - output_dim][_kernel_size_to_index[max_ks]] = cost
+                    memo_block[(c, _kernel_size_to_index[max_ks])] = cb
+
+            else:
+                memo_cost[c - output_dim][_kernel_size_to_index[max_ks]] = cost
+                memo_block[(c, _kernel_size_to_index[max_ks])] = cb
 
     # pool case
     for (counts, cb, max_ks) in possible_counts_pool:
         for c in counts:
-            memo_cost[c - output_dim][_kernel_size_to_index[max_ks]] = np.nan # some cost function in terms of the block that led to this count 
-            memo_block[(c, _kernel_size_to_index[max_ks])] = cb
+            if c - output_dim > len(memo_cost):
+                continue
 
+            cost = _get_cost_function(cb)
+            # if the cost is already computed, update it if the new cost is lower
+            if memo_cost[c - output_dim][_kernel_size_to_index[max_ks]] != -1: 
+                # check if the cost needs to be updated
+                if cost < memo_cost[c - output_dim][_kernel_size_to_index[max_ks]]:
+                    memo_cost[c - output_dim][_kernel_size_to_index[max_ks]] = cost
+                    memo_block[(c, _kernel_size_to_index[max_ks])] = cb
+            else:
+                memo_cost[c - output_dim][_kernel_size_to_index[max_ks]] = cost
+                memo_block[(c, _kernel_size_to_index[max_ks])] = cb
+
+
+
+def dp_function(input_dim: int, output_dim: int, 
+                current_max_ks:int,
+                min_n: int, max_n: int, 
+                memo_cost: List[List[int]], 
+                memo_block: Dict):
+    
+    if memo_cost[input_dim - output_dim][_kernel_size_to_index[current_max_ks]] != -1:
+        return memo_cost[input_dim - output_dim], memo_block[input_dim - output_dim]
+
+    # now we actually need to compute stuff
+    kernel_combs = get_possible_kernel_combs(min_n=min_n, max_n=max_n, max_kernel_size=current_max_ks, min_kernel_size=3)   
+
+    # build convolutional blocks
+    conv_blocks = [_get_conv_representation(kc) for kc in kernel_combs]
+    
+    # limit the max pooling kernel size to 2
+    conv_pool_blocks = [cb + [_get_pool_representation([2])] for cb in conv_blocks]
+
+    possible_counts_no_pool = [(get_output_dim(input_dim, cb), cb, min(ks)) for cb, ks in zip(conv_blocks, kernel_combs)]
+
+    # we need to do the same for the pool case
+    possible_counts_pool = [(get_output_dim(input_dim, cb), cb, min(ks)) for cb, ks in zip(conv_pool_blocks, kernel_combs)]
+
+
+
+    best_cost = float('inf') 
+    best_block = None
+
+    # pool case
+    for (count, cb, min_ks) in possible_counts_pool:
+        if count - output_dim < 0 or count - output_dim > len(memo_cost):
+            # this means that applying the block leads to a negative dimension
+            continue 
+
+
+        possible_next_max_ks = [ks for ks in _kernel_size_to_index.keys() if ks <= min_ks]
+
+        for nks in possible_next_max_ks:
+            dp_function(count, output_dim, nks, min_n, max_n, memo_cost, memo_block) 
+            # get the cost of the count and its best block
+            rec_block = memo_block[(count, _kernel_size_to_index[nks])]
+
+            # compute the cost by adding the current block to the recursive block
+            new_block = cb + rec_block 
+            cost = _get_cost_function(new_block)    
+
+            if cost < best_cost:
+                best_cost = cost
+                best_block = new_block
+
+
+    for (count, cb, min_ks) in possible_counts_no_pool:
+        if count - output_dim < 0 or count - output_dim > len(memo_cost):
+            # this means that applying the block leads to a negative dimension
+            continue 
+
+        possible_next_max_ks = [ks for ks in _kernel_size_to_index.keys() if ks <= min_ks]
+
+        for nks in possible_next_max_ks:
+            dp_function(count, output_dim, nks, min_n, max_n, memo_cost, memo_block) 
+
+            # get the cost of the count and its best block
+            rec_block = memo_block[(count, _kernel_size_to_index[min_ks])]
+
+            # compute the cost by adding the current block to the recursive block
+            new_block = cb + rec_block 
+            cost = _get_cost_function(new_block)    
+
+            if cost < best_cost:
+                best_cost = cost
+                best_block = new_block
+
+
+    # set the best cost and block for the current input_dim - output_dim
+    memo_cost[input_dim - output_dim][_kernel_size_to_index[current_max_ks]] = best_cost 
+    memo_block[(input_dim, _kernel_size_to_index[current_max_ks])] = best_block
+
+    return best_cost, best_block
 
 
 def main_function(input_dim: int, output_dim: int, min_n: int, max_n: int, 
@@ -222,7 +337,13 @@ def main_function(input_dim: int, output_dim: int, min_n: int, max_n: int,
 
     _build_base_cases(output_dim, min_n, max_n, memo_cost, memo_block)
 
+    for max_ks in _kernel_size_to_index.keys():
+        dp_function(input_dim, output_dim, max_ks, min_n, max_n, memo_cost, memo_block)
 
+    # find the best block
+    best_cost_index = np.argmin(memo_cost[input_dim - output_dim])
+    best_block = memo_block[(input_dim, best_cost_index)]
 
+    return best_block
 
 
