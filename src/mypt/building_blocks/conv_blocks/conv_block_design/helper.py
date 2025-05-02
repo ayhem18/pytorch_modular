@@ -3,7 +3,8 @@ Helper functions for the convolutional block design.
 """
 
 import os
-from typing import Dict, List, Optional, Tuple
+import pickle
+from typing import Dict, List, Optional, Tuple, Set
 
 import numpy as np
 
@@ -16,7 +17,7 @@ _current_dir = _script_dir
 while 'package_data' not in os.listdir(_current_dir):
     _current_dir = os.path.dirname(_current_dir)
 
-_DATA_FOLDER = dirf.process_path(os.path.join(_current_dir, 'conv_block_design'), dir_ok=True, file_ok=False, must_exist=False)
+_DATA_FOLDER = dirf.process_path(os.path.join(_current_dir, 'package_data', 'conv_block_design'), dir_ok=True, file_ok=False, must_exist=False)
 
 
 
@@ -72,9 +73,34 @@ def get_combs_with_rep_range(min_n: int, max_n: int, elements: List[int]) -> Dic
 def get_possible_kernel_combs(min_n: int, max_n: int, max_kernel_size: int, min_kernel_size: int) -> List[List[int]]:
     """
     Get all possible kernel combinations for the convolutional block design.
+    Results are cached in a file to avoid recomputation for the same parameters.
+    
+    Args:
+        min_n: Minimum number of conv layers
+        max_n: Maximum number of conv layers
+        max_kernel_size: Maximum kernel size to consider
+        min_kernel_size: Minimum kernel size to consider
+        
+    Returns:
+        List of possible kernel size combinations
     """
     min_n, max_n = sorted([min_n, max_n])
-
+    
+    # Create a filename for caching - changed to .pkl extension
+    cache_filename = f"{min_n}_{max_n}_{min_kernel_size}_{max_kernel_size}.pkl"
+    cache_path = os.path.join(_DATA_FOLDER, cache_filename)
+    
+    # Check if the cache file exists
+    if os.path.exists(cache_path):
+        try:
+            # Load the cached results using pickle
+            with open(cache_path, 'rb') as f:
+                return pickle.load(f)
+        except Exception as e:
+            print(f"Warning: Could not load cached kernel combinations: {e}")
+            # If loading fails, continue with computation
+    
+    # Compute the kernel combinations
     ks = [k for k in [3, 5, 7] if min_kernel_size <= k <= max_kernel_size]
 
     if len(ks) == 0:
@@ -83,10 +109,17 @@ def get_possible_kernel_combs(min_n: int, max_n: int, max_kernel_size: int, min_
     res_dict = get_combs_with_rep_range(min_n, max_n, ks)
 
     res = []
-
     for _, combs in res_dict.items():
         res.extend(combs)
-
+        
+        
+    # Cache the results using pickle
+    try:
+        with open(cache_path, 'wb') as f:
+            pickle.dump(res, f)
+    except Exception as e:
+        print(f"Warning: Could not save kernel combinations to cache: {e}")
+    
     return res
 
 
@@ -423,6 +456,49 @@ def main2():
     for v in res:
         print(v)
 
+
+def compute_all_possible_inputs(min_n: int, max_n: int, output_dim: int, res: Set[int], 
+                               memo: Set[int], num_blocks: int):
+    """
+    Recursively compute all possible input dimensions that could result in the given output dimension
+    when applying a series of convolutional blocks.
+    
+    Args:
+        min_n: Minimum number of conv layers in a block
+        max_n: Maximum number of conv layers in a block
+        output_dim: The target output dimension
+        res: Set to collect all possible input dimensions
+        memo: Set to track dimensions we've already processed
+        num_blocks: Number of blocks to consider applying
+    """
+    # If we've already processed this output_dim, don't repeat the work
+    if output_dim in memo:
+        return
+
+    # Mark this output_dim as processed and add it to the results
+    memo.add(output_dim)
+    res.add(output_dim)
+
+    # nothing to be done with 0 blocks
+    if num_blocks == 0:
+        return
+    
+    # Get all possible kernel combinations for the given constraints
+    kernel_combs = get_possible_kernel_combs(min_n, max_n, max_kernel_size=7, min_kernel_size=3)
+    
+    # For each kernel combination, create a block representation
+    conv_blocks = [_get_conv_representation(kc) for kc in kernel_combs]
+    
+    # Add pooling to each block (with kernel size 2)
+    conv_pool_blocks = [cb + _get_pool_representation([(2, 2)]) for cb in conv_blocks]
+    
+    # For each possible block, compute the input dimension that would result in output_dim
+    for block in conv_pool_blocks:
+        potential_inputs = get_input_dim(output_dim, block)
+
+        # For each potential input, continue the recursion
+        for input_dim in potential_inputs:
+            compute_all_possible_inputs(min_n, max_n, input_dim, res, memo, num_blocks - 1)
 
 
 if __name__ == "__main__":

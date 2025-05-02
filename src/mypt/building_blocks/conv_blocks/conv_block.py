@@ -161,6 +161,9 @@ class BasicConvBlock(WrapperLikeModuleMixin):
         self._activation = activation
         self._activation_params = activation_params
 
+        # define self._block outside of the if else block for clarity
+        self._block: torch.nn.Sequential = None
+
         if activation_after_each_layer:
             self._block = self.__build_block_activation_after_each_layer(
                 channels, kernel_sizes, strides, paddings, use_bn, activation, activation_params, final_bn_layer) 
