@@ -3,7 +3,7 @@ import random
 
 from tqdm import tqdm
 
-from mypt.building_blocks.conv_blocks.conv_block_design.helper import (
+from mypt.building_blocks.conv_blocks.conv_block_design.contracting_helper import (
     main_function, 
     get_output_dim,
     compute_all_possible_inputs

@@ -194,7 +194,7 @@ def adaptive_pool2d_output(input_shape: Union[four_int_tuple, three_int_tuple],
         raise TypeError("The 'pool_layer' is expected to a be an ADAPTIVE pooling layer \n"
                         f"Found the type: {type(pool_layer)}")
 
-    batch, channels, height, width = (None,) * 4
+    batch, channels, _, _ = (None,) * 4
     if len(input_shape) == 4:
         batch, channels, _, _ = input_shape
     else:
@@ -232,7 +232,6 @@ def flatten_output(input_shape: Tuple, flatten_layer: nn.Flatten) -> int:
     after_flattened = input_shape[end + 1] if end + 1 < len(input_shape) else tuple()
 
     return before_flattened + flattened + after_flattened
-
 
 
 # Linear layer
