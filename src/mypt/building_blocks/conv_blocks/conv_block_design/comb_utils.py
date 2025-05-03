@@ -19,7 +19,7 @@ DATA_FOLDER = dirf.process_path(os.path.join(_current_dir, 'package_data', 'conv
                                 dir_ok=True, file_ok=False, must_exist=False)
 
 
-def get_combinations_with_replacement(elements: List[int], n: int, memo: Optional[Dict] = None) -> List[Tuple[int, ...]]:
+def get_combinations_with_replacement(elements: List[int], n: int, reverse:bool, memo: Optional[Dict] = None) -> List[Tuple[int, ...]]:
     """
     Get all combinations with replacement of the elements in the list.
     
@@ -45,7 +45,7 @@ def get_combinations_with_replacement(elements: List[int], n: int, memo: Optiona
     if n in memo:
         return memo[n]
 
-    res_n_minus_1 = get_combinations_with_replacement(elements, n - 1, memo) 
+    res_n_minus_1 = get_combinations_with_replacement(elements, n - 1, reverse, memo) 
 
     res_n = []
 
@@ -53,12 +53,12 @@ def get_combinations_with_replacement(elements: List[int], n: int, memo: Optiona
         add_e = [r + (e,) for r in res_n_minus_1]
         res_n.extend(add_e)
 
-    res_n = list(set(tuple(sorted(l, reverse=True)) for l in res_n))
+    res_n = list(set(tuple(sorted(l, reverse=reverse)) for l in res_n))
     memo[n] = res_n
     return res_n
 
 
-def get_combs_with_rep_range(min_n: int, max_n: int, elements: List[int]) -> Dict[int, List[Tuple[int, ...]]]:
+def get_combs_with_rep_range(min_n: int, max_n: int, elements: List[int], reverse: bool) -> Dict[int, List[Tuple[int, ...]]]:
     """
     Get all possible combinations with replacement for a range of sizes.
     
@@ -66,7 +66,7 @@ def get_combs_with_rep_range(min_n: int, max_n: int, elements: List[int]) -> Dic
         min_n: Minimum number of elements in each combination
         max_n: Maximum number of elements in each combination
         elements: List of elements to create combinations from
-        
+        reverse: Whether to reverse the order of the elements
     Returns:
         Dictionary mapping size to list of combinations of that size
     """
@@ -75,7 +75,7 @@ def get_combs_with_rep_range(min_n: int, max_n: int, elements: List[int]) -> Dic
     memo = {}
 
     for i in range(min_n, max_n + 1):
-        get_combinations_with_replacement(elements, i, memo)
+        get_combinations_with_replacement(elements, i, reverse, memo)
 
     items = list(memo.items())
     for k, v in items:
@@ -85,7 +85,7 @@ def get_combs_with_rep_range(min_n: int, max_n: int, elements: List[int]) -> Dic
     return memo
 
 
-def get_possible_kernel_combs(min_n: int, max_n: int, max_kernel_size: int, min_kernel_size: int) -> List[List[int]]:
+def get_possible_kernel_combs(min_n: int, max_n: int, max_kernel_size: int, min_kernel_size: int, reverse: bool) -> List[List[int]]:
     """
     Get all possible kernel combinations for the convolutional block design.
     Results are cached in a file to avoid recomputation for the same parameters.
@@ -102,7 +102,11 @@ def get_possible_kernel_combs(min_n: int, max_n: int, max_kernel_size: int, min_
     min_n, max_n = sorted([min_n, max_n])
     
     # Create a filename for caching
-    cache_filename = f"{min_n}_{max_n}_{min_kernel_size}_{max_kernel_size}.pkl"
+    if reverse:
+        cache_filename = f"{min_n}_{max_n}_{min_kernel_size}_{max_kernel_size}_reverse.pkl"
+    else:
+        cache_filename = f"{min_n}_{max_n}_{min_kernel_size}_{max_kernel_size}.pkl"
+
     cache_path = os.path.join(DATA_FOLDER, cache_filename)
     
     # Check if the cache file exists
@@ -121,7 +125,7 @@ def get_possible_kernel_combs(min_n: int, max_n: int, max_kernel_size: int, min_
     if len(ks) == 0:
         raise ValueError(f"No kernel sizes in the range {min_kernel_size} to {max_kernel_size}") 
     
-    res_dict = get_combs_with_rep_range(min_n, max_n, ks)
+    res_dict = get_combs_with_rep_range(min_n, max_n, ks, reverse)
 
     res = []
     for _, combs in res_dict.items():

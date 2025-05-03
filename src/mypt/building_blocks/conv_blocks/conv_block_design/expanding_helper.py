@@ -4,9 +4,7 @@ This module finds transpose convolution blocks that expand dimensions from input
 where input_dim is smaller than output_dim.
 """
 
-import os
-from typing import Dict, List, Optional, Tuple, Set
-import numpy as np
+from typing import Dict, List, Optional, Set
 
 from mypt.building_blocks.conv_blocks.conv_block_design.comb_utils import (
     get_possible_kernel_combs,
@@ -15,20 +13,6 @@ from mypt.building_blocks.conv_blocks.conv_block_design.comb_utils import (
 # Mapping of kernel sizes to indices and costs
 _kernel_size_to_index = {3: 0, 5: 1, 7: 2}
 kernel_size_to_cost = {3: 0.5, 5: 2, 7: 6}
-
-
-def _get_transpose_conv_representation(kernel_comb: List[Tuple[int, int, int]]) -> List[Dict]:
-    """
-    Get the representation of the kernel combination for transpose convolutions.
-    
-    Args:
-        kernel_comb: List of tuples representing kernel sizes, strides, and paddings
-        
-    Returns:
-        List of dicts representing transpose convolution layers
-    """
-    return [{"type": "tconv", "kernel_size": ks, "stride": stride, "output_padding": output_padding} 
-            for ks, stride, output_padding in kernel_comb]
 
 
 
@@ -43,7 +27,7 @@ def _get_output_dim(input_dim: int, tconv_rep: Dict) -> int:
     Returns:
         Output dimension
     """
-    if tconv_rep["type"] !=  "pool":
+    if tconv_rep["type"] !=  "tconv":
         raise ValueError(f"Invalid transpose convolution representation: {tconv_rep}")
 
     ks = tconv_rep["kernel_size"]   
@@ -53,8 +37,25 @@ def _get_output_dim(input_dim: int, tconv_rep: Dict) -> int:
     return (input_dim - 1) * stride + ks + output_padding 
 
 
+def get_output_dim(input_dim: int, tconv_reps: List[Dict]) -> int:
+    """
+    Get the output dimension after applying a sequence of transpose convolution layers.
+    
+    Args:
+        input_dim: Input dimension
+        tconv_reps: List of dicts representing transpose convolution layers
+        
+    Returns:
+        Output dimension
+    """
+    res = input_dim
+    for tconv_rep in tconv_reps:
+        res = _get_output_dim(res, tconv_rep)
+        
+    return res
 
-def _get_input_dim(output_dim: int, tconv_rep: Dict) -> Tuple[int, int]:
+
+def _get_input_dim(output_dim: int, tconv_rep: Dict) -> Optional[int]:
     """
     Get the possible input dimensions that would result in the given output dimension
     after applying a transpose convolution layer.
@@ -82,24 +83,6 @@ def _get_input_dim(output_dim: int, tconv_rep: Dict) -> Tuple[int, int]:
     return None
 
 
-def get_output_dim(input_dim: int, tconv_reps: List[Dict]) -> int:
-    """
-    Get the output dimension after applying a sequence of transpose convolution layers.
-    
-    Args:
-        input_dim: Input dimension
-        tconv_reps: List of dicts representing transpose convolution layers
-        
-    Returns:
-        Output dimension
-    """
-    res = input_dim
-    for tconv_rep in tconv_reps:
-        res = _get_output_dim(res, tconv_rep)
-        
-    return res
-
-
 def get_input_dim(output_dim: int, tconv_reps: List[Dict]) -> Optional[int]:
     """
     Get the possible input dimensions that would result in the given output dimension
@@ -124,6 +107,13 @@ def get_input_dim(output_dim: int, tconv_reps: List[Dict]) -> Optional[int]:
     return res
 
 
+def _get_single_transpose_conv_rep(ks: int, stride: int, output_padding: int) -> Dict:
+    """
+    Get the representation of a single transpose convolution layer.
+    """
+    return {"type": "tconv", "kernel_size": ks, "stride": stride, "output_padding": output_padding}
+
+
 def _cost_function(block: List[Dict]) -> float:
     """
     Calculate the cost of a block based on kernel sizes.
@@ -138,7 +128,64 @@ def _cost_function(block: List[Dict]) -> float:
     return len([b for b in block if b["stride"] > 1])
 
 
-def dp_function(input_dim: int, 
+def _build_base_cases(input_dim: int, output_dim: int, min_n: int, max_n: int, memo_cost: List[List], memo_block: Dict):
+    """
+    Build the base cases for the dynamic programming function.
+    """
+    # Get all possible kernel combinations for the given constraints
+    kernel_combs = get_possible_kernel_combs(min_n, max_n, max_kernel_size=7, min_kernel_size=3, reverse=False)
+
+    # each element in kernel_combs is a list (with number of elements between min_n and max_n)
+    # for each elements in these lists, add the stride 1 and output padding 0
+    tconvs_no_stride = [[_get_single_transpose_conv_rep(ks, 1, 0) for ks in kc] for kc in kernel_combs]
+    
+    # add a tranpose convolution with stride 2 and output padding 0
+    tconvs_op0 = [b + [{"type": "tconv", "kernel_size": 2, "stride": 2, "output_padding": 0}] for b in tconvs_no_stride]
+
+    # add a tranpose convolution with stride 2 and output padding 1
+    tconvs_op1 = [b + [{"type": "tconv", "kernel_size": 2, "stride": 2, "output_padding": 1}] for b in tconvs_no_stride]
+
+    tconvs = tconvs_op0 + tconvs_op1
+
+    possible_counts_unfiltered = [get_input_dim(output_dim, tconv) for tconv in tconvs]
+
+    # filter None values and their corresponding tranpose convolution blocks 
+    possible_counts = [i for i in possible_counts_unfiltered if i is not None]
+    tconvs = [tconv for tconv, i in zip(tconvs, possible_counts_unfiltered) if i is not None]
+
+
+    # time to populate the memo    
+    for count, tconv in zip(possible_counts, tconvs):
+        if count < input_dim:
+            continue 
+
+        # find the smallest kernel size in the tconv
+        min_ks = min([tconv["kernel_size"] for tconv in tconv])
+
+        cost = _cost_function(tconv)
+
+        for ks in _kernel_size_to_index.keys():
+            if ks > min_ks:
+                continue
+
+            # if the cost is already computed, update it if the new cost is lower
+            if memo_cost[count - input_dim][_kernel_size_to_index[ks]] != -1: 
+                # check if the cost needs to be updated
+                if cost < memo_cost[count - input_dim][_kernel_size_to_index[ks]]:
+                    memo_cost[count - input_dim][_kernel_size_to_index[ks]] = cost
+                    memo_block[(count, _kernel_size_to_index[ks])] = tconv
+            else:
+                memo_cost[count - input_dim][_kernel_size_to_index[ks]] = cost
+                memo_block[(count, _kernel_size_to_index[ks])] = tconv
+
+    for i in range(3):
+        memo_cost[0][i] = 0
+        memo_block[(input_dim, i)] = []
+
+
+
+def dp_transpose_conv_block(
+                input_dim: int, 
                 output_dim: int, 
                 current_min_ks: int, 
                 min_n: int, 
@@ -161,52 +208,46 @@ def dp_function(input_dim: int,
     if memo_cost[output_dim - input_dim][_kernel_size_to_index[current_min_ks]] != -1:
         return memo_cost[output_dim - input_dim][_kernel_size_to_index[current_min_ks]]
 
-    # Base case: if input_dim equals output_dim, no need for any block  
-    if input_dim == output_dim:
-        memo_cost[0][_kernel_size_to_index[current_min_ks]] = 0
-        memo_block[(input_dim, _kernel_size_to_index[current_min_ks])] = []
-        return 0
-
     if output_dim < input_dim:
         memo_block[(input_dim, _kernel_size_to_index[current_min_ks])] = None
         return None
 
     # Generate kernel combinations with kernel sizes <= current_max_ks
-    kernel_combs = get_possible_kernel_combs(min_n, max_n, current_min_ks, 3)
-        
-    # Build transpose convolution blocks
-    tconv_blocks = [_get_transpose_conv_representation([kc, 1, 0]) for kc in kernel_combs]
-
+    kernel_combs = get_possible_kernel_combs(min_n, max_n, current_min_ks, 3, reverse=False)
+    
+    # each element in kernel_combs is a list (with number of elements between min_n and max_n)
+    # for each elements in these lists, add the stride 1 and output padding 0
+    tconvs_no_stride = [[_get_single_transpose_conv_rep(ks, 1, 0) for ks in kc] for kc in kernel_combs]
+    
     # add a tranpose convolution with stride 2 and output padding 0
-    tconv_blocks_op0 = [b + [{"type": "tconv", "kernel_size": 2, "stride": 2, "output_padding": 0}] for b in tconv_blocks]
+    tconvs_op0 = [b + [{"type": "tconv", "kernel_size": 2, "stride": 2, "output_padding": 0}] for b in tconvs_no_stride]
 
-    t_conv_blocks_op1 = [b + [{"type": "tconv", "kernel_size": 2, "stride": 2, "output_padding": 1}] for b in tconv_blocks]
+    # add a tranpose convolution with stride 2 and output padding 1
+    tconvs_op1 = [b + [{"type": "tconv", "kernel_size": 2, "stride": 2, "output_padding": 1}] for b in tconvs_no_stride]
 
-    tconv_blocks = tconv_blocks_op0 + t_conv_blocks_op1 
+    tconvs = tconvs_op0 + tconvs_op1
+
 
     best_cost = float('inf')
     best_block = None
 
+    kernel_combs_duplicated = kernel_combs + kernel_combs
+
+    assert len(tconvs) == len(kernel_combs_duplicated), "make sure the number of transpose convolution blocks is the same as the number of kernel combinations"
+
     # Try each block and find the best one
-    for block, ks in zip(tconv_blocks, kernel_combs):
+    for block, block_kernel_sizes in zip(tconvs, kernel_combs_duplicated):
         expanded_dim = get_output_dim(input_dim, block)
         
-        # If the expanded dimension matches the target, this is a solution
-        if expanded_dim == output_dim:
-            cost = _cost_function(block)
-            if cost < best_cost:
-                best_cost = cost
-                best_block = block
-        # If we've expanded beyond the target, not a valid solution
-        elif expanded_dim > output_dim:
+        if expanded_dim > output_dim:
             continue
 
-        max_ks = max(ks)
+        max_ks = max(block_kernel_sizes)
         possible_next_max_ks = [k for k in _kernel_size_to_index.keys() if k >= max_ks]
         
         for nks in possible_next_max_ks:
             # Recursively try to expand from the current expanded dimension to the target
-            dp_function(expanded_dim, output_dim, nks, min_n, max_n, memo_cost, memo_block)
+            dp_transpose_conv_block(expanded_dim, output_dim, nks, min_n, max_n, memo_cost, memo_block)
             
             rec_cost_idx = output_dim - expanded_dim
             
@@ -240,7 +281,23 @@ def dp_function(input_dim: int,
     return best_cost
 
 
-def main_function(input_dim: int, output_dim: int, min_n: int, max_n: int,
+def _input_validation(input_dim: int, output_dim: int, min_n: int, max_n: int):
+    minimal_block = [{"type": "tconv", "kernel_size": 3, "stride": 1, "output_padding": 0}, {"type": "tconv", "kernel_size": 3, "stride": 2, "output_padding": 0}]    
+
+    if get_output_dim(input_dim, minimal_block) > output_dim:
+        raise ValueError("Applying the minimal tranpose convolution block leads to a dimension larger than the output dimension. The input dimension is too large.")
+        
+    if input_dim <= 0 or output_dim <= 0:
+        raise ValueError("For expanding_helper, input_dim and output_dim must be positive")
+
+    if min_n <= 0 or max_n <= 0:
+        raise ValueError("For expanding_helper, min_n and max_n must be positive")
+
+    if min_n > max_n:
+        raise ValueError("For expanding_helper, min_n must be less than max_n")
+
+
+def best_transpose_conv_block(input_dim: int, output_dim: int, min_n: int, max_n: int,
                   memo_cost: Optional[List[List[int]]] = None,
                   memo_block: Optional[Dict] = None):
     """
@@ -257,18 +314,18 @@ def main_function(input_dim: int, output_dim: int, min_n: int, max_n: int,
     Returns:
         Tuple of (best_block, best_cost)
     """
-    if input_dim >= output_dim:
-        raise ValueError("For expanding_helper, input_dim must be smaller than output_dim")
-    
+    _input_validation(input_dim, output_dim, min_n, max_n)
+
     # Initialize memoization tables
     if memo_cost is None:
         memo_cost = [[-1, -1, -1] for _ in range(output_dim - input_dim + 1)]
     
     if memo_block is None:
         memo_block = {}
-    
-    # Try all starting kernel sizes
-    dp_function(input_dim, output_dim, 3, min_n, max_n, memo_cost, memo_block)
+
+    _build_base_cases(input_dim, output_dim, min_n, max_n, memo_cost, memo_block)
+
+    dp_transpose_conv_block(input_dim, output_dim, 3, min_n, max_n, memo_cost, memo_block)
     
     # Find the best block across all kernel sizes
     best_block = None
@@ -285,9 +342,11 @@ def main_function(input_dim: int, output_dim: int, min_n: int, max_n: int,
     return best_block, best_cost
 
 
-def compute_all_possible_outputs(min_n: int, 
+
+def _compute_all_possible_inputs(min_n: int, 
                                 max_n: int, 
-                                input_dim: int, 
+                                output_dim: int,
+                                min_threshold: int, 
                                 res: Set[int],
                                 memo: Set[int], 
                                 num_blocks: int):
@@ -303,38 +362,51 @@ def compute_all_possible_outputs(min_n: int,
         memo: Set to track dimensions we've already processed
         num_blocks: Number of blocks to consider applying
     """
-    # If we've already processed this input_dim, don't repeat the work
-    if input_dim in memo:
+    # If we've already processed this output_dim, don't repeat the work
+    if output_dim in memo or output_dim < min_threshold:
         return
     
-    # Mark this input_dim as processed and add it to the results
-    memo.add(input_dim)
-    res.add(input_dim)
+    # Mark this output_dim as processed and add it to the results
+    memo.add(output_dim)
+    res.add(output_dim)
     
     # Nothing to be done with 0 blocks
     if num_blocks == 0:
         return
     
     # Get all possible kernel combinations for the given constraints
-    kernel_combs = get_possible_kernel_combs(min_n, max_n, max_kernel_size=7, min_kernel_size=3)
+    kernel_combs = get_possible_kernel_combs(min_n, max_n, max_kernel_size=7, min_kernel_size=3, reverse=False)
     
-    # For each kernel combination, create a block representation
-    tconv_blocks = [_get_transpose_conv_representation(kc) for kc in kernel_combs]
+    # each element in kernel_combs is a list (with number of elements between min_n and max_n)
+    # for each elements in these lists, add the stride 1 and output padding 0
+    tconvs_no_stride = [[_get_single_transpose_conv_rep(ks, 1, 0) for ks in kc] for kc in kernel_combs]
     
     # add a tranpose convolution with stride 2 and output padding 0
-    tconv_blocks_op0 = [b + [{"type": "tconv", "kernel_size": 2, "stride": 2, "output_padding": 0}] for b in tconv_blocks]
+    tconvs_op0 = [b + [{"type": "tconv", "kernel_size": 2, "stride": 2, "output_padding": 0}] for b in tconvs_no_stride]
 
-    t_conv_blocks_op1 = [b + [{"type": "tconv", "kernel_size": 2, "stride": 2, "output_padding": 1}] for b in tconv_blocks]
+    # add a tranpose convolution with stride 2 and output padding 1
+    tconvs_op1 = [b + [{"type": "tconv", "kernel_size": 2, "stride": 2, "output_padding": 1}] for b in tconvs_no_stride]
 
-    tconv_blocks = tconv_blocks_op0 + t_conv_blocks_op1 
+    tconvs = tconvs_op0 + tconvs_op1
 
-
+ 
     # For each possible block, compute the output dimension
-    for block in tconv_blocks:
-        output_dim = get_output_dim(input_dim, block)
+    for block in tconvs:
+        res_output_dim = get_input_dim(output_dim, block)
         
-        if output_dim is None:
+        if res_output_dim is None:
             continue
 
         # Continue the recursion with this output as the new input
-        compute_all_possible_outputs(min_n, max_n, output_dim, res, memo, num_blocks - 1) 
+        _compute_all_possible_inputs(min_n, max_n, res_output_dim, min_threshold, res, memo, num_blocks - 1)  
+
+
+
+def compute_all_possible_inputs(min_n: int, 
+                                max_n: int, 
+                                output_dim: int, 
+                                res: Set[int],
+                                memo: Set[int], 
+                                num_blocks: int):
+    
+    _compute_all_possible_inputs(min_n, max_n, output_dim, 0, res, memo, num_blocks)   

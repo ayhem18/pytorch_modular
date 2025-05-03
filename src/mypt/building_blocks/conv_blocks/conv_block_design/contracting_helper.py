@@ -114,7 +114,7 @@ def _build_base_cases(output_dim: int,
                       pool_layer_params: Tuple[int, int]):
 
     # the first step is to generate all possible kernel combinations
-    kernel_combs = get_possible_kernel_combs(min_n, max_n, max_kernel_size=7, min_kernel_size=3) 
+    kernel_combs = get_possible_kernel_combs(min_n, max_n, max_kernel_size=7, min_kernel_size=3, reverse=True) 
 
     # build convolutional blocks
     conv_blocks = [_get_conv_representation(kc) for kc in kernel_combs]
@@ -165,7 +165,7 @@ def best_conv_block_dp(input_dim: int,
         return memo_cost[input_dim - output_dim][_kernel_size_to_index[current_max_ks]], memo_block[(input_dim, _kernel_size_to_index[current_max_ks])]
 
     # now we actually need to compute stuff
-    kernel_combs = get_possible_kernel_combs(min_n=min_n, max_n=max_n, max_kernel_size=current_max_ks, min_kernel_size=3)   
+    kernel_combs = get_possible_kernel_combs(min_n=min_n, max_n=max_n, max_kernel_size=current_max_ks, min_kernel_size=3, reverse=True)   
 
     # build convolutional blocks
     conv_blocks = [_get_conv_representation(kc) for kc in kernel_combs]
@@ -188,7 +188,7 @@ def best_conv_block_dp(input_dim: int,
         possible_next_max_ks = [ks for ks in _kernel_size_to_index.keys() if ks <= min_ks]
 
         for nks in possible_next_max_ks:
-            best_conv_block_dp(count, output_dim, nks, min_n, max_n, memo_cost, memo_block) 
+            best_conv_block_dp(count, output_dim, nks, min_n, max_n, memo_cost, memo_block, pool_layer_params) 
             # get the cost of the count and its best block
             rec_block = memo_block[(count, _kernel_size_to_index[nks])]
             if rec_block is None:
@@ -215,6 +215,25 @@ def best_conv_block_dp(input_dim: int,
     return best_cost, best_block
 
 
+def _input_validation(input_dim: int, output_dim: int, min_n: int, max_n: int):
+    if input_dim <= 0 or output_dim <= 0:
+        raise ValueError("For expanding_helper, input_dim and output_dim must be positive")
+
+    # the first step is to make sure the output_dim can be reached by applying at least one block
+    minimal_block = [{"type": "conv", "kernel_size": 3, "stride": 1}, {"type": "pool", "kernel_size": 2, "stride": 2}]    
+
+    if get_output_dim(input_dim, minimal_block) < output_dim:
+        raise ValueError("Applying the minimal block leads to a dimension smaller than the output dimension. The output dimension is too small.")
+
+
+    if min_n <= 0 or max_n <= 0:
+        raise ValueError("For contracting_helper, min_n and max_n must be positive")
+
+    if min_n > max_n:
+        raise ValueError("For contracting_helper, min_n must be less than max_n")
+
+
+
 def best_conv_block(input_dim: int, 
                     output_dim: int, 
                     min_n: int, 
@@ -222,23 +241,17 @@ def best_conv_block(input_dim: int,
                     memo_cost: Optional[List[List[int]]] = None, 
                     memo_block: Optional[Dict] = None,
                     pool_layer_params: Tuple[int, int] = (2, 2)):
-   
+    _input_validation(input_dim, output_dim, min_n, max_n)
+
     if memo_cost is None:
         memo_cost = [[-1, -1, -1] for _ in range(output_dim, input_dim + 1)]
 
     if memo_block is None:
         memo_block = {}
 
-    # the first step is to make sure the output_dim can be reached by applying at least one block
-
-    minimal_block = [{"type": "conv", "kernel_size": 3, "stride": 1}, {"type": "pool", "kernel_size": 2, "stride": 2}]    
-
-    if get_output_dim(input_dim, minimal_block) < output_dim:
-        raise ValueError("Applying the minimal block leads to a dimension smaller than the output dimension. The output dimension is too small.")
-
     _build_base_cases(output_dim, min_n, max_n, memo_cost, memo_block, pool_layer_params)
 
-    best_conv_block_dp(input_dim, output_dim, 7, min_n, max_n, memo_cost, memo_block, pool_layer_params )
+    best_conv_block_dp(input_dim, output_dim, 7, min_n, max_n, memo_cost, memo_block, pool_layer_params)
 
     # find the best block
     best_block = memo_block[(input_dim, 2)] 
@@ -279,7 +292,7 @@ def compute_all_possible_inputs(min_n: int, max_n: int, output_dim: int, res: Se
         return
     
     # Get all possible kernel combinations for the given constraints
-    kernel_combs = get_possible_kernel_combs(min_n, max_n, max_kernel_size=7, min_kernel_size=3)
+    kernel_combs = get_possible_kernel_combs(min_n, max_n, max_kernel_size=7, min_kernel_size=3, reverse=True)
     
     # For each kernel combination, create a block representation
     conv_blocks = [_get_conv_representation(kc) for kc in kernel_combs]
