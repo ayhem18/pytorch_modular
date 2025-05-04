@@ -152,6 +152,10 @@ def _build_base_cases(output_dim: int,
                     memo_cost[c - output_dim][_kernel_size_to_index[ks]] = cost
                     memo_block[(c, _kernel_size_to_index[ks])] = cb
 
+    for i in range(3):
+        memo_cost[0][i] = 0
+        memo_block[(output_dim, i)] = []
+
 
 def best_conv_block_dp(input_dim: int, 
                 output_dim: int, 

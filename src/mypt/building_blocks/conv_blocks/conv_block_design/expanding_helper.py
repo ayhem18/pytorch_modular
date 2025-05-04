@@ -4,7 +4,7 @@ This module finds transpose convolution blocks that expand dimensions from input
 where input_dim is smaller than output_dim.
 """
 
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Optional, Set, Tuple
 
 from mypt.building_blocks.conv_blocks.conv_block_design.comb_utils import (
     get_possible_kernel_combs,
@@ -34,8 +34,8 @@ def _get_output_dim(input_dim: int, tconv_rep: Dict) -> int:
     stride = tconv_rep["stride"]
     output_padding = tconv_rep["output_padding"]
 
-    return (input_dim - 1) * stride + ks + output_padding 
-
+    res = (input_dim - 1) * stride + ks + output_padding 
+    return res
 
 def get_output_dim(input_dim: int, tconv_reps: List[Dict]) -> int:
     """
@@ -159,8 +159,8 @@ def _build_base_cases(input_dim: int, output_dim: int, min_n: int, max_n: int, m
         if count < input_dim:
             continue 
 
-        # find the smallest kernel size in the tconv
-        min_ks = min([tconv["kernel_size"] for tconv in tconv])
+        # find the smallest kernel size in the tconv (with stride 1 !!!!)
+        min_ks = min([tconv["kernel_size"] for tconv in tconv if tconv["stride"] == 1])
 
         cost = _cost_function(tconv)
 
@@ -180,7 +180,8 @@ def _build_base_cases(input_dim: int, output_dim: int, min_n: int, max_n: int, m
 
     for i in range(3):
         memo_cost[0][i] = 0
-        memo_block[(input_dim, i)] = []
+        memo_block[(output_dim, i)] = []
+
 
 
 
@@ -213,7 +214,7 @@ def dp_transpose_conv_block(
         return None
 
     # Generate kernel combinations with kernel sizes <= current_max_ks
-    kernel_combs = get_possible_kernel_combs(min_n, max_n, current_min_ks, 3, reverse=False)
+    kernel_combs = get_possible_kernel_combs(min_n, max_n, 7, current_min_ks, reverse=False)
     
     # each element in kernel_combs is a list (with number of elements between min_n and max_n)
     # for each elements in these lists, add the stride 1 and output padding 0
@@ -248,12 +249,7 @@ def dp_transpose_conv_block(
         for nks in possible_next_max_ks:
             # Recursively try to expand from the current expanded dimension to the target
             dp_transpose_conv_block(expanded_dim, output_dim, nks, min_n, max_n, memo_cost, memo_block)
-            
-            rec_cost_idx = output_dim - expanded_dim
-            
-            if rec_cost_idx >= len(memo_cost):
-                continue
-                
+        
             rec_block = memo_block.get((expanded_dim, _kernel_size_to_index[nks]))
             
             if rec_block is None:
@@ -282,7 +278,10 @@ def dp_transpose_conv_block(
 
 
 def _input_validation(input_dim: int, output_dim: int, min_n: int, max_n: int):
-    minimal_block = [{"type": "tconv", "kernel_size": 3, "stride": 1, "output_padding": 0}, {"type": "tconv", "kernel_size": 3, "stride": 2, "output_padding": 0}]    
+    minimal_block = [
+                    {"type": "tconv", "kernel_size": 3, "stride": 1, "output_padding": 0}, 
+                    {"type": "tconv", "kernel_size": 3, "stride": 2, "output_padding": 0}
+                    ]    
 
     if get_output_dim(input_dim, minimal_block) > output_dim:
         raise ValueError("Applying the minimal tranpose convolution block leads to a dimension larger than the output dimension. The input dimension is too large.")
@@ -343,11 +342,12 @@ def best_transpose_conv_block(input_dim: int, output_dim: int, min_n: int, max_n
 
 
 
-def _compute_all_possible_inputs(min_n: int, 
+def dp_compute_all_possible_inputs(min_n: int, 
                                 max_n: int, 
                                 output_dim: int,
                                 min_threshold: int, 
                                 res: Set[int],
+                                res_ks_size: Set[Tuple[int, int]],
                                 memo: Set[int], 
                                 num_blocks: int):
     """
@@ -368,12 +368,96 @@ def _compute_all_possible_inputs(min_n: int,
     
     # Mark this output_dim as processed and add it to the results
     memo.add(output_dim)
-    res.add(output_dim)
     
     # Nothing to be done with 0 blocks
     if num_blocks == 0:
         return
     
+    # find the largest kernel size associated with the output_dim
+    max_size =  max([ks for ks in _kernel_size_to_index.keys() if (output_dim, ks) in res_ks_size])
+
+    # Get all possible kernel combinations for the given constraints
+    kernel_combs = get_possible_kernel_combs(min_n, max_n, max_kernel_size=max_size, min_kernel_size=3, reverse=False)
+    
+    # each element in kernel_combs is a list (with number of elements between min_n and max_n)
+    # for each elements in these lists, add the stride 1 and output padding 0
+    tconvs_no_stride = [[_get_single_transpose_conv_rep(ks, 1, 0) for ks in kc] for kc in kernel_combs]
+    
+    # add a tranpose convolution with stride 2 and output padding 0
+    tconvs_op0 = [b + [{"type": "tconv", "kernel_size": 2, "stride": 2, "output_padding": 0}] for b in tconvs_no_stride]
+
+    # add a tranpose convolution with stride 2 and output padding 1
+    tconvs_op1 = [b + [{"type": "tconv", "kernel_size": 2, "stride": 2, "output_padding": 1}] for b in tconvs_no_stride]
+
+    tconvs = tconvs_op0 + tconvs_op1
+
+ 
+    # For each possible block, compute the output dimension
+    for block in tconvs:
+        res_output_dim = get_input_dim(output_dim, block)
+        
+        if res_output_dim is None or res_output_dim < min_threshold:
+            continue
+
+        min_ks = min([tconv["kernel_size"] for tconv in block if tconv["stride"] == 1])
+
+        if res_output_dim in res:
+            # check if the min_ks is the same as the previous one
+            if (res_output_dim, min_ks) in res_ks_size:
+                continue
+            else:
+                res_ks_size.add((res_output_dim, min_ks))
+        else:
+            res.add(res_output_dim)
+            res_ks_size.add((res_output_dim, min_ks))
+
+        # Continue the recursion with this output as the new input
+        dp_compute_all_possible_inputs(min_n, max_n, res_output_dim, min_threshold, res, res_ks_size, memo, num_blocks - 1)  
+
+
+
+def compute_all_possible_inputs(min_n: int, 
+                                max_n: int, 
+                                output_dim: int, 
+                                num_blocks: int) -> Set[int]:
+    """
+    Compute all possible output dimensions that could result from the given input dimension
+    when applying a series of transpose convolutional blocks.
+    """
+    res = set()
+    memo = set()
+    res_ks_size = set()
+
+    # add the largest kernel size associated with the output_dim
+    res_ks_size.add((output_dim, 7))
+
+    dp_compute_all_possible_inputs(min_n, max_n, output_dim, 1, res, res_ks_size, memo, num_blocks) 
+    # # remove the output_dim itself from the result
+    # res.remove(output_dim) 
+    
+    return res
+
+
+def dp_compute_outputs_exhaustive(min_n: int, 
+                                  max_n: int, 
+                                  output_dim: int, 
+                                  num_blocks: int,
+                                  min_threshold:int, 
+                                  res: Set[int], 
+                                  memo: Set[int]):
+    # If we've already processed this output_dim, don't repeat the work
+    if output_dim in memo or output_dim < min_threshold:
+        return
+    
+    # Mark this output_dim as processed and add it to the results
+    memo.add(output_dim)
+    res.add(output_dim)
+
+    # Nothing to be done with 0 blocks
+    if num_blocks == 0:
+        return
+    
+
     # Get all possible kernel combinations for the given constraints
     kernel_combs = get_possible_kernel_combs(min_n, max_n, max_kernel_size=7, min_kernel_size=3, reverse=False)
     
@@ -398,15 +482,21 @@ def _compute_all_possible_inputs(min_n: int,
             continue
 
         # Continue the recursion with this output as the new input
-        _compute_all_possible_inputs(min_n, max_n, res_output_dim, min_threshold, res, memo, num_blocks - 1)  
+        dp_compute_outputs_exhaustive(min_n, max_n, res_output_dim, num_blocks - 1, min_threshold, res, memo)  
 
+def compute_outputs_exhaustive(min_n: int, 
+                              max_n: int, 
+                              output_dim: int, 
+                              num_blocks: int) -> Set[int]:
+    """
+    Compute all possible output dimensions that could result from the given input dimension
+    when applying a series of transpose convolutional blocks.
+    """
+    res = set()
+    memo = set()
 
-
-def compute_all_possible_inputs(min_n: int, 
-                                max_n: int, 
-                                output_dim: int, 
-                                res: Set[int],
-                                memo: Set[int], 
-                                num_blocks: int):
+    dp_compute_outputs_exhaustive(min_n, max_n, output_dim, num_blocks, 1, res, memo) 
+    # remove the output_dim itself from the result
+    res.remove(output_dim) 
     
-    _compute_all_possible_inputs(min_n, max_n, output_dim, 0, res, memo, num_blocks)   
+    return res

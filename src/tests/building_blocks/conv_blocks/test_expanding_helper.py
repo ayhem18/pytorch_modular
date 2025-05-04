@@ -4,6 +4,7 @@ from tqdm import tqdm
 
 from mypt.building_blocks.conv_blocks.conv_block_design.expanding_helper import (
     best_transpose_conv_block,
+    compute_outputs_exhaustive,
     get_output_dim,
     compute_all_possible_inputs 
 )
@@ -99,7 +100,7 @@ class TestExpandingHelper(unittest.TestCase):
             # This ensures input_dim < output_dim but the gap is small enough that
             # applying even a minimal transpose conv block would exceed the target
             input_dim = i
-            output_dim = random.randint(i + 1, 2 * i - 5)  # Small increment that's likely impossible to achieve exactly
+            output_dim = random.randint(i + 1, 2 * i - 5)
             
             with self.subTest(input_dim=input_dim, output_dim=output_dim):
                 # The function should raise ValueError because the minimal transpose
@@ -111,7 +112,7 @@ class TestExpandingHelper(unittest.TestCase):
                     best_transpose_conv_block(input_dim, output_dim, min_n, max_n)
         
 
-    # @unittest.skip("Skip comprehensive test to save test runtime")
+    @unittest.skip("Skip comprehensive test to save test runtime")
     def test_compute_all_possible_inputs(self):
         """
         Test that compute_all_possible_inputs generates valid output dimensions
@@ -121,75 +122,69 @@ class TestExpandingHelper(unittest.TestCase):
         max_n = 5
         
         # Test with a small set of input dimensions
-        possible_output_dims = [120, 150, 180, 200, 250]
+        # possible_output_dims = [120, 150, 180, 200, 250]
 
-        for output_dim in possible_output_dims:
-            # Compute possible output dimensions
-            possible_inputs = set()
-            memo = set()
+        possible_output_dims = list(range(10, 1000, 10))
+
+        for output_dim in tqdm(possible_output_dims, desc="iterating over output dims"):            
+        # for output_dim in possible_output_dims:            
+            possible_inputs = compute_all_possible_inputs(min_n, max_n, output_dim, 3)
             
-            compute_all_possible_inputs(min_n, max_n, output_dim, possible_inputs, memo, 5)
-            
-            # Remove the output dimension itself
-            if output_dim in possible_inputs:
-                possible_inputs.remove(output_dim)
-
-
             for input_dim in possible_inputs:
-                with self.subTest(input_dim=input_dim, output_dim=output_dim):
+                # with self.subTest(input_dim=input_dim, output_dim=output_dim):
                     # Verify we can find a block that produces this output
-                    block, cost = best_transpose_conv_block(input_dim, output_dim, min_n, max_n)
-                    
-                    self.assertIsNotNone(block, 
-                        f"Failed to find valid block for input={input_dim}, output={output_dim}")
-                    
-                    # Check the output is correct
-                    result_dim = get_output_dim(input_dim, block)
-                    self.assertEqual(result_dim, output_dim,
-                        f"Block should expand input_dim={input_dim} to output_dim={output_dim}, "
-                        f"but got {result_dim}")
-                    
-                    # Check kernel sizes are in increasing order
-                    kernel_sizes = [b["kernel_size"] for b in block if b["stride"] == 1]
-                    
-                    self.assertEqual(
-                        kernel_sizes, 
-                        sorted(kernel_sizes),
-                        f"Kernel sizes should be in increasing order, but got {kernel_sizes}"
+                block, cost = best_transpose_conv_block(input_dim, output_dim, min_n, max_n)
+                
+                self.assertIsNotNone(block, 
+                    f"Failed to find valid block for input={input_dim}, output={output_dim}")
+                
+                # Check the output is correct
+                result_dim = get_output_dim(input_dim, block)
+                self.assertEqual(result_dim, output_dim,
+                    f"Block should expand input_dim={input_dim} to output_dim={output_dim}, "
+                    f"but got {result_dim}")
+                
+                # Check kernel sizes are in increasing order
+                kernel_sizes = [b["kernel_size"] for b in block if b["stride"] == 1]
+                
+                self.assertEqual(
+                    kernel_sizes, 
+                    sorted(kernel_sizes),
+                    f"Kernel sizes should be in increasing order, but got {kernel_sizes}"
+                )
+                
+                # Check 3: Each group of consecutive convolutional blocks should be between min_n and max_n
+                # Count consecutive conv blocks
+                consecutive_groups = []
+                current_group = []
+                
+                for b in block:
+                    if b["stride"] == 1:
+                        current_group.append(b)
+                    else:
+                        # tconv with stride > 1 encountered - end of consecutive conv group
+                        if current_group:
+                            consecutive_groups.append(current_group)
+                            current_group = []
+                
+                # Don't forget to add the last group if it exists
+                if current_group:
+                    consecutive_groups.append(current_group)
+
+                for group in consecutive_groups:
+                    self.assertGreaterEqual(
+                        len(group), 
+                        min_n,
+                        f"Number of consecutive tconv blocks ({len(group)}) "
+                        f"should be >= min_n ({min_n})"
                     )
                     
-                    # Check 3: Each group of consecutive convolutional blocks should be between min_n and max_n
-                    # Count consecutive conv blocks
-                    consecutive_groups = []
-                    current_group = []
-                    
-                    for b in block:
-                        if b["stride"] == 1:
-                            current_group.append(b)
-                        else:
-                            # tconv with stride > 1 encountered - end of consecutive conv group
-                            if current_group:
-                                consecutive_groups.append(current_group)
-                                current_group = []
-                    
-                    # Don't forget to add the last group if it exists
-                    if current_group:
-                        consecutive_groups.append(current_group)
-
-                    for group in consecutive_groups:
-                        self.assertGreaterEqual(
-                            len(group), 
-                            min_n,
-                            f"Number of consecutive tconv blocks ({len(group)}) "
-                            f"should be >= min_n ({min_n})"
-                        )
-                        
-                        self.assertLessEqual(
-                            len(group), 
-                            max_n,
-                            f"Number of consecutive tconv blocks ({len(group)}) "
-                            f"should be <= max_n ({max_n})"
-                        )
+                    self.assertLessEqual(
+                        len(group), 
+                        max_n,
+                        f"Number of consecutive tconv blocks ({len(group)}) "
+                        f"should be <= max_n ({max_n})"
+                    )
     
     @unittest.skip("Skip impossible outputs test to save test runtime")
     def test_compute_impossible_outputs(self):
@@ -200,33 +195,29 @@ class TestExpandingHelper(unittest.TestCase):
         min_n = 2
         max_n = 4
         
-        # A few input dimensions to test
-        input_dims = [8, 16, 32]
+        # output_dims = [120, 150, 180, 200, 250]
         
-        for input_dim in input_dims:
+        output_dims = list(range(10, 1000, 10))
+
+        for output_dim in tqdm(output_dims, desc="iterating over output dims"):
             # Compute possible output dimensions
-            possible_outputs = set()
-            memo = set()
-            
-            compute_all_possible_inputs(min_n, max_n, input_dim, possible_outputs, memo, 2)
-            
-            # Try some dimensions that aren't in the possible_outputs set
-            # These should be impossible to achieve with our blocks
-            test_range = range(input_dim + 1, input_dim * 4)
-            impossible_outputs = [d for d in test_range if d not in possible_outputs]
-            
-            # Test a sample of impossible outputs
-            sample_size = min(5, len(impossible_outputs))
-            if sample_size > 0:
-                for output_dim in random.sample(impossible_outputs, sample_size):
-                    with self.subTest(input_dim=input_dim, output_dim=output_dim):
-                        block, cost = best_transpose_conv_block(input_dim, output_dim, min_n, max_n)
-                        
-                        # Should not find a valid block
-                        self.assertIsNone(block, 
-                            f"Expected None for impossible input={input_dim}, output={output_dim}")
-                        self.assertIsNone(cost, 
-                            f"Expected None cost for impossible input={input_dim}, output={output_dim}")
+            possible_inputs = compute_outputs_exhaustive(min_n, max_n, output_dim, 3)
+
+            max_possible_input_dim = max(possible_inputs)            
+            min_possible_input_dim = min(possible_inputs)
+
+            test_range = range(min_possible_input_dim + 1, max_possible_input_dim)
+            impossible_inputs = [d for d in test_range if d not in possible_inputs]
+
+            for input_dim in impossible_inputs:
+                # with self.subTest(input_dim=input_dim, output_dim=output_dim):
+                block, cost = best_transpose_conv_block(input_dim, output_dim, min_n, max_n)
+                
+                # Should not find a valid block
+                self.assertIsNone(block, 
+                    f"Expected None for impossible input={input_dim}, output={output_dim}")
+                self.assertIsNone(cost, 
+                    f"Expected None cost for impossible input={input_dim}, output={output_dim}")
 
 
 if __name__ == "__main__":
