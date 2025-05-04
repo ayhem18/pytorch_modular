@@ -17,9 +17,9 @@ class BasicConvBlock(WrapperLikeModuleMixin):
     
     def __build_block_single_activation(self, 
                                         channels: List[int], 
-                                        kernel_sizes: List[int], 
-                                        stride: List[int], 
-                                        padding: List[int], 
+                                        kernel_sizes: List[Union[int, Tuple[int, int]]], 
+                                        stride: List[Union[int, Tuple[int, int]]], 
+                                        padding: List[Union[int, Tuple[int, int]]], 
                                         use_bn: bool, 
                                         activation: nn.Module, 
                                         activation_params: dict,

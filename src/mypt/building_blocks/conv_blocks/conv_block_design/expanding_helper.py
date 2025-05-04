@@ -6,7 +6,7 @@ where input_dim is smaller than output_dim.
 
 from typing import Dict, List, Optional, Set, Tuple
 
-from mypt.building_blocks.conv_blocks.conv_block_design.comb_utils import (
+from mypt.building_blocks.conv_blocks.conv_block_design.conv_design_utils import (
     get_possible_kernel_combs,
 )
 

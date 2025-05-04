@@ -3,7 +3,9 @@ Utility functions for combinatorics and caching for the convolutional block desi
 """
 
 import os
+import math
 import pickle
+import numpy as np
 from typing import Dict, List, Optional, Tuple
 
 import mypt.code_utils.directories_and_files as dirf
@@ -17,6 +19,69 @@ while 'package_data' not in os.listdir(_current_dir):
 
 DATA_FOLDER = dirf.process_path(os.path.join(_current_dir, 'package_data', 'conv_block_design'), 
                                 dir_ok=True, file_ok=False, must_exist=False)
+
+
+def compute_log_linear_sequence(input_dim: int, output_dim: int, n: int) -> List[int]:
+    """
+    Compute a sequence of n integers that progress linearly on a log2 scale
+    between input_dim and output_dim.
+    
+    If log2(max_dim) - log2(min_dim) < 1, use a simple linear progression instead.
+    
+    Args:
+        input_dim: Starting dimension
+        output_dim: Ending dimension
+        n: Number of elements in the sequence (including input_dim and output_dim)
+        
+    Returns:
+        List of n integers forming a progression from input_dim to output_dim
+    """
+    if n < 2:
+        raise ValueError(f"Number of elements must be at least 2, got {n}")
+    
+    if n == 2:
+        return [input_dim, output_dim]
+    
+    min_dim, max_dim = min(input_dim, output_dim), max(input_dim, output_dim)
+    
+    if min_dim <= 0:
+        raise ValueError(f"Input dimension must be positive, got {min_dim}")
+    
+    log_min = math.log2(min_dim)
+    log_max = math.log2(max_dim)
+    
+    # Determine if we should use log or linear progression
+    if log_max - log_min >= 1:
+        # Use logarithmic progression
+        if input_dim < output_dim:
+            # Increasing sequence
+            log_sequence = np.linspace(math.log2(input_dim), math.log2(output_dim), n)
+            sequence = [int(round(2**x)) for x in log_sequence]
+        else:
+            # Decreasing sequence
+            log_sequence = np.linspace(math.log2(input_dim), math.log2(output_dim), n)
+            sequence = [int(round(2**x)) for x in log_sequence]
+    else:
+        # Use linear progression
+        sequence = [int(round(x)) for x in np.linspace(input_dim, output_dim, n)]
+    
+    # Ensure boundary values are exact
+    sequence[0] = input_dim
+    sequence[-1] = output_dim
+    
+    # Handle potential duplicates by slightly adjusting values
+    result = [sequence[0]]
+    for i in range(1, len(sequence)-1):
+        if sequence[i] == result[-1]:
+            # Adjust duplicate value
+            if input_dim < output_dim:
+                sequence[i] += 1
+            else:
+                sequence[i] -= 1
+        result.append(sequence[i])
+    result.append(sequence[-1])
+    
+    return result
 
 
 def get_combinations_with_replacement(elements: List[int], n: int, reverse:bool, memo: Optional[Dict] = None) -> List[Tuple[int, ...]]:

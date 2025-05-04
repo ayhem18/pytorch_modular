@@ -6,7 +6,7 @@ import numpy as np
 
 from typing import Dict, List, Optional, Tuple, Set
 
-from mypt.building_blocks.conv_blocks.conv_block_design.comb_utils import (
+from mypt.building_blocks.conv_blocks.conv_block_design.conv_design_utils import (
     get_possible_kernel_combs,
 )
 
@@ -244,7 +244,7 @@ def best_conv_block(input_dim: int,
                     max_n: int, 
                     memo_cost: Optional[List[List[int]]] = None, 
                     memo_block: Optional[Dict] = None,
-                    pool_layer_params: Tuple[int, int] = (2, 2)):
+                    pool_layer_params: Tuple[int, int] = (2, 2)) -> Tuple[List[Dict], int]:
     _input_validation(input_dim, output_dim, min_n, max_n)
 
     if memo_cost is None:

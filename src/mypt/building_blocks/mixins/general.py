@@ -18,8 +18,6 @@ class ModuleListMixin:
             raise TypeError(f"The SequentialModuleListMixin expects the self._block attribute to be of type {torch.nn.ModuleList} or {nn.Sequential}. Found: {type(getattr(self, self._inner_model_field_name))}")
 
     def module_list_to(self, *args, **kwargs):
-        self._verify_instance()
-
         inner_model = getattr(self, self._inner_model_field_name)
 
         # call the '.to' method for each Module in the ModuleList
@@ -27,15 +25,27 @@ class ModuleListMixin:
             inner_model[i] = inner_model[i].to(*args, **kwargs)
         
         # always return self
+        return self
+
+    def module_list_train(self, mode: bool = True) -> 'ModuleListMixin':
+        inner_model = getattr(self, self._inner_model_field_name)
+
+        for i in range(len(inner_model)):
+            inner_model[i].train(mode)
+
         return self 
+    
+    def module_list_eval(self) -> 'ModuleListMixin':
+        return self.module_list_train(mode=False) 
+    
 
-
+    
 class SequentialModuleListMixin(ModuleListMixin):
     """
     This mixin provides an implementation of the forward method for a class that uses a ModuleList but with a sequential structure.
     """
 
-    def forward_sequential_module_list(self, x: torch.Tensor) -> torch.Tensor:
+    def sequential_module_list_forward(self, x: torch.Tensor) -> torch.Tensor:
         self._verify_instance()
 
         inner_model = getattr(self, self._inner_model_field_name)
