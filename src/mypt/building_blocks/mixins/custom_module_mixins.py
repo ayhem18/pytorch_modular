@@ -72,7 +72,7 @@ class WrapperLikeModuleMixin(nn.Module):
 
     # the forward method    
     def forward(self, x: torch.Tensor, *args, **kwargs) -> torch.Tensor:
-        return getattr(self, self._inner_model_field_name)(x, *args, **kwargs) 
+        return getattr(self, self._inner_model_field_name).forward(x, *args, **kwargs) 
     
     def __str__(self) -> str:
         return getattr(self, self._inner_model_field_name).__str__() 

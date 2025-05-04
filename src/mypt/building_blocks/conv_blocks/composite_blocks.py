@@ -28,7 +28,6 @@ class ContractingBlock(WrapperLikeModuleMixin, SequentialModuleListMixin):
     def to(self, *args, **kwargs) -> 'ContractingBlock':
         return super().module_list_to(*args, **kwargs)
         
-    
     def train(self, mode: bool = True) -> 'ContractingBlock':
         return super().module_list_train(mode)
     

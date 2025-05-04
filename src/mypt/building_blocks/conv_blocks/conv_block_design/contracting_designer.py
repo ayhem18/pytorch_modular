@@ -36,8 +36,8 @@ class ContractingCbDesigner:
         """
         # Validate input dimensions
         if input_shape[1] <= output_shape[1] or input_shape[2] <= output_shape[2]:
-            raise ValueError("Input spatial dimensions must be larger than output spatial dimensions")
-        
+            raise ValueError("Input spatial dimensions must be larger than output spatial dimensions. The shapes are expected as (channels, height, width).")
+
         # Store input parameters
         self.input_shape = input_shape
         self.output_shape = output_shape
@@ -215,7 +215,74 @@ class ContractingCbDesigner:
         # Return in the correct order
         return (larger, result_smaller) if is_height_larger else (result_smaller, larger)
     
-    def _merge_blocks(self) -> List[nn.ModuleList]:
+    def _set_kernel_sizes_and_paddings(self, 
+                                       h_equalized: List[Dict], 
+                                       w_equalized: List[Dict]) -> Tuple[List[Dict], List[Dict]]:
+        """
+        Set the kernel sizes and paddings for the height and width sub-blocks.
+        """
+        assert len(h_equalized) == len(w_equalized)
+
+        # Extract kernel sizes
+        h_kernel_sizes = [l["kernel_size"] for l in h_equalized if l["type"] == "conv"]
+        w_kernel_sizes = [l["kernel_size"] for l in w_equalized if l["type"] == "conv"]
+
+        # make sure to set the paddings correctly   
+        h_paddings = [l.get('padding', 0) for l in h_equalized if l["type"] == "conv"]
+        w_paddings = [l.get('padding', 0) for l in w_equalized if l["type"] == "conv"]
+
+        # the final paddings need to be chosen carefully (we cannot have (number, 'same') for example)
+        paddings = []
+        for index, (ph, pw) in enumerate(zip(h_paddings, w_paddings)):
+            if ph == pw and ph == 'same':
+                # we need to choose a padding that is valid
+                # we can choose the maximum of the two
+                paddings.append('same')
+            elif isinstance(ph, int) and isinstance(pw, int):
+                paddings.append((ph, pw))
+            
+            else:
+                # the kernel size of the block with a 'same' padding must be set '1' 
+                if ph == 'same':
+                    h_kernel_sizes[index] = 1
+                    paddings.append((0, pw))
+                elif pw == 'same':
+                    w_kernel_sizes[index] = 1 
+                    paddings.append((ph, 0))
+
+        kernel_sizes = [(h, w) for h, w in zip(h_kernel_sizes, w_kernel_sizes)]
+
+        return kernel_sizes, paddings
+
+
+
+    def _merge_blocks_singular(self, height_block: List[Dict], width_block: List[Dict]) -> List[nn.Sequential]:
+        """
+        Merge the height and width blocks where both of them have only one sub-block.
+        """
+
+        # Equalize layers within the sub-blocks
+        h_equalized, w_equalized = self._equalize_sub_block_layers(height_block, width_block)
+                
+        # compute the channels
+        channels = compute_log_linear_sequence(self.input_shape[0], self.output_shape[0], len(h_equalized)) # height block contains a pool layer at the end... (so passing the height is correct)
+
+        kernel_sizes, paddings = self._set_kernel_sizes_and_paddings(h_equalized, w_equalized)
+
+        conv = BasicConvBlock(
+            num_conv_layers=len(kernel_sizes),
+            channels=channels,
+            kernel_sizes=kernel_sizes,
+            paddings=paddings,
+            use_bn=True
+        )
+
+        pool_layer = nn.AvgPool2d(h_equalized[-1]["kernel_size"], h_equalized[-1]["stride"])
+
+        return [nn.Sequential(OrderedDict([("conv", conv), ("pool", pool_layer)]))]
+        
+
+    def _merge_blocks(self) -> List[nn.Sequential]:
         """
         Merge the height and width blocks into a single architecture.
         
@@ -231,6 +298,9 @@ class ContractingCbDesigner:
             height_sub_blocks, width_sub_blocks
         )
         
+        if len(height_sub_blocks) == 1 and len(width_sub_blocks) == 1:
+            return self._merge_blocks_singular(height_sub_blocks[0], width_sub_blocks[0])
+
         # compute the channels
         channels = compute_log_linear_sequence(self.input_shape[0], self.output_shape[0], len(height_sub_blocks))
 
@@ -238,23 +308,23 @@ class ContractingCbDesigner:
         merged_blocks = []
         
         # For each pair of sub-blocks
-        for c, h_sub_block, w_sub_block in zip(channels, height_sub_blocks, width_sub_blocks):
+        for block_index, (h_sub_block, w_sub_block) in enumerate(zip(height_sub_blocks, width_sub_blocks)):
             # Equalize layers within the sub-blocks
             h_equalized, w_equalized = self._equalize_sub_block_layers(h_sub_block, w_sub_block)
             
-            
-            # Extract kernel sizes
-            h_kernel_sizes = [l["kernel_size"] for l in h_equalized if l["type"] == "conv"]
-            w_kernel_sizes = [l["kernel_size"] for l in w_equalized if l["type"] == "conv"]
-            kernel_sizes = [(h, w) for h, w in zip(h_kernel_sizes, w_kernel_sizes)]
+            kernel_sizes, paddings = self._set_kernel_sizes_and_paddings(h_equalized, w_equalized) 
+
+            block_channels = ([channels[block_index]] * len(kernel_sizes)) + [channels[min(block_index + 1, len(channels) - 1)]]
+
+            assert len(block_channels) == len(kernel_sizes) + 1
 
             conv = BasicConvBlock(
-                num_conv_layers=len(h_kernel_sizes),
-                channels=[c] * (len(h_kernel_sizes) + 1),
+                num_conv_layers=len(kernel_sizes),
+                channels=block_channels,
                 kernel_sizes=kernel_sizes,
+                paddings=paddings,
                 use_bn=True
             )
-
 
             pool_layer = nn.AvgPool2d(h_equalized[-1]["kernel_size"], h_equalized[-1]["stride"])
 
@@ -263,6 +333,7 @@ class ContractingCbDesigner:
         
         return merged_blocks
     
+
     def get_contracting_block(self) -> List[nn.Sequential]:
         """
         Get the contracting block.
