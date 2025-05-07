@@ -8,7 +8,7 @@ from typing import Dict, List, OrderedDict, Tuple
 
 
 from mypt.building_blocks.conv_blocks.conv_block import BasicConvBlock
-from mypt.building_blocks.conv_blocks.conv_block_design.contracting_helper import best_conv_block
+from mypt.building_blocks.conv_blocks.conv_block_design.contracting_helper import best_conv_block, get_output_dim
 from mypt.building_blocks.conv_blocks.conv_block_design.conv_design_utils import compute_log_linear_sequence
 
 
@@ -301,10 +301,9 @@ class ContractingCbDesigner:
         if len(height_sub_blocks) == 1 and len(width_sub_blocks) == 1:
             return self._merge_blocks_singular(height_sub_blocks[0], width_sub_blocks[0])
 
-        # compute the channels
+        # compute the channels for each block.
         channels = compute_log_linear_sequence(self.input_shape[0], self.output_shape[0], len(height_sub_blocks))
 
-        # Create ModuleList to hold the merged blocks
         merged_blocks = []
         
         # For each pair of sub-blocks
@@ -326,7 +325,8 @@ class ContractingCbDesigner:
                 use_bn=True
             )
 
-            pool_layer = nn.AvgPool2d(h_equalized[-1]["kernel_size"], h_equalized[-1]["stride"])
+            # it is possible that the height and width sub-blocks have different kernel sizes and strides
+            pool_layer = nn.AvgPool2d((h_equalized[-1]["kernel_size"], w_equalized[-1]["kernel_size"]), (h_equalized[-1]["stride"], w_equalized[-1]["stride"]))
 
             # Create a ModuleList containing both blocks        
             merged_blocks.append(nn.Sequential(OrderedDict([("conv", conv), ("pool", pool_layer)])))
