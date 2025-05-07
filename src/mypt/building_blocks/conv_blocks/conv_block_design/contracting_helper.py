@@ -82,22 +82,33 @@ def get_input_dim(output_dim: int, conv_reps: List[Dict]) -> List[int]:
     """
     Get the input dimension of the convolutional block.
     """
-    if len(conv_reps) == 0:
-        return [output_dim]
-
-    possible_values = []
-
-    # first get the possible input dimensions of the sublist 
-    sub_reps = conv_reps[1:]
-    possible_values_sub = get_input_dim(output_dim, sub_reps) 
-
-    for value in possible_values_sub:
-        # apply the first conv_rep to get the final result
-        low_high = _get_input_dim(value, conv_reps[0])
-        possible_values.extend(list(range(low_high[0], low_high[1])))
+    # there should be at most one pool layer and it must be the last one
+    pool_count = sum([1 for conv_rep in conv_reps if conv_rep["type"] == "pool"])
     
-    return possible_values
+    if pool_count > 1:
+        raise ValueError("There should be at most one pool layer")
 
+    if pool_count == 1:
+        if conv_reps[-1]['type'] != "pool":
+            raise ValueError("The last layer should be a pool layer")
+
+        # in this case we have 2 possible outputs 
+        r1, r2 = _get_input_dim(output_dim, conv_reps[-1])
+        odim = [r1, r2]
+        conv_reps = conv_reps[:-1]
+    else:
+        odim = [output_dim]
+
+    res_list = []
+
+    for start_val in odim:
+        res = start_val
+        # make sure to run in reverse order
+        for conv_rep in conv_reps[::-1]:
+            res = _get_input_dim(res, conv_rep)[0]
+        res_list.append(res)
+
+    return res_list
 
 def _cost_function(block: List[Dict]) -> float:
     """
@@ -269,7 +280,7 @@ def best_conv_block(input_dim: int,
     return best_block, best_cost
 
 
-def compute_all_possible_inputs(min_n: int, max_n: int, output_dim: int, res: Set[int], 
+def _compute_all_possible_inputs_dp(min_n: int, max_n: int, output_dim: int, res: Set[int], 
                                memo: Set[int], num_blocks: int):
     """
     Recursively compute all possible input dimensions that could result in the given output dimension
@@ -310,5 +321,16 @@ def compute_all_possible_inputs(min_n: int, max_n: int, output_dim: int, res: Se
 
         # For each potential input, continue the recursion
         for input_dim in potential_inputs:
-            compute_all_possible_inputs(min_n, max_n, input_dim, res, memo, num_blocks - 1)
+            _compute_all_possible_inputs_dp(min_n, max_n, input_dim, res, memo, num_blocks - 1)
 
+
+def compute_all_possible_inputs(min_n: int, max_n: int, output_dim: int, num_blocks: int) -> Set[int]:
+    """
+    Recursively compute all possible input dimensions that could result in the given output dimension
+    when applying a series of convolutional blocks.
+    """
+    res = set()
+    memo = set()
+    _compute_all_possible_inputs_dp(min_n, max_n, output_dim, res, memo, num_blocks)    
+    res.remove(output_dim)
+    return res
