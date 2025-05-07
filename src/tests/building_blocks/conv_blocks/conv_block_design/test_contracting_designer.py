@@ -1,10 +1,10 @@
-import unittest
 import torch
-from torch import nn
-from typing import Tuple, List
+import unittest
 
-from mypt.building_blocks.conv_blocks.conv_block_design.contracting_designer import ContractingCbDesigner
+from torch import nn
+
 from mypt.building_blocks.conv_blocks.conv_block import BasicConvBlock
+from mypt.building_blocks.conv_blocks.conv_block_design.contracting_designer import ContractingCbDesigner
 
 
 class TestContractingDesigner(unittest.TestCase):
@@ -23,8 +23,6 @@ class TestContractingDesigner(unittest.TestCase):
             ((3, 128, 128), (32, 4, 4)),
 
             ((3, 32, 32), (16, 8, 8)),
-
-            # the code works for square input and output shapes
 
             ((3, 64, 32), (16, 8, 8)),
 
@@ -153,7 +151,6 @@ class TestContractingDesigner(unittest.TestCase):
                 self.assertEqual(tuple(x.shape), expected_shape, 
                                f"Expected shape {expected_shape}, got {tuple(x.shape)}")
 
-    # @unittest.skip("skip for now")
     def test_channels_progression(self):
         """Test that channels follow a logical progression"""
         for input_shape, output_shape in self.test_cases:

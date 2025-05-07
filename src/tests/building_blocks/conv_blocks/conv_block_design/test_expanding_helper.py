@@ -1,6 +1,8 @@
 import unittest
 import random
 from tqdm import tqdm
+import torch
+import torch.nn as nn
 
 from mypt.building_blocks.conv_blocks.conv_block_design.expanding_helper import (
     best_transpose_conv_block,
@@ -112,7 +114,7 @@ class TestExpandingHelper(unittest.TestCase):
                     best_transpose_conv_block(input_dim, output_dim, min_n, max_n)
         
 
-    @unittest.skip("Skip comprehensive test to save test runtime")
+    # @unittest.skip("Skip comprehensive test to save test runtime")
     def test_compute_all_possible_inputs(self):
         """
         Test that compute_all_possible_inputs generates valid output dimensions
@@ -185,6 +187,16 @@ class TestExpandingHelper(unittest.TestCase):
                         f"Number of consecutive tconv blocks ({len(group)}) "
                         f"should be <= max_n ({max_n})"
                     )
+
+                tconv = self._block_module(block)
+
+                out = tconv(torch.randn(1, 3, input_dim, input_dim))
+
+                # Check that the output shape is correct
+                self.assertEqual(
+                    out.shape,
+                    (1, 3, output_dim, output_dim)
+                )
     
     @unittest.skip("Skip impossible outputs test to save test runtime")
     def test_compute_impossible_outputs(self):
@@ -218,6 +230,36 @@ class TestExpandingHelper(unittest.TestCase):
                     f"Expected None for impossible input={input_dim}, output={output_dim}")
                 self.assertIsNone(cost, 
                     f"Expected None cost for impossible input={input_dim}, output={output_dim}")
+
+    def _block_module(self, block: list, in_channels: int = 3) -> nn.Sequential:
+        """
+        Convert a transpose convolution block representation (list of dicts) into an nn.Sequential module.
+        
+        Args:
+            block: List of layer dictionaries from best_transpose_conv_block
+            in_channels: Number of input channels (default: 3)
+            
+        Returns:
+            nn.Sequential module that implements the block
+        """
+        layers = []
+        
+        for layer in block:
+            if layer["type"] == "tconv":
+                ks = layer["kernel_size"]
+                stride = layer["stride"]
+                output_padding = layer.get("output_padding", 0)
+                layers.append(nn.ConvTranspose2d(
+                    in_channels, in_channels, 
+                    kernel_size=ks, 
+                    stride=stride, 
+                    output_padding=output_padding,
+                    padding=0  # No padding to match expected dimension expansion
+                ))
+            else:
+                raise ValueError(f"Unknown layer type: {layer['type']}")
+            
+        return nn.Sequential(*layers)
 
 
 if __name__ == "__main__":

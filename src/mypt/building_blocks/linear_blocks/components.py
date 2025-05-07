@@ -8,8 +8,8 @@ from torch.nn import Module
 from abc import ABC, abstractmethod
 from typing import Iterable, Iterator, Union, Optional, List, Tuple
 
-from mypt.building_blocks.mixins.custom_module_mixins import CloneableModuleMixin, WrapperLikeModuleMixin
 from mypt.building_blocks.mixins.residual_mixins import GeneralResidualMixin
+from mypt.building_blocks.mixins.custom_module_mixins import CloneableModuleMixin, WrapperLikeModuleMixin
 
 
 class BasicLinearBlock(WrapperLikeModuleMixin, CloneableModuleMixin):

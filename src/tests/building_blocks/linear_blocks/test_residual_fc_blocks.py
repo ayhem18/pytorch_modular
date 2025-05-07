@@ -420,7 +420,6 @@ class ResidualFCBlockTestBase(unittest.TestCase):
                                 "Output should be main + adaptive when dimensions don't match")
 
 
-
 class TestGenericResidualFCBlock(ResidualFCBlockTestBase):
     """
     Tests for GenericResidualFCBlock
