@@ -2,16 +2,13 @@
 This script contains some functionalities helpful for the segmentation task
 """
 
-import os
 import numpy as np
 
-from typing import List, Optional, Tuple, Union, Iterable
-from pathlib import Path
-
 from PIL import Image
+from pathlib import Path
 from collections import deque
+from typing import List, Optional, Tuple, Union, Dict
 
-from typing import Dict
 from .bbox_utils import OBJ_DETECT_ANN_TYPE
 
 

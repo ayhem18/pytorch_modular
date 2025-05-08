@@ -4,11 +4,11 @@ This scripts contains functionalities to manipulate files and directories
 import os, zipfile, shutil, re, random
 import numpy as np
 
-from typing import Union, Optional, List, Dict, Callable, Tuple
+from tqdm import tqdm
 from pathlib import Path
 from datetime import datetime
 from sklearn.model_selection import train_test_split
-from tqdm import tqdm
+from typing import Union, Optional, List, Dict, Callable, Tuple
 
 HOME = os.getcwd()
 

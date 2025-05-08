@@ -6,8 +6,8 @@ This script is designed to test implementations of similarities and distances:
 3. MMD
 """
 
-import random, torch, numpy as np
 from tqdm import tqdm
+import random, torch, numpy as np
 from mypt.similarities.cosineSim import CosineSim
 
 def _test_cos_sim(num_tests:int=10 ** 4):

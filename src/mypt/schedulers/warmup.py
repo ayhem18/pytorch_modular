@@ -7,7 +7,7 @@ from torch.optim.lr_scheduler import LinearLR, SequentialLR, CosineAnnealingLR
 from torch.optim.lr_scheduler import LRScheduler
 from torch.optim import Optimizer
 
-from mypt.code_utilities import pytorch_utilities as pu, directories_and_files as dirf
+from mypt.code_utils import pytorch_utils as pu
 from mypt.schedulers.annealing_lr import AnnealingLR
 
 

@@ -6,7 +6,7 @@ import numpy as np
 from typing import Tuple
 from tqdm import tqdm
 
-from mypt.code_utils import bbox_utilities as au
+from mypt.code_utils import bbox_utils as bu
 
 ################################## utility functions ################################## 
 def _random_yolo_ann(img_shape=None):
@@ -55,39 +55,39 @@ def _random_albumentation_ann(img_shape=None):
     return [min_x, min_y, max_x, max_y]
 
 
-__format_random_generation = {au.COCO: _random_coco_ann, 
-                              au.ALBUMENTATION: _random_albumentation_ann, 
-                              au.PASCAL_VOC: _random_pascal_voc_ann, 
-                              au.YOLO: _random_yolo_ann}
+__format_random_generation = {bu.COCO: _random_coco_ann, 
+                              bu.ALBUMENTATIONS: _random_albumentation_ann, 
+                              bu.PASCAL_VOC: _random_pascal_voc_ann, 
+                              bu.YOLO: _random_yolo_ann}    
 
 
 ################################# test conversion #################################
 def _test_conversion_single_format(format: str, num_tests:int = 5 * 10 ** 4):
-    if format not in au.OBJ_DETECT_ANN_FORMATS:
-        raise NotImplementedError(f"Currently supporting only the following formats: {au.OBJ_DETECT_ANN_FORMATS}")
+    if format not in bu.OBJ_DETECT_ANN_FORMATS:
+        raise NotImplementedError(f"Currently supporting only the following formats: {bu.OBJ_DETECT_ANN_FORMATS}")
 
-    other_formats = [fr for fr in au.OBJ_DETECT_ANN_FORMATS if fr != format]
+    other_formats = [fr for fr in bu.OBJ_DETECT_ANN_FORMATS if fr != format]
 
     for _ in tqdm(range(num_tests), desc=f'passing tests with the {format} format'):
         img_shape = (random.randint(50, 400), random.randint(50, 400))
         random_ann = __format_random_generation[format](img_shape=img_shape)
 
         # verify the format
-        au.verify_object_detection_ann_format(annotation=random_ann, 
+        bu.verify_object_detection_ann_format(annotation=random_ann, 
                                               img_shape=img_shape, 
                                               current_format=format)
 
         for of in other_formats:
             # convert 
-            of_ann = au.convert_annotations(annotation=random_ann, current_format=format, target_format=of, img_shape=img_shape)
+            of_ann = bu.convert_annotations(annotation=random_ann, current_format=format, target_format=of, img_shape=img_shape)
 
-            au.verify_object_detection_ann_format(annotation=of_ann, img_shape=img_shape, current_format=of)
+            bu.verify_object_detection_ann_format(annotation=of_ann, img_shape=img_shape, current_format=of)
 
             # convert back
-            or_ann_converted = au.convert_annotations(annotation=of_ann, current_format=of, target_format=format, img_shape=img_shape)
+            or_ann_converted = bu.convert_annotations(annotation=of_ann, current_format=of, target_format=format, img_shape=img_shape)
 
 
-            if format in [au.COCO, au.PASCAL_VOC]:
+            if format in [bu.COCO, bu.PASCAL_VOC]:
                 # since those de
                 all([abs(v1 - v2) <= 1 for v1, v2 in zip(random_ann, or_ann_converted)]), "Make sure the conversion is correct"
             else:
@@ -99,7 +99,7 @@ def _test_conversion(num_tests:int = 5 * 10 ** 4):
     # set the seed for reproducibility
     from mypt.code_utils import pytorch_utilities as pu
     pu.seed_everything(seed=0)
-    for f in au.OBJ_DETECT_ANN_FORMATS:
+    for f in bu.OBJ_DETECT_ANN_FORMATS:
         _test_conversion_single_format(format=f, num_tests=num_tests)
 
 

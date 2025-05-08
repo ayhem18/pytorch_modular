@@ -8,7 +8,7 @@ from typing import Dict, List, OrderedDict, Tuple
 
 
 from mypt.building_blocks.conv_blocks.conv_block import BasicConvBlock
-from mypt.building_blocks.conv_blocks.conv_block_design.contracting_helper import best_conv_block, get_output_dim
+from mypt.building_blocks.conv_blocks.conv_block_design.contracting_helper import best_conv_block
 from mypt.building_blocks.conv_blocks.conv_block_design.conv_design_utils import compute_log_linear_sequence
 
 
@@ -210,26 +210,6 @@ class ContractingCbDesigner:
               + 
             [smaller[-1]] # add the last convolutional layer of the smaller block
             )
-
-        # # Find the last conv layer in the smaller block
-        # last_conv_idx = -1
-        # last_conv_ks = 3  # Default kernel size
-        
-
-        # for i, layer in enumerate(smaller):
-        #     if layer["type"] == "conv":
-        #         last_conv_idx = i
-        #         last_conv_ks = layer["kernel_size"]
-        
-        # # Add 'same' padding conv layers after the last conv
-        # for _ in range(difference):
-        #     # Create a 'same' padding conv with the same kernel size
-        #      = {"type": "conv", "kernel_size": 1, "stride": 1}
-            
-        #     # Insert after the last conv layer
-        #     if last_conv_idx >= 0:
-        #         result_smaller.insert(last_conv_idx + 1, same_padding_conv)
-        #         last_conv_idx += 1  # Update for the next insertion
         
         # Return in the correct order
         return (larger, result_smaller) if is_height_larger else (result_smaller, larger)
@@ -258,31 +238,6 @@ class ContractingCbDesigner:
         paddings = [(h, w) for h, w in zip(h_paddings, w_paddings)]
         kernel_sizes = [(h, w) for h, w in zip(h_kernel_sizes, w_kernel_sizes)]
         return kernel_sizes, paddings   
-
-
-        # # the final paddings need to be chosen carefully (we cannot have (number, 'same') for example)
-        # paddings = []
-        # for index, (ph, pw) in enumerate(zip(h_paddings, w_paddings)):
-        #     if ph == pw and ph == 'same':
-        #         # we need to choose a padding that is valid
-        #         # we can choose the maximum of the two
-        #         paddings.append('same')
-        #     elif isinstance(ph, int) and isinstance(pw, int):
-        #         paddings.append((ph, pw))
-            
-        #     else:
-        #         # the kernel size of the block with a 'same' padding must be set '1' 
-        #         if ph == 'same':
-        #             h_kernel_sizes[index] = 1
-        #             paddings.append((0, pw))
-        #         elif pw == 'same':
-        #             w_kernel_sizes[index] = 1 
-        #             paddings.append((ph, 0))
-
-        # kernel_sizes = [(h, w) for h, w in zip(h_kernel_sizes, w_kernel_sizes)]
-
-        # return kernel_sizes, paddings
-
 
 
     def _merge_blocks_singular(self, height_block: List[Dict], width_block: List[Dict]) -> List[nn.Sequential]:

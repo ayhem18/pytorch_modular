@@ -7,7 +7,6 @@ import torch
 from typing import Union, List
 from torch.optim.lr_scheduler import LambdaLR
 
-from copy import deepcopy
 
 class AnnealingLR(LambdaLR):    
     def __init__(self, 
