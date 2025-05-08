@@ -8,7 +8,7 @@ from typing import Dict
 from mypt.backbones.resnetFE import ResnetFE
 from torchvision.models.resnet import Bottleneck
 
-from tests.building_blocks.custom_base_test import CustomModuleBaseTest
+from tests.custom_base_test import CustomModuleBaseTest
 
 
 class TestResnetFE(CustomModuleBaseTest):

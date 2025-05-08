@@ -1,3 +1,4 @@
+from typing import Iterator
 import torch
 from torch import nn
 
@@ -28,6 +29,9 @@ class ModuleListMixin:
         return self
 
     def module_list_train(self, mode: bool = True) -> 'ModuleListMixin':
+        # make sure to set the training attribute of the module itself !!!
+        self.training = mode
+ 
         inner_model = getattr(self, self._inner_model_field_name)
 
         for i in range(len(inner_model)):
@@ -39,6 +43,15 @@ class ModuleListMixin:
         return self.module_list_train(mode=False) 
     
 
+    def module_list_modules(self) -> Iterator[nn.Module]:
+        inner_model = getattr(self, self._inner_model_field_name)
+
+        for i in range(len(inner_model)):
+            gen = inner_model[i].modules()
+            for module in gen:
+                yield module
+        
+        
     
 class SequentialModuleListMixin(ModuleListMixin):
     """

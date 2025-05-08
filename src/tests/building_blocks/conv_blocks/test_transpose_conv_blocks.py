@@ -7,7 +7,7 @@ from typing import List, Tuple
 import mypt.code_utils.pytorch_utils as pu
 from mypt.building_blocks.conv_blocks.transpose_conv_block import TransposeConvBlock
 from mypt.dimensions_analysis.dimension_analyser import DimensionsAnalyser
-from tests.building_blocks.custom_base_test import CustomModuleBaseTest
+from tests.custom_base_test import CustomModuleBaseTest
 
 
 class TestTransposeConvBlocks(CustomModuleBaseTest):

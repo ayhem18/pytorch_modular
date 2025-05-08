@@ -289,6 +289,8 @@ class ContractingCbDesigner:
         channels = compute_log_linear_sequence(self.input_shape[0], self.output_shape[0], len(height_sub_blocks))
 
         merged_blocks = []
+
+        merged_blocks = [None for _ in range(len(height_sub_blocks))]
         
         # For each pair of sub-blocks
         for block_index, (h_sub_block, w_sub_block) in enumerate(zip(height_sub_blocks, width_sub_blocks)):
@@ -312,9 +314,9 @@ class ContractingCbDesigner:
             # it is possible that the height and width sub-blocks have different kernel sizes and strides
             pool_layer = nn.AvgPool2d((h_equalized[-1]["kernel_size"], w_equalized[-1]["kernel_size"]), (h_equalized[-1]["stride"], w_equalized[-1]["stride"]))
 
-            # Create a ModuleList containing both blocks        
-            merged_blocks.append(nn.Sequential(OrderedDict([("conv", conv), ("pool", pool_layer)])))
-        
+            merged_blocks[block_index] = nn.Sequential(OrderedDict([("conv", conv), ("pool", pool_layer)]))
+
+            
         return merged_blocks
     
 

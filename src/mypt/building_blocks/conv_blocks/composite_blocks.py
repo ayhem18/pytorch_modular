@@ -1,6 +1,6 @@
 import torch
 from torch import nn
-from typing import List, Tuple, Union
+from typing import Iterator, List, Tuple, Union
 
 from mypt.building_blocks.mixins.general import SequentialModuleListMixin
 from mypt.building_blocks.mixins.custom_module_mixins import WrapperLikeModuleMixin
@@ -26,22 +26,29 @@ class ContractingBlock(WrapperLikeModuleMixin, SequentialModuleListMixin):
 
 
     def to(self, *args, **kwargs) -> 'ContractingBlock':
-        return super().module_list_to(*args, **kwargs)
-        
+        super().module_list_to(*args, **kwargs)
+        return self
+    
     def train(self, mode: bool = True) -> 'ContractingBlock':
-        return super().module_list_train(mode)
+        super().module_list_train(mode)
+        return self
     
     def eval(self) -> 'ContractingBlock':
-        return super().module_list_eval()
-    
+        super().module_list_eval()
+        return self
+
+    def modules(self) -> Iterator[nn.Module]:
+        return super().module_list_modules()
+
 
     def _full_forward(self, x: torch.Tensor) -> List[torch.Tensor]:
-        outputs = []
         final_output = x
 
-        for block in self.blocks:
+        outputs = [None for _ in range(len(self.blocks))]
+
+        for block_index, block in enumerate(self.blocks):
             final_output = block.conv(final_output)
-            outputs.append(final_output)
+            outputs[block_index] = final_output
             final_output = block.pool(final_output)
 
         return outputs
@@ -56,4 +63,9 @@ class ContractingBlock(WrapperLikeModuleMixin, SequentialModuleListMixin):
 
         return output
         
+
+    @property
+    def block(self) -> List[nn.Module]:
+        return self._block
+
 
