@@ -81,6 +81,12 @@ class ContractingCbDesigner:
             self.max_conv_layers_per_block
         )
         
+        if height_block is None:
+            raise ValueError("The internal algorithm failed to find a valid convolutional block mapping the input height to the output height with the given parameters. Consider increasing the max_conv_layers_per_block parameter.")
+
+        if width_block is None:
+            raise ValueError("The internal algorithm failed to find a valid convolutional block mapping the input width to the output width with the given parameters. Consider increasing the max_conv_layers_per_block parameter.")
+
         return height_block, width_block
     
     def _split_into_sub_blocks(self, block: List[Dict]) -> List[List[Dict]]:
@@ -188,29 +194,42 @@ class ContractingCbDesigner:
             larger = width_sub_block
             smaller = height_sub_block
             is_height_larger = False
-        
+
+
+        # although the initial idea was to add convolutional layers with the same kernel size as the last convolutional layer (in the smaller block)
+        # this approach does not work, since a convolutional layer can have either "same" for dimensions or a numerical value for both dimensions: width and height
+        # in other words, having a convolutional layer with a padding arguments (same, 0) or (0, same) raises an error.  
+        # so we need to add a convolutional layer with a kernel size of 1 and a stride of 1 to the smaller block
+
         # Add padding layers to the smaller block
         difference = abs(height_conv_count - width_conv_count)
-        result_smaller = smaller.copy()
+        result_smaller = smaller[:-1].copy()
         
-        # Find the last conv layer in the smaller block
-        last_conv_idx = -1
-        last_conv_ks = 3  # Default kernel size
+        result_smaller.extend(
+            ([{"type": "conv", "kernel_size": 1, "stride": 1}] * difference) # add convolutional layers with a kernel size 1, padding 0 and stride 1
+              + 
+            [smaller[-1]] # add the last convolutional layer of the smaller block
+            )
+
+        # # Find the last conv layer in the smaller block
+        # last_conv_idx = -1
+        # last_conv_ks = 3  # Default kernel size
         
-        for i, layer in enumerate(smaller):
-            if layer["type"] == "conv":
-                last_conv_idx = i
-                last_conv_ks = layer["kernel_size"]
+
+        # for i, layer in enumerate(smaller):
+        #     if layer["type"] == "conv":
+        #         last_conv_idx = i
+        #         last_conv_ks = layer["kernel_size"]
         
-        # Add 'same' padding conv layers after the last conv
-        for _ in range(difference):
-            # Create a 'same' padding conv with the same kernel size
-            same_padding_conv = {"type": "conv", "kernel_size": last_conv_ks, "stride": 1, "padding": 'same'}
+        # # Add 'same' padding conv layers after the last conv
+        # for _ in range(difference):
+        #     # Create a 'same' padding conv with the same kernel size
+        #      = {"type": "conv", "kernel_size": 1, "stride": 1}
             
-            # Insert after the last conv layer
-            if last_conv_idx >= 0:
-                result_smaller.insert(last_conv_idx + 1, same_padding_conv)
-                last_conv_idx += 1  # Update for the next insertion
+        #     # Insert after the last conv layer
+        #     if last_conv_idx >= 0:
+        #         result_smaller.insert(last_conv_idx + 1, same_padding_conv)
+        #         last_conv_idx += 1  # Update for the next insertion
         
         # Return in the correct order
         return (larger, result_smaller) if is_height_larger else (result_smaller, larger)
@@ -221,38 +240,48 @@ class ContractingCbDesigner:
         """
         Set the kernel sizes and paddings for the height and width sub-blocks.
         """
-        assert len(h_equalized) == len(w_equalized)
+        assert len(h_equalized) == len(w_equalized), "kernel sizes and paddings must be extracted from sub-blocks of the same size"
+
+        # make sure there is exactly one pool layer in the height and width sub-blocks
+        assert sum(1 for l in h_equalized if l["type"] == "pool") == 1 and sum(1 for l in w_equalized if l["type"] == "pool") == 1, "there must be exactly one pool layer in the height and width sub-blocks"
+        # make sure the only pooly layer is the last one
+        assert h_equalized[-1]["type"] == "pool" and w_equalized[-1]["type"] == "pool", "the last layer of the height and width sub-blocks must be a pool layer"
 
         # Extract kernel sizes
-        h_kernel_sizes = [l["kernel_size"] for l in h_equalized if l["type"] == "conv"]
-        w_kernel_sizes = [l["kernel_size"] for l in w_equalized if l["type"] == "conv"]
+        h_kernel_sizes = [l["kernel_size"] for l in h_equalized[:-1]]
+        w_kernel_sizes = [l["kernel_size"] for l in w_equalized[:-1]]
 
         # make sure to set the paddings correctly   
-        h_paddings = [l.get('padding', 0) for l in h_equalized if l["type"] == "conv"]
-        w_paddings = [l.get('padding', 0) for l in w_equalized if l["type"] == "conv"]
+        h_paddings = [l.get('padding', 0) for l in h_equalized[:-1]]
+        w_paddings = [l.get('padding', 0) for l in w_equalized[:-1]]
 
-        # the final paddings need to be chosen carefully (we cannot have (number, 'same') for example)
-        paddings = []
-        for index, (ph, pw) in enumerate(zip(h_paddings, w_paddings)):
-            if ph == pw and ph == 'same':
-                # we need to choose a padding that is valid
-                # we can choose the maximum of the two
-                paddings.append('same')
-            elif isinstance(ph, int) and isinstance(pw, int):
-                paddings.append((ph, pw))
-            
-            else:
-                # the kernel size of the block with a 'same' padding must be set '1' 
-                if ph == 'same':
-                    h_kernel_sizes[index] = 1
-                    paddings.append((0, pw))
-                elif pw == 'same':
-                    w_kernel_sizes[index] = 1 
-                    paddings.append((ph, 0))
-
+        paddings = [(h, w) for h, w in zip(h_paddings, w_paddings)]
         kernel_sizes = [(h, w) for h, w in zip(h_kernel_sizes, w_kernel_sizes)]
+        return kernel_sizes, paddings   
 
-        return kernel_sizes, paddings
+
+        # # the final paddings need to be chosen carefully (we cannot have (number, 'same') for example)
+        # paddings = []
+        # for index, (ph, pw) in enumerate(zip(h_paddings, w_paddings)):
+        #     if ph == pw and ph == 'same':
+        #         # we need to choose a padding that is valid
+        #         # we can choose the maximum of the two
+        #         paddings.append('same')
+        #     elif isinstance(ph, int) and isinstance(pw, int):
+        #         paddings.append((ph, pw))
+            
+        #     else:
+        #         # the kernel size of the block with a 'same' padding must be set '1' 
+        #         if ph == 'same':
+        #             h_kernel_sizes[index] = 1
+        #             paddings.append((0, pw))
+        #         elif pw == 'same':
+        #             w_kernel_sizes[index] = 1 
+        #             paddings.append((ph, 0))
+
+        # kernel_sizes = [(h, w) for h, w in zip(h_kernel_sizes, w_kernel_sizes)]
+
+        # return kernel_sizes, paddings
 
 
 

@@ -99,17 +99,17 @@ class ExpandingCbDesigner:
         current_sub_block = []
         
         for layer in block:
-            if layer["stride"] == 1:
-                # Regular transpose conv - add to current sub-block
-                current_sub_block.append(layer)
-            else:
-                # Strided transpose conv - end of a sub-block
+            # if the layer has a stride larger than 1 or it has a end_block flag, it is the end of a sub-block
+            if layer["stride"] > 1 or layer.get("end_block", False):
                 # Add the strided transpose conv to the current sub-block
                 current_sub_block.append(layer)
                 
                 # Finalize the sub-block and start a new one
                 sub_blocks.append(current_sub_block)
                 current_sub_block = []
+            else:
+                # Regular transpose conv - add to current sub-block
+                current_sub_block.append(layer)
         
         # Add the last sub-block if it exists
         if current_sub_block:
@@ -140,13 +140,21 @@ class ExpandingCbDesigner:
         if len(height_sub_blocks) < len(width_sub_blocks):
             for i in range(len(height_sub_blocks), len(width_sub_blocks)):
                 # each new block should have the same number of layers as the width sub-block but as "identity_block"
-                block_to_add = shape_preserving_layer * len(width_sub_blocks[i])
+                block_to_add = shape_preserving_layer * len(width_sub_blocks[i] - 1)
+                # the very last layer should somehow identify the end of a sub-blokc
+                end_block_preserving_layer = shape_preserving_layer[0].copy()
+                end_block_preserving_layer['end_block'] = True
+                block_to_add.append(end_block_preserving_layer)
                 height_sub_blocks.append(block_to_add)
-            
+
         else:
             for i in range(len(width_sub_blocks), len(height_sub_blocks)):
                 # each new block should have the same number of layers as the height sub-block but as "identity_block"  
-                block_to_add = shape_preserving_layer * len(height_sub_blocks[i])
+                block_to_add = shape_preserving_layer * (len(height_sub_blocks[i]) - 1)
+                # the very last layer should somehow identify the end of a sub-blokc
+                end_block_preserving_layer = shape_preserving_layer[0].copy()
+                end_block_preserving_layer['end_block'] = True
+                block_to_add.append(end_block_preserving_layer)
                 width_sub_blocks.append(block_to_add)
         
         return height_sub_blocks, width_sub_blocks
@@ -176,11 +184,17 @@ class ExpandingCbDesigner:
 
         # the idea is to add identity layers to the shorter block so that both blocks have the same number of layers
         if len(h_block) < len(w_block):
-            for i in range(len(h_block), len(w_block)):
-                h_block.append(shape_preserving_layer)
+            h_block.extend(shape_preserving_layer * (len(w_block) - len(h_block)))
         else:
-            for i in range(len(w_block), len(h_block)):
-                w_block.append(shape_preserving_layer)
+            w_block.extend(shape_preserving_layer * (len(h_block) - len(w_block)))
+
+        # before adding the last layer, make sure it is either a strided layer or a layer with the end_block flag.
+
+        if height_sub_block[-1]["stride"] == 1:
+            height_sub_block[-1]["end_block"] = True
+
+        if width_sub_block[-1]["stride"] == 1:
+            width_sub_block[-1]["end_block"] = True
 
         # then block block add their last layer
         h_block.append(height_sub_block[-1])
@@ -188,31 +202,51 @@ class ExpandingCbDesigner:
 
         return h_block, w_block
     
-    def _set_kernel_sizes_and_paddings(self, h_sub_block: List[Dict], 
-                                      w_sub_block: List[Dict]) -> Tuple[List[Tuple[int, int]], List[Tuple[int, int]]]:
+
+    def _set_layer_parameters(self, h_sub_block: List[Dict], 
+                             w_sub_block: List[Dict]) -> Tuple[List[Tuple[int, int]], List[Tuple[int, int]], List[Tuple[int, int]], List[Tuple[int, int]]]:
         """
-        Create 2D kernel sizes and padding tuples from height and width sub-blocks.
-        
-        Args:
-            h_sub_block: Equalized height sub-block
-            w_sub_block: Equalized width sub-block
-            
-        Returns:
-            Tuple of (kernel_sizes, paddings) lists with 2D tuples
+        Set the parameters for the layers in the height and width sub-blocks.
         """
-        # Extract stride-1 layers
-        h_stride1_layers = [layer for layer in h_sub_block if layer["stride"] == 1]
-        w_stride1_layers = [layer for layer in w_sub_block if layer["stride"] == 1]
+
+        assert len(h_sub_block) == len(w_sub_block), "height and width sub-blocks must have the same number of layers"
+
+        kernel_sizes = [(h_layer["kernel_size"], w_layer["kernel_size"]) for h_layer, w_layer in zip(h_sub_block, w_sub_block)]
+
+        strides = [(h_layer["stride"], w_layer["stride"]) for h_layer, w_layer in zip(h_sub_block, w_sub_block)]
+
+        output_paddings = [(h_layer["output_padding"], w_layer["output_padding"]) for h_layer, w_layer in zip(h_sub_block, w_sub_block)]
+
+        paddings = [(h_layer.get("padding", 0), w_layer.get("padding", 0)) for h_layer, w_layer in zip(h_sub_block, w_sub_block)]
+
+        return kernel_sizes, strides, output_paddings, paddings
+
+
+    # def _set_kernel_sizes_and_paddings(self, h_sub_block: List[Dict], 
+    #                                   w_sub_block: List[Dict]) -> Tuple[List[Tuple[int, int]], List[Tuple[int, int]]]:
+    #     """
+    #     Create 2D kernel sizes and padding tuples from height and width sub-blocks.
         
-        # Create 2D kernel sizes
-        kernel_sizes = []
-        for h_layer, w_layer in zip(h_stride1_layers, w_stride1_layers):
-            kernel_sizes.append((h_layer["kernel_size"], w_layer["kernel_size"]))
+    #     Args:
+    #         h_sub_block: Equalized height sub-block
+    #         w_sub_block: Equalized width sub-block
             
-        # Default paddings of 0 for transpose convolutions
-        paddings = [(0, 0) for _ in kernel_sizes]
+    #     Returns:
+    #         Tuple of (kernel_sizes, paddings) lists with 2D tuples
+    #     """
+    #     # Extract stride-1 layers
+    #     h_stride1_layers = [layer for layer in h_sub_block if layer["stride"] == 1]
+    #     w_stride1_layers = [layer for layer in w_sub_block if layer["stride"] == 1]
         
-        return kernel_sizes, paddings
+    #     # Create 2D kernel sizes
+    #     kernel_sizes = []
+    #     for h_layer, w_layer in zip(h_stride1_layers, w_stride1_layers):
+    #         kernel_sizes.append((h_layer["kernel_size"], w_layer["kernel_size"]))
+            
+    #     # Default paddings of 0 for transpose convolutions
+    #     paddings = [(0, 0) for _ in kernel_sizes]
+        
+    #     return kernel_sizes, paddings
     
     def _merge_blocks_singular(self, height_block: List[Dict], width_block: List[Dict]) -> List[nn.Sequential]:
         """
@@ -284,16 +318,8 @@ class ExpandingCbDesigner:
             # Equalize layers within the sub-blocks
             h_equalized, w_equalized = self._equalize_sub_block_layers(h_sub_block, w_sub_block)
             
-            # Extract stride-1 layers
-            h_stride1 = [layer for layer in h_equalized if layer["stride"] == 1]
-            w_stride1 = [layer for layer in w_equalized if layer["stride"] == 1]
-            
-            # Get strided layers
-            h_strided = next((layer for layer in h_equalized if layer["stride"] > 1), None)
-            w_strided = next((layer for layer in w_equalized if layer["stride"] > 1), None)
-            
             # Extract kernel sizes and paddings for stride-1 layers
-            kernel_sizes, paddings = self._set_kernel_sizes_and_paddings(h_stride1, w_stride1)
+            kernel_sizes, strides, output_paddings, paddings = self._set_layer_parameters(h_equalized, w_equalized)
             
             # Create the transpose conv block for stride-1 layers
             block_channels = [channels[block_index]] * (len(kernel_sizes) + 1)
@@ -302,31 +328,33 @@ class ExpandingCbDesigner:
                 num_transpose_conv_layers=len(kernel_sizes),
                 channels=block_channels,
                 kernel_sizes=kernel_sizes,
-                strides=1,
+                strides=strides,
                 paddings=paddings,
-                output_paddings=0,
+                output_paddings=output_paddings,
                 use_bn=True
             )
-            
-            # Create the strided transpose conv layer if needed
-            if h_strided and w_strided:
-                strided_tconv = nn.ConvTranspose2d(
-                    channels[block_index], channels[block_index + 1],
-                    kernel_size=(h_strided["kernel_size"], w_strided["kernel_size"]),
-                    stride=(h_strided["stride"], w_strided["stride"]),
-                    output_padding=(h_strided.get("output_padding", 0), w_strided.get("output_padding", 0)),
-                    padding=0  # No padding for transpose conv
-                )
-                merged_blocks.append(nn.Sequential(OrderedDict([
-                    ("tconv", tconv), 
-                    ("strided_tconv", strided_tconv)
-                ])))
-            else:
-                merged_blocks.append(nn.Sequential(OrderedDict([("tconv", tconv)])))
+
+            merged_blocks.append(tconv)
+
+            # # Create the strided transpose conv layer if needed
+            # if h_strided and w_strided:
+            #     strided_tconv = nn.ConvTranspose2d(
+            #         channels[block_index], channels[block_index + 1],
+            #         kernel_size=(h_strided["kernel_size"], w_strided["kernel_size"]),
+            #         stride=(h_strided["stride"], w_strided["stride"]),
+            #         output_padding=(h_strided.get("output_padding", 0), w_strided.get("output_padding", 0)),
+            #         padding=0  # No padding for transpose conv
+            #     )
+            #     merged_blocks.append(nn.Sequential(OrderedDict([
+            #         ("tconv", tconv), 
+            #         ("strided_tconv", strided_tconv)
+            #     ])))
+            # else:
+            #     merged_blocks.append(nn.Sequential(OrderedDict([("tconv", tconv)])))
         
         return merged_blocks
     
-    def get_expanding_block(self) -> List[nn.Sequential]:
+    def get_expanding_block(self) -> List[TransposeConvBlock]:
         """
         Get the expanding block that transforms input shape to output shape.
         
