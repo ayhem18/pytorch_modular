@@ -1,6 +1,6 @@
 import torch
-import unittest
 import random
+import unittest
 
 from torch import nn
 from tqdm import tqdm
