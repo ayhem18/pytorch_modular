@@ -80,6 +80,20 @@ class ResidualConvBlock(GeneralResidualMixin, WrapperLikeModuleMixin):
         if input_shape is not None and input_shape[0] != channels[0]:
             raise ValueError(f"The input shape[0] ({input_shape[0]}) must be the same as the channels[0] ({channels[0]}).")
 
+        # one final check: if the stride is set 1, then the kernel size must be larger than the padding
+        # to guarantee that the output shape is smaller than the input shape
+
+        # normalize the paddings, kernel sizes and strides
+        paddings = [paddings] * num_conv_layers if isinstance(paddings, int) else paddings
+        kernel_sizes = [kernel_sizes] * num_conv_layers if isinstance(kernel_sizes, int) else kernel_sizes
+        strides = [strides] * num_conv_layers if isinstance(strides, int) else strides
+        for index, (s, k, p) in enumerate(zip(strides, kernel_sizes, paddings)):
+            if s == 1 and isinstance(p, int) and k <= p:
+                raise ValueError(f"When using strides=1, the kernel size must be larger than the padding to guarantee "
+                                 f"that the output shape is smaller than the input shape. For the {index}-th layer, "
+                                 f"the kernel size is {k} and the padding is {p}.")
+
+
         self._input_shape = input_shape
 
         # Create the main convolutional block
@@ -112,17 +126,18 @@ class ResidualConvBlock(GeneralResidualMixin, WrapperLikeModuleMixin):
             sample_input = torch.zeros(1, channels[0], sample_height, sample_width)
         
         # Get the output shape
-        output_shape = dim_analyzer.analyse_dimensions(sample_input.shape, self._block)
+        output_shape = dim_analyzer.analyse_dimensions(sample_input.shape, self._block)[1:]
         
         if any(v <= 0 for v in output_shape):
-            raise ValueError(f"It seems that the input shape passed to the ResidualConvBlock is completely consumed by the convolutions. A large input shape is needed !!")
+            raise ValueError(f"It seems that the input shape: {self._input_shape} passed to the ResidualConvBlock is completely consumed by the convolutions: {output_shape}. A large input shape is needed !!")
 
-        if output_shape[1:] != (channels[0], sample_height, sample_width) or force_residual:
+
+        if output_shape != (channels[0], sample_height, sample_width) or force_residual:
             # Creating an adaptive layer that transforms from input shape to output shape
             self._adaptive_layer = nn.Conv2d(
                 in_channels=channels[0],
                 out_channels=channels[-1],
-                kernel_size=(sample_height - output_shape[2] + 1, sample_width - output_shape[3] + 1),
+                kernel_size=(sample_height - output_shape[1] + 1, sample_width - output_shape[2] + 1),
                 stride=1,
                 padding=0
             )

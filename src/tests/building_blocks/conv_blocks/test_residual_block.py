@@ -1,19 +1,18 @@
-from copy import copy
 import torch
 import random
 import unittest
 
 from torch import nn
-from random import randint as ri
-from typing import Tuple
-
 from tqdm import tqdm
+from random import randint as ri
+
 
 import mypt.code_utils.pytorch_utils as pu
+
 from tests.custom_base_test import CustomModuleBaseTest
+from mypt.building_blocks.conv_blocks.conv_block import BasicConvBlock
 from mypt.dimensions_analysis.dimension_analyser import DimensionsAnalyser
 from mypt.building_blocks.conv_blocks.residual_conv_block import ResidualConvBlock
-from mypt.building_blocks.conv_blocks.conv_block import BasicConvBlock
 
 
 class TestResidualConvBlock(CustomModuleBaseTest):
@@ -392,7 +391,7 @@ class TestResidualConvBlock(CustomModuleBaseTest):
 
 
 
-    # @unittest.skip("passed!!")
+    # @unittest.skip("passed!!")    
     def test_forward_md_true_fr_true(self):
         """
         Test forward pass with matching dimensions and force_residual=True

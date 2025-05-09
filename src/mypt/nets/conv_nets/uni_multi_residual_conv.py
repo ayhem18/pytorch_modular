@@ -1,7 +1,11 @@
 import torch
-from torch import nn
-from typing import List, Union, Optional
 
+from torch import nn
+from copy import copy
+from collections import OrderedDict
+from typing import List, Tuple, Union, Optional
+
+from mypt.dimensions_analysis.dimension_analyser import DimensionsAnalyser
 from mypt.building_blocks.conv_blocks.residual_conv_block import ResidualConvBlock
 from mypt.building_blocks.mixins.custom_module_mixins import WrapperLikeModuleMixin
 from mypt.building_blocks.conv_blocks.conv_block_design.conv_design_utils import compute_log_linear_sequence
@@ -30,6 +34,7 @@ class UniformMultiResidualNet(WrapperLikeModuleMixin):
                  activation_params: Optional[Union[dict, List[dict]]] = None,
                  final_bn_layer: Union[bool, List[bool]] = False,
                  force_residual: Union[bool, List[bool]] = True,
+                 input_shape: Optional[Tuple[int, int, int]] = None,
                  *args, **kwargs):
         """
         Initialize a UniformMultiResidualNet.
@@ -79,9 +84,20 @@ class UniformMultiResidualNet(WrapperLikeModuleMixin):
                 raise ValueError(f"Last channel must be {out_channels}, got {channels[-1]}")
             self.channels = channels
         
+        # it is important to consider strides > 1 in any of the blocks 
+        self.strides = self._normalize_parameter(strides, num_conv_blocks, "strides")
+
+        if any(s > 1 for s in self.strides) and input_shape is None:
+            raise ValueError("input_shape must be provided when using strides > 1") 
+
+        if input_shape is not None:
+            if input_shape[0] != in_channels:
+                raise ValueError(f"input_shape[0] must be {in_channels}, got {input_shape[0]}")        
+        
+        self.input_shape = input_shape
+
         # Process other parameters - convert to lists if they're single values
         self.kernel_sizes = self._normalize_parameter(kernel_sizes, num_conv_blocks, "kernel_sizes")
-        self.strides = self._normalize_parameter(strides, num_conv_blocks, "strides")
         self.paddings = self._normalize_parameter(paddings, num_conv_blocks, "paddings")
         self.use_bn = self._normalize_parameter(use_bn, num_conv_blocks, "use_bn")
         self.activation_after_each_layer = self._normalize_parameter(activation_after_each_layer, num_conv_blocks, "activation_after_each_layer")
@@ -89,9 +105,14 @@ class UniformMultiResidualNet(WrapperLikeModuleMixin):
         self.activation_params = self._normalize_parameter(activation_params, num_conv_blocks, "activation_params")
         self.final_bn_layer = self._normalize_parameter(final_bn_layer, num_conv_blocks, "final_bn_layer")
         self.force_residual = self._normalize_parameter(force_residual, num_conv_blocks, "force_residual")
-        
+
+        shape = copy(self.input_shape)
+
+        dimAnalyzer = DimensionsAnalyser('static')
+
         # Create the residual blocks
         blocks = [None for _ in range(num_conv_blocks)]
+        
         for i in range(num_conv_blocks):
             # Each residualConvBlock expects a list of channels of length num_conv_layers + 1 
             # the first num_conv_layers will be channels[i] and the last one will be channels[i+1]  
@@ -108,12 +129,23 @@ class UniformMultiResidualNet(WrapperLikeModuleMixin):
                 activation=self.activation[i],
                 activation_params=self.activation_params[i],
                 final_bn_layer=self.final_bn_layer[i],
-                force_residual=self.force_residual[i]
+                force_residual=self.force_residual[i],
+                input_shape=shape
             )
-            blocks[i] = block
+
+            blocks[i] = (f"residual_block_{i + 1}", block)
         
+            if shape is not None:
+                # since the ResidualConvBlock has a residual connection, the analyse_dimension method won't find the correct output shape
+                # hence, choose either the residual or the main stream block 
+                actual_block = block.adaptive_layer if block.adaptive_layer is not None else block.block
+                shape = dimAnalyzer.analyse_dimensions((2,) + shape, actual_block)[1:] # make sure to pass the 
+                # make sure that the shape does not go below zero
+                if any(s <= 0 for s in shape):
+                    raise ValueError(f"The input shape {self.input_shape} was completely consumed by the network reaching {shape}. Use a larger input shape or reduce the number of blocks.")
+
         # Store blocks as a sequential module
-        self._block = nn.Sequential(*blocks)
+        self._block = nn.Sequential(OrderedDict(blocks))
     
     def _normalize_parameter(self, param, length: int, param_name: str):
         """
@@ -145,6 +177,9 @@ class UniformMultiResidualNet(WrapperLikeModuleMixin):
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Forward pass through the network"""
+        if self.input_shape is not None and x.shape[1:] != self.input_shape:
+            raise ValueError(f"Input shape must be {self.input_shape}, got {x.shape[1:]}")
+
         return self._block(x)
     
     def __call__(self, x: torch.Tensor) -> torch.Tensor:
