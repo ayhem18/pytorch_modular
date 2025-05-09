@@ -66,16 +66,20 @@ class ResidualConvBlock(GeneralResidualMixin, WrapperLikeModuleMixin):
         
         # Validate kernel sizes
         # If kernel sizes include values > 1, we need input_shape to properly create the adaptive layer
-        if isinstance(kernel_sizes, int):
-            all_kernels_are_one = (kernel_sizes == 1)
+        if isinstance(strides, int):
+            all_strides_are_one = (strides == 1)
         else:
-            all_kernels_are_one = all(k == 1 for k in kernel_sizes)
+            all_strides_are_one = all(s == 1 for s in strides)
             
-        if not all_kernels_are_one and input_shape is None:
-            raise ValueError("When using kernel sizes > 1, input_shape must be provided. "
+        if not all_strides_are_one and input_shape is None:
+            raise ValueError("When using strides > 1, input_shape must be provided. "
                              "Strided convolutions are non-linear operations that cannot "
                              "always be represented by an equivalent single convolution layer  in the residual stream !!!.")
         
+        # the final step is to make sure that the input shape[0] is the same as the channels[0]
+        if input_shape is not None and input_shape[0] != channels[0]:
+            raise ValueError(f"The input shape[0] ({input_shape[0]}) must be the same as the channels[0] ({channels[0]}).")
+
         self._input_shape = input_shape
 
         # Create the main convolutional block
@@ -104,12 +108,15 @@ class ResidualConvBlock(GeneralResidualMixin, WrapperLikeModuleMixin):
             sample_height, sample_width = input_shape[1], input_shape[2]
         else:
             # Use default large dimensions only for trivial kernel sizes (all 1s)
-            sample_height, sample_width = 2024, 2024
+            sample_height, sample_width = 2024, 2024 # setting a very large input here is not issue since the static method does not not pass the input through the torch.nn.Module
             sample_input = torch.zeros(1, channels[0], sample_height, sample_width)
         
         # Get the output shape
         output_shape = dim_analyzer.analyse_dimensions(sample_input.shape, self._block)
         
+        if any(v <= 0 for v in output_shape):
+            raise ValueError(f"It seems that the input shape passed to the ResidualConvBlock is completely consumed by the convolutions. A large input shape is needed !!")
+
         if output_shape[1:] != (channels[-1], sample_height, sample_width) or force_residual:
             # Creating an adaptive layer that transforms from input shape to output shape
             self._adaptive_layer = nn.Conv2d(
@@ -152,33 +159,36 @@ class ResidualConvBlock(GeneralResidualMixin, WrapperLikeModuleMixin):
         
         return self.residual_forward(x, debug=debug)
     
-    def __call__(self, x: torch.Tensor) -> torch.Tensor:
-        return self.forward(x)
+    def __call__(self, x: torch.Tensor, debug: bool = False) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]:
+        return self.forward(x, debug=debug)
     
     # Override methods with residual implementations
     def children(self) -> Iterator[nn.Module]:
-        return self.residual_children()
+        return super().residual_children()
     
     def named_children(self) -> Iterator[Tuple[str, nn.Module]]:
-        return self.residual_named_children()
+        return super().residual_named_children()
     
     def modules(self) -> Iterator[nn.Module]:
-        return self.residual_modules()
+        return super().residual_modules()
     
     def parameters(self, recurse: bool = True) -> Iterator[nn.Parameter]:
-        return self.residual_parameters(recurse=recurse)
+        return super().residual_parameters(recurse=recurse)
     
     def named_parameters(self, prefix: str = '', recurse: bool = True) -> Iterator[Tuple[str, nn.Parameter]]:
-        return self.residual_named_parameters(prefix=prefix, recurse=recurse)
+        return super().residual_named_parameters(prefix=prefix, recurse=recurse)
     
     def to(self, *args, **kwargs) -> 'ResidualConvBlock':
-        return self.residual_to(*args, **kwargs)
+        super().residual_to(*args, **kwargs)
+        return self
     
     def train(self, mode: bool = True) -> 'ResidualConvBlock':
-        return self.residual_train(mode)
+        super().residual_train(mode)
+        return self
     
     def eval(self) -> 'ResidualConvBlock':
-        return self.residual_eval()
+        super().residual_eval()
+        return self
 
 
     @property

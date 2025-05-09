@@ -41,8 +41,8 @@ class WrapperLikeModuleMixin(nn.Module):
         return getattr(self, self._inner_model_field_name).named_modules(memo, prefix, remove_duplicate)
 
     # the parameters-related methods    
-    def parameters(self) -> Iterator[nn.Parameter]:
-        return getattr(self, self._inner_model_field_name).parameters()
+    def parameters(self, recurse: bool = True) -> Iterator[nn.Parameter]:
+        return getattr(self, self._inner_model_field_name).parameters(recurse)
 
     # !!!! MAKE SURE TO PRESERVE THE METHOD SIGNATURE WHEN OVERRIDING 
     # THE METHODS OF A PARENT CLASS

@@ -25,7 +25,6 @@ class GeneralResidualMixin:
         self._residual_stream_field_name = residual_stream_field_name
 
 
-
     def _get_main_stream(self) -> Union[nn.Module, nn.Sequential]:
         """Get the main stream component"""
         if not hasattr(self, self._main_stream_field_name):
@@ -207,6 +206,8 @@ class GeneralResidualMixin:
         Args:
             mode (bool): Whether to set training mode (True) or evaluation mode (False)
         """
+        # make sure to set the training attribute of the model itself
+        self.training = mode
         # Set main stream to train mode
         main_stream = self._get_main_stream()
         main_stream.train(mode)

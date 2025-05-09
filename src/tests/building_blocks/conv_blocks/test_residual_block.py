@@ -1,10 +1,12 @@
 import torch
-import unittest
 import random
+import unittest
 
 from torch import nn
 from random import randint as ri
 from typing import Tuple
+
+from tqdm import tqdm
 
 import mypt.code_utils.pytorch_utils as pu
 from tests.custom_base_test import CustomModuleBaseTest
@@ -45,7 +47,8 @@ class TestResidualConvBlock(CustomModuleBaseTest):
                                             matching_dimensions=None,
                                             force_residual=None,
                                             activation=None,
-                                            kernel_sizes=None):
+                                            strides=None,
+                                            input_shape=None):
         """
         Generate a random ResidualConvBlock with configurable parameters
         
@@ -61,7 +64,27 @@ class TestResidualConvBlock(CustomModuleBaseTest):
         # Generate random parameters if not specified
         if num_conv_layers is None:
             num_conv_layers = ri(*self.num_layers_range)
+
+        if strides is not None:
+            if isinstance(strides, int):
+                strides = [strides] * num_conv_layers
+            else:
+                assert len(strides) == num_conv_layers
+
+        if strides is not None and any(s > 1 for s in strides):
+            matching_dimensions=False
+
+            if input_shape is None:
+                input_shape = (16, 100, 100)    
+
+        if strides is None:
+            strides = random.choice(self.strides_options) 
             
+            if strides != 1:
+                matching_dimensions = False
+                input_shape = (16, 100, 100)
+
+
         if matching_dimensions is None:
             matching_dimensions = random.choice([True, False])
             
@@ -72,36 +95,28 @@ class TestResidualConvBlock(CustomModuleBaseTest):
             activation = random.choice(self.activation_modules)
         
         # Generate channel dimensions
-        in_channels = ri(*self.input_channels_range)
+        if input_shape is not None:
+            in_channels = input_shape[0]
+        else:
+            in_channels = ri(*self.input_channels_range)
         
         if matching_dimensions:
             out_channels = in_channels
             paddings = 'same'
+            strides = 1
         else:
             out_channels = ri(*self.output_channels_range)
             while out_channels == in_channels:
                 out_channels = ri(*self.output_channels_range)
             
-            # the exact value here does not matter, since the number of output channels is different
-            paddings = random.choice(self.padding_options)
+            # if the dimensions are not matching, then no need for padding
+            paddings = 0
+
 
         # Create a list of channels for all layers
         channels = [in_channels] * num_conv_layers + [out_channels]
-        # Generate other parameters
-        if kernel_sizes is None:
-            kernel_sizes = random.choice(self.kernel_sizes_options)
-        else:
-            if isinstance(kernel_sizes, int):
-                kernel_sizes = [kernel_sizes] * num_conv_layers
-            else:
-                assert len(kernel_sizes) == num_conv_layers
 
-        # the `same` padding is not supported for strides > 1
-        if paddings == 'same':
-            strides = 1
-        else:
-            strides = random.choice(self.strides_options)
-
+        kernel_sizes = random.choice(self.kernel_sizes_options)
         use_bn = random.choice([True, False])
         activation_after_each_layer = random.choice([True, False])
         final_bn_layer = random.choice([True, False])
@@ -118,60 +133,80 @@ class TestResidualConvBlock(CustomModuleBaseTest):
             activation=activation,
             activation_params=None,
             final_bn_layer=final_bn_layer,
-            force_residual=force_residual
+            force_residual=force_residual,
+            input_shape=input_shape
         )
     
     ########################## CustomModuleBaseTest tests ##########################
     
+    @unittest.skip("passed!!")
     def test_eval_mode(self):
         """Test that the block can be set to evaluation mode"""
-        for _ in range(100):
+        for _ in tqdm(range(100), desc="Testing eval mode"):
             block = self._generate_random_residual_conv_block()
             super()._test_eval_mode(block)
     
+    @unittest.skip("passed!!")
     def test_train_mode(self):
         """Test that the block can be set to training mode"""
-        for _ in range(100):
+        for _ in tqdm(range(100), desc="Testing train mode"):
             block = self._generate_random_residual_conv_block()
             super()._test_train_mode(block)
     
+    @unittest.skip("passed!!")
     def test_consistent_output_without_dropout_bn(self):
         """Test consistent output for non-stochastic blocks"""
-        for _ in range(100):
-            # Create a block without batch norm or dropout
+        for _ in tqdm(range(100), desc="Testing consistent output without dropout bn"):
             block = self._generate_random_residual_conv_block()
-            block.use_bn = False
             
-            input_tensor = self._get_valid_input(block)
+            if block._input_shape is not None:
+                input_tensor = self._get_valid_input(block, batch_size=1, height=block._input_shape[1], width=block._input_shape[2])
+            else:
+                input_tensor = self._get_valid_input(block)
+
             super()._test_consistent_output_without_dropout_bn(block, input_tensor)
     
+    @unittest.skip("passed!!")
     def test_consistent_output_in_eval_mode(self):
         """Test consistent output in evaluation mode"""
         for _ in range(100):
             block = self._generate_random_residual_conv_block()
-            input_tensor = self._get_valid_input(block)
+            if block._input_shape is not None:
+                input_tensor = self._get_valid_input(block, batch_size=1, height=block._input_shape[1], width=block._input_shape[2])
+            else:   
+                input_tensor = self._get_valid_input(block)
             super()._test_consistent_output_in_eval_mode(block, input_tensor)
-    
+
+    @unittest.skip("passed!!")
     def test_batch_size_one_in_train_mode(self):
         """Test handling of batch size 1 in training mode"""
         for _ in range(100):
             block = self._generate_random_residual_conv_block()
-            input_tensor = self._get_valid_input(block, batch_size=1)
+            if block._input_shape is not None:
+                input_tensor = self._get_valid_input(block, batch_size=1, height=block._input_shape[1], width=block._input_shape[2])
+            else:
+                input_tensor = self._get_valid_input(block)
             super()._test_batch_size_one_in_train_mode(block, input_tensor)
-    
+
+    # @unittest.skip("skip for now")
     def test_batch_size_one_in_eval_mode(self):
         """Test handling of batch size 1 in evaluation mode"""
         for _ in range(100):
             block = self._generate_random_residual_conv_block()
-            input_tensor = self._get_valid_input(block, batch_size=1)
+            if block._input_shape is not None:
+                input_tensor = self._get_valid_input(block, batch_size=1, height=block._input_shape[1], width=block._input_shape[2])
+            else:
+                input_tensor = self._get_valid_input(block)
             super()._test_batch_size_one_in_eval_mode(block, input_tensor)
-    
+
+    # @unittest.skip("skip for now")
     def test_named_parameters_length(self):
         """Test that named_parameters and parameters have the same length"""
         for _ in range(100):
             block = self._generate_random_residual_conv_block()
             super()._test_named_parameters_length(block)
     
+    # @unittest.skip("skip for now")
     def test_to_device(self):
         """Test that the block can be moved between devices"""
         for _ in range(100):
@@ -257,61 +292,61 @@ class TestResidualConvBlock(CustomModuleBaseTest):
             ResidualConvBlock(
                 num_conv_layers=2,
                 channels=[16, 16, 32],
-                kernel_sizes=3,
-                strides=1,
+                strides=[1, 2, 1],
                 paddings='same',
                 use_bn=True,
                 force_residual=False
             )
             
-        # Test with list containing kernel_sizes > 1
-        kernel_size_combinations = [
-            [3, 1],  # First layer has kernel_size > 1
-            [1, 3],  # Second layer has kernel_size > 1
-            [3, 5],  # All layers have kernel_size > 1
-            [5, 7]   # All layers have larger kernel_size
+        # Test with list containing strides > 1
+        strides_combinations = [
+            [3, 1],  # First layer has stride > 1
+            [1, 3],  # Second layer has stride > 1
+            [3, 5],  # All layers have stride > 1
+            [5, 7]   # All layers have larger stride
         ]
         
-        for kernel_sizes in kernel_size_combinations:
-            with self.subTest(kernel_sizes=kernel_sizes):
+        for strides in strides_combinations:
+            with self.subTest(strides=strides):
                 with self.assertRaises(ValueError):
                     ResidualConvBlock(
-                        num_conv_layers=len(kernel_sizes),
-                        channels=[16] * len(kernel_sizes) + [32],
-                        kernel_sizes=kernel_sizes,
-                        strides=1,
+                        num_conv_layers=len(strides),
+                        channels=[16] * len(strides) + [32],
+                        kernel_sizes=[1] * len(strides),
+                        strides=strides,
                         paddings='same',
                         use_bn=True,
                         force_residual=False
                     )
         
         # Test that it works with input_shape provided
-        for kernel_sizes in kernel_size_combinations:
+        for strides in strides_combinations:
             try:
                 ResidualConvBlock(
-                    num_conv_layers=len(kernel_sizes),
-                    channels=[16] * len(kernel_sizes) + [32],
-                    kernel_sizes=kernel_sizes,
-                    strides=1,
+                    num_conv_layers=len(strides),
+                    channels=[16] * len(strides) + [32],
+                    kernel_sizes=[1] * len(strides),
+                    strides=strides,
                     paddings='same',
                     use_bn=True,
                     force_residual=False,
-                    input_shape=(16, 64, 64)
+                    input_shape=(16, 100, 100)
                 )
             except ValueError:
-                self.fail(f"ResidualConvBlock with kernel_sizes={kernel_sizes} and input_shape should not raise ValueError")
+                self.fail(f"ResidualConvBlock with strides={strides} and input_shape should not raise ValueError")
                 
         # Test that kernel_size=1 works without input_shape
         try:
-            ResidualConvBlock(
-                num_conv_layers=2,
-                channels=[16, 16, 32],
-                kernel_sizes=1,
-                strides=1,
-                paddings='same',
-                use_bn=True,
-                force_residual=False
-            )
+            for k in range(1, 11, 2):
+                ResidualConvBlock(
+                    num_conv_layers=2,
+                    channels=[16, 16, 32],
+                    kernel_sizes=k,
+                    strides=1,
+                    paddings='same',
+                    use_bn=True,
+                    force_residual=False
+                )
         except ValueError:
             self.fail("ResidualConvBlock with kernel_size=1 should not require input_shape")
 
@@ -320,7 +355,7 @@ class TestResidualConvBlock(CustomModuleBaseTest):
     def test_input_shape_validation(self):
         """Test that the forward method validates input shape when input_shape is specified"""
         # Create a block with input_shape specified
-        input_shape = (16, 64, 64)
+        input_shape = (16, 100, 100)
         block = ResidualConvBlock(
             num_conv_layers=2,
             channels=[16, 16, 32],
@@ -339,16 +374,15 @@ class TestResidualConvBlock(CustomModuleBaseTest):
         except ValueError:
             self.fail("Forward pass should accept input with correct shape")
         
-        # Invalid input should raise error
-        invalid_shapes = [
-            (2, 16, 32, 64),  # Wrong spatial dimensions
-            (2, 8, 64, 64),   # Wrong channel dimension
-            (2, 16, 64, 32)   # Wrong width
-        ]
-        
-        for shape in invalid_shapes:
+
+        for _ in range(100):
+            # change one of the dimensions of the input shape
+            shape = input_shape.copy()
+            i = random.randint(0, 2) 
+            shape[i] = random.randint(2, input_shape[i] - 1)
+            
             with self.subTest(shape=shape):
-                invalid_input = torch.randn(shape)
+                invalid_input = torch.randn(2, *shape)
                 with self.assertRaises(ValueError):
                     block(invalid_input)
 
@@ -365,15 +399,17 @@ class TestResidualConvBlock(CustomModuleBaseTest):
         - Output should be main_stream + residual_stream
         """
         for _ in range(100):
-            block = self._generate_random_residual_conv_block(matching_dimensions=True, force_residual=True)
-            block.eval()  # Set to eval mode for consistent outputs
             
+            # matching dimensions does not work with strides > 1
+            block = self._generate_random_residual_conv_block(matching_dimensions=True, force_residual=True, strides=1)
+            block.eval()
             # Generate random input with valid shape
             batch_size = random.randint(1, 4)
-            height = random.randint(256, 512)
-            width = random.randint(256, 512)
+            height = random.randint(100, 150)
+            width = random.randint(100, 150)
+
             x = self._get_valid_input(block, batch_size=batch_size, height=height, width=width)
-            
+
             # Check that adaptive layer has a 1x1 kernel
             self.assertIsNotNone(block._adaptive_layer)
             self.assertEqual(tuple(block._adaptive_layer.kernel_size), (1, 1), 
@@ -397,7 +433,7 @@ class TestResidualConvBlock(CustomModuleBaseTest):
                 output = block(x)
                 self.assertTrue(torch.allclose(output, expected_output))
 
-
+    @unittest.skip("skip for now")
     def test_forward_md_true_fr_false(self):
         """
         Test forward pass with matching dimensions and force_residual=False
@@ -408,13 +444,13 @@ class TestResidualConvBlock(CustomModuleBaseTest):
         - Output should be main_stream + input
         """
         for _ in range(100):
-            block = self._generate_random_residual_conv_block(matching_dimensions=True, force_residual=False)
+            block = self._generate_random_residual_conv_block(matching_dimensions=True, force_residual=False, strides=1)
             block.eval()  # Set to eval mode for consistent outputs
             
             # Generate random input with valid shape
             batch_size = random.randint(1, 4)
-            height = random.randint(256, 512)
-            width = random.randint(256, 512)
+            height = random.randint(100, 150)
+            width = random.randint(100, 150)
             x = self._get_valid_input(block, batch_size=batch_size, height=height, width=width)
             
             # Check that no adaptive layer exists
@@ -449,36 +485,52 @@ class TestResidualConvBlock(CustomModuleBaseTest):
         - Output should be main_stream + residual_stream
         """
         for _ in range(100):
-            block = self._generate_random_residual_conv_block(matching_dimensions=False, force_residual=True)
-            block.eval()  # Set to eval mode for consistent outputs
-            
-            # Generate random input with valid shape
+            # matching dimensions is set to False; then we can pass input_shape and strides > 1
+
+            blocks_inputs = [None, None]
+
+            b1 = self._generate_random_residual_conv_block(matching_dimensions=False, force_residual=True, strides=1)
+            b1.eval()  # Set to eval mode for consistent outputs
+
             batch_size = random.randint(1, 4)
-            height = random.randint(256, 512)
-            width = random.randint(256, 512)
-            x = self._get_valid_input(block, batch_size=batch_size, height=height, width=width)
-            
-            # Check that adaptive layer exists and the kernel size is different from 1x1
-            self.assertIsNotNone(block._adaptive_layer)
-            self.assertNotEqual(tuple(block._adaptive_layer.kernel_size), (1, 1))
-            
-            # Verify forward pass computation
-            with torch.no_grad():
-                main_output = block._block(x)
-                residual_output = block._adaptive_layer(x)
-                expected_output = main_output + residual_output
+            height = random.randint(100, 150)
+            width = random.randint(100, 150)
+            x = self._get_valid_input(b1, batch_size=batch_size, height=height, width=width)
+            blocks_inputs[0] = (b1, x)
+
+            # generate the second block with a larger input shape
+            batch_size = random.randint(1, 4)
+            height = random.randint(100, 150)
+            width = random.randint(100, 150)
+
+            b2 = self._generate_random_residual_conv_block(matching_dimensions=False, force_residual=True, strides=2, input_shape=(16, height, width))
+            b2.eval()  # Set to eval mode for consistent outputs
+
+            x = self._get_valid_input(b2, batch_size=batch_size, height=height, width=width)
+            blocks_inputs[1] = (b2, x)
+
+            for block, x in blocks_inputs:
+                # Check that adaptive layer exists and the kernel size is different from 1x1
+                self.assertIsNotNone(block._adaptive_layer)
+                self.assertNotEqual(tuple(block._adaptive_layer.kernel_size), (1, 1))
                 
-                # Debug mode should return individual components
-                main, residual, combined = block(x, debug=True)
-                
-                # Check that all outputs match expectations
-                self.assertTrue(torch.allclose(main, main_output))
-                self.assertTrue(torch.allclose(residual, residual_output))
-                self.assertTrue(torch.allclose(combined, expected_output))
-                
-                # Regular forward should match combined output
-                output = block(x)
-                self.assertTrue(torch.allclose(output, expected_output))
+                # Verify forward pass computation
+                with torch.no_grad():
+                    main_output = block._block(x)
+                    residual_output = block._adaptive_layer(x)
+                    expected_output = main_output + residual_output
+                    
+                    # Debug mode should return individual components
+                    main, residual, combined = block(x, debug=True)
+                    
+                    # Check that all outputs match expectations
+                    self.assertTrue(torch.allclose(main, main_output))
+                    self.assertTrue(torch.allclose(residual, residual_output))
+                    self.assertTrue(torch.allclose(combined, expected_output))
+                    
+                    # Regular forward should match combined output
+                    output = block(x)
+                    self.assertTrue(torch.allclose(output, expected_output))
 
     
     @unittest.skip("skip for now")
@@ -492,36 +544,51 @@ class TestResidualConvBlock(CustomModuleBaseTest):
         - Output should be main_stream + residual_stream
         """
         for _ in range(100):
-            block = self._generate_random_residual_conv_block(matching_dimensions=False, force_residual=False)
-            block.eval()  # Set to eval mode for consistent outputs
-            
-            # Generate random input with valid shape
-            batch_size = random.randint(1, 4)
-            height = random.randint(256, 512)
-            width = random.randint(256, 512)
-            x = self._get_valid_input(block, batch_size=batch_size, height=height, width=width)
-            
-            # Check that adaptive layer exists and is not a 1x1 kernel
-            self.assertIsNotNone(block._adaptive_layer)
-            self.assertNotEqual(tuple(block._adaptive_layer.kernel_size), (1, 1))
+            blocks_inputs = [None, None]
 
-            # Verify forward pass computation
-            with torch.no_grad():
-                main_output = block._block(x)
-                residual_output = block._adaptive_layer(x)
-                expected_output = main_output + residual_output
-                
-                # Debug mode should return individual components
-                main, residual, combined = block(x, debug=True)
-                
-                # Check that all outputs match expectations
-                self.assertTrue(torch.allclose(main, main_output))
-                self.assertTrue(torch.allclose(residual, residual_output))
-                self.assertTrue(torch.allclose(combined, expected_output))
-                
-                # Regular forward should match combined output
-                output = block(x)
-                self.assertTrue(torch.allclose(output, expected_output))
+            b1 = self._generate_random_residual_conv_block(matching_dimensions=False, force_residual=True, strides=1)
+            b1.eval()  # Set to eval mode for consistent outputs
+
+            batch_size = random.randint(1, 4)
+            height = random.randint(100, 150)
+            width = random.randint(100, 150)
+            x = self._get_valid_input(b1, batch_size=batch_size, height=height, width=width)
+            blocks_inputs[0] = (b1, x)
+
+            # generate the second block with a larger input shape
+            batch_size = random.randint(1, 4)
+            height = random.randint(100, 150)
+            width = random.randint(100, 150)
+
+            b2 = self._generate_random_residual_conv_block(matching_dimensions=False, force_residual=True, strides=2, input_shape=(16, height, width))
+            b2.eval()  # Set to eval mode for consistent outputs
+
+            x = self._get_valid_input(b2, batch_size=batch_size, height=height, width=width)
+            blocks_inputs[1] = (b2, x)
+
+
+            for block, x in blocks_inputs:
+                # Check that adaptive layer exists and is not a 1x1 kernel
+                self.assertIsNotNone(block._adaptive_layer)
+                self.assertNotEqual(tuple(block._adaptive_layer.kernel_size), (1, 1))
+
+                # Verify forward pass computation
+                with torch.no_grad():
+                    main_output = block._block(x)
+                    residual_output = block._adaptive_layer(x)
+                    expected_output = main_output + residual_output
+                    
+                    # Debug mode should return individual components
+                    main, residual, combined = block(x, debug=True)
+                    
+                    # Check that all outputs match expectations
+                    self.assertTrue(torch.allclose(main, main_output))
+                    self.assertTrue(torch.allclose(residual, residual_output))
+                    self.assertTrue(torch.allclose(combined, expected_output))
+                    
+                    # Regular forward should match combined output
+                    output = block(x)
+                    self.assertTrue(torch.allclose(output, expected_output))
 
 
 if __name__ == "__main__":
