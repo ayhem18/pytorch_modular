@@ -3,7 +3,7 @@
 import torch
 
 from torch import nn
-from typing import List, Optional, OrderedDict, Tuple, Union
+from typing import Callable, List, Optional, OrderedDict, Tuple, Union
 
 from mypt.building_blocks.mixins.custom_module_mixins import WrapperLikeModuleMixin
 
@@ -16,17 +16,26 @@ class BasicConvBlock(WrapperLikeModuleMixin):
     batch normalization and activation functions.
     """
     
+    def __activation(self, activation: Union[nn.Module, Callable], activation_params: dict) -> nn.Module:
+        # the initialization of the activation layer depends on whether it is a nn.Module or a callable
+        if isinstance(activation, nn.Module):
+            return activation
+
+        return activation(**activation_params) if activation_params else activation()
+
+
     def __build_block_single_activation(self, 
                                         channels: List[int], 
                                         kernel_sizes: List[Union[int, Tuple[int, int]]], 
                                         stride: List[Union[int, Tuple[int, int]]], 
                                         padding: List[Union[int, Tuple[int, int]]], 
                                         use_bn: bool, 
-                                        activation: nn.Module, 
+                                        activation: Union[nn.Module, Callable], 
                                         activation_params: dict,
                                         final_bn_layer: bool):
-        # define the activation layer 
-        activation_layer = activation(**activation_params) if activation_params else activation()
+
+        activation_layer = self.__activation(activation, activation_params)
+
         layers = []
         for i in range(len(channels) - 1):
             layers.append((f"conv_{i + 1}", nn.Conv2d(channels[i], channels[i+1], kernel_sizes[i], stride[i], padding[i])))
@@ -48,7 +57,7 @@ class BasicConvBlock(WrapperLikeModuleMixin):
                                         stride: List[int], 
                                         padding: List[int], 
                                         use_bn: bool, 
-                                        activation: nn.Module, 
+                                        activation: Union[nn.Module, Callable], 
                                         activation_params: dict,
                                         final_bn_layer: bool):
         # define the activation layer 
@@ -60,9 +69,9 @@ class BasicConvBlock(WrapperLikeModuleMixin):
             # add the batch normalization layer
             if use_bn:
                 layers.append((f"bn_{i + 1}", nn.BatchNorm2d(channels[i+1])))
-            # add the activation layer
-            # create a new activation layer each time (it seems that the Sequential module does not support having the same object in the list multiple times)
-            activation_layer = activation(**activation_params) if activation_params else activation()
+
+            activation_layer = self.__activation(activation, activation_params)
+
             layers.append((f"activation_{i + 1}", activation_layer))
 
         # add the final convolutional layer
@@ -73,7 +82,7 @@ class BasicConvBlock(WrapperLikeModuleMixin):
             layers.append((f"bn_{len(channels) - 1}", nn.BatchNorm2d(channels[-1])))
 
         # add the activation layer
-        activation_layer = activation(**activation_params) if activation_params else activation()
+        activation_layer = self.__activation(activation, activation_params)
         layers.append((f"activation_{len(channels) - 1}", activation_layer))
             
         return nn.Sequential(OrderedDict(layers))

@@ -1,9 +1,9 @@
 import torch
 from torch import nn
-from typing import List, Union, Optional, Tuple
+from typing import List, Union, Optional
 
-from mypt.building_blocks.mixins.custom_module_mixins import WrapperLikeModuleMixin
 from mypt.building_blocks.conv_blocks.residual_conv_block import ResidualConvBlock
+from mypt.building_blocks.mixins.custom_module_mixins import WrapperLikeModuleMixin
 from mypt.building_blocks.conv_blocks.conv_block_design.conv_design_utils import compute_log_linear_sequence
 
 
@@ -29,7 +29,7 @@ class UniformMultiResidualNet(WrapperLikeModuleMixin):
                  activation: Optional[Union[nn.Module, List[nn.Module]]] = None,
                  activation_params: Optional[Union[dict, List[dict]]] = None,
                  final_bn_layer: Union[bool, List[bool]] = False,
-                 force_residual: Union[bool, List[bool]] = False,
+                 force_residual: Union[bool, List[bool]] = True,
                  *args, **kwargs):
         """
         Initialize a UniformMultiResidualNet.
@@ -93,6 +93,8 @@ class UniformMultiResidualNet(WrapperLikeModuleMixin):
         # Create the residual blocks
         blocks = [None for _ in range(num_conv_blocks)]
         for i in range(num_conv_blocks):
+            # Each residualConvBlock expects a list of channels of length num_conv_layers + 1 
+            # the first num_conv_layers will be channels[i] and the last one will be channels[i+1]  
             block_channels = [self.channels[i]] * self.conv_layers_per_block[i] + [self.channels[i+1]]
 
             block = ResidualConvBlock(

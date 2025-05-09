@@ -1,13 +1,14 @@
 import torch
 import random
 import unittest
+
 from torch import nn
 from typing import List, Tuple
 
-import mypt.code_utils.pytorch_utils as pu
 from mypt.building_blocks.conv_blocks.conv_block import BasicConvBlock
 from mypt.dimensions_analysis.dimension_analyser import DimensionsAnalyser
 from tests.custom_base_test import CustomModuleBaseTest
+
 
 
 class TestConvBlocks(CustomModuleBaseTest):
@@ -210,7 +211,6 @@ class TestConvBlocks(CustomModuleBaseTest):
                         self.assertIsInstance(children[i*3+2], nn.ReLU)
         
 
-    @unittest.skip("Skipping forward pass shape test as it takes a long time to run")
     def test_forward_pass_shape(self):
         """Test that forward pass produces output with expected shape"""
         for _ in range(10):  # Test multiple random configurations
@@ -483,5 +483,6 @@ class TestConvBlocks(CustomModuleBaseTest):
                 super()._test_named_parameters_length(block)
 
 if __name__ == '__main__':
+    import mypt.code_utils.pytorch_utils as pu
     pu.seed_everything(69)
     unittest.main()

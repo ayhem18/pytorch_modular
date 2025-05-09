@@ -29,6 +29,7 @@ class ResidualConvBlock(GeneralResidualMixin, WrapperLikeModuleMixin):
                  activation_params: Optional[dict] = None,
                  final_bn_layer: bool = False,
                  force_residual: bool = False,
+                 input_shape: Optional[Tuple[int, int, int]] = None,  # (C, H, W)
                  *args, **kwargs):
         """
         Initialize a ResidualConvBlock.
@@ -45,6 +46,7 @@ class ResidualConvBlock(GeneralResidualMixin, WrapperLikeModuleMixin):
             activation_params: Parameters for the activation function
             final_bn_layer: Whether to add a batch norm layer at the end
             force_residual: Whether to force a residual connection even when dimensions match
+            input_shape: Optional input shape (C, H, W) needed for non-trivial kernel sizes
         """
         WrapperLikeModuleMixin.__init__(self, '_block', *args, **kwargs)
         
@@ -60,7 +62,22 @@ class ResidualConvBlock(GeneralResidualMixin, WrapperLikeModuleMixin):
         self._activation_params = activation_params
         self._final_bn_layer = final_bn_layer
         self._force_residual = force_residual
+        self._input_shape = input_shape
         
+        # Validate kernel sizes
+        # If kernel sizes include values > 1, we need input_shape to properly create the adaptive layer
+        if isinstance(kernel_sizes, int):
+            all_kernels_are_one = (kernel_sizes == 1)
+        else:
+            all_kernels_are_one = all(k == 1 for k in kernel_sizes)
+            
+        if not all_kernels_are_one and input_shape is None:
+            raise ValueError("When using kernel sizes > 1, input_shape must be provided. "
+                             "Strided convolutions are non-linear operations that cannot "
+                             "always be represented by an equivalent single convolution layer  in the residual stream !!!.")
+        
+        self._input_shape = input_shape
+
         # Create the main convolutional block
         self._block = BasicConvBlock(
             num_conv_layers=num_conv_layers,
@@ -79,27 +96,26 @@ class ResidualConvBlock(GeneralResidualMixin, WrapperLikeModuleMixin):
         self._adaptive_layer = None
         
         # Use dimension analyzer to determine output shape
-        dim_analyzer = DimensionsAnalyser(method='static') # use static method: faster and memory efficient
+        dim_analyzer = DimensionsAnalyser(method='static')
         
-        # Create a sample input tensor with reasonable dimensions
-        # The actual values don't matter, just the shape
-        sample_height, sample_width = 1024, 1024
-        sample_input = torch.zeros(1, channels[0], sample_height, sample_width)
+        # Create a sample input tensor with either provided shape or reasonable default dimensions
+        if input_shape is not None:
+            sample_input = torch.zeros(1, *input_shape)
+            sample_height, sample_width = input_shape[1], input_shape[2]
+        else:
+            # Use default large dimensions only for trivial kernel sizes (all 1s)
+            sample_height, sample_width = 2024, 2024
+            sample_input = torch.zeros(1, channels[0], sample_height, sample_width)
         
         # Get the output shape
         output_shape = dim_analyzer.analyse_dimensions(sample_input.shape, self._block)
         
         if output_shape[1:] != (channels[-1], sample_height, sample_width) or force_residual:
-            # the adaptive layer should produce the output shape from the input shape
-            # the input shape is (1, channels[0], sample_height, sample_width)
-            # the output shape is (1, channels[-1], sample_height, sample_width)
-            # the kernel size should be (output_shape[2] - sample_height + 1, output_shape[3] - sample_width + 1)   
-            # if the shape are exactly the same (and force_residual is True), then the formula is still correct
-
+            # Creating an adaptive layer that transforms from input shape to output shape
             self._adaptive_layer = nn.Conv2d(
                 in_channels=channels[0],
                 out_channels=channels[-1],
-                kernel_size=(output_shape[2] - sample_height + 1, output_shape[3] - sample_width + 1), 
+                kernel_size=(sample_height - output_shape[2] + 1, sample_width - output_shape[3] + 1),
                 stride=1,
                 padding=0
             )
@@ -131,6 +147,9 @@ class ResidualConvBlock(GeneralResidualMixin, WrapperLikeModuleMixin):
         Returns:
             Output tensor or (main_output, residual_output, final_output) if debug=True
         """
+        if self._input_shape is not None and x.shape[1:] != self._input_shape:
+            raise ValueError(f"Input shape {x.shape[1:]} does not match expected input shape {self._input_shape}")
+        
         return self.residual_forward(x, debug=debug)
     
     def __call__(self, x: torch.Tensor) -> torch.Tensor:
