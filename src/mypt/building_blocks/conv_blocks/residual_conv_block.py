@@ -117,7 +117,7 @@ class ResidualConvBlock(GeneralResidualMixin, WrapperLikeModuleMixin):
         if any(v <= 0 for v in output_shape):
             raise ValueError(f"It seems that the input shape passed to the ResidualConvBlock is completely consumed by the convolutions. A large input shape is needed !!")
 
-        if output_shape[1:] != (channels[-1], sample_height, sample_width) or force_residual:
+        if output_shape[1:] != (channels[0], sample_height, sample_width) or force_residual:
             # Creating an adaptive layer that transforms from input shape to output shape
             self._adaptive_layer = nn.Conv2d(
                 in_channels=channels[0],

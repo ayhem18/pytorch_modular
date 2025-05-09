@@ -152,6 +152,10 @@ class BasicConvBlock(WrapperLikeModuleMixin):
             if len(paddings) != num_conv_layers:
                 raise ValueError(f"The number of paddings must be the number of conv layers. Found: {len(paddings)} paddings for {num_conv_layers} conv layers.")
 
+        for index, (s, p) in enumerate(zip(strides, paddings)):
+            if s != 1 and p == 'same':
+                raise ValueError(f"the {index + 1}-th layer has a stride of {s} and padding of {p}. This is not allowed because 'same' padding is not allowed when strides > 1.")
+
         # set the fields
         self._num_conv_layers = num_conv_layers  
         self._channels = channels

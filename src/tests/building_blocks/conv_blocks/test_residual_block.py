@@ -1,3 +1,4 @@
+from copy import copy
 import torch
 import random
 import unittest
@@ -139,21 +140,21 @@ class TestResidualConvBlock(CustomModuleBaseTest):
     
     ########################## CustomModuleBaseTest tests ##########################
     
-    @unittest.skip("passed!!")
+    # @unittest.skip("passed!!")
     def test_eval_mode(self):
         """Test that the block can be set to evaluation mode"""
         for _ in tqdm(range(100), desc="Testing eval mode"):
             block = self._generate_random_residual_conv_block()
             super()._test_eval_mode(block)
     
-    @unittest.skip("passed!!")
+    # @unittest.skip("passed!!")
     def test_train_mode(self):
         """Test that the block can be set to training mode"""
         for _ in tqdm(range(100), desc="Testing train mode"):
             block = self._generate_random_residual_conv_block()
             super()._test_train_mode(block)
     
-    @unittest.skip("passed!!")
+    # @unittest.skip("passed!!")
     def test_consistent_output_without_dropout_bn(self):
         """Test consistent output for non-stochastic blocks"""
         for _ in tqdm(range(100), desc="Testing consistent output without dropout bn"):
@@ -166,7 +167,7 @@ class TestResidualConvBlock(CustomModuleBaseTest):
 
             super()._test_consistent_output_without_dropout_bn(block, input_tensor)
     
-    @unittest.skip("passed!!")
+    # @unittest.skip("passed!!")  
     def test_consistent_output_in_eval_mode(self):
         """Test consistent output in evaluation mode"""
         for _ in range(100):
@@ -177,7 +178,7 @@ class TestResidualConvBlock(CustomModuleBaseTest):
                 input_tensor = self._get_valid_input(block)
             super()._test_consistent_output_in_eval_mode(block, input_tensor)
 
-    @unittest.skip("passed!!")
+    # @unittest.skip("passed!!")
     def test_batch_size_one_in_train_mode(self):
         """Test handling of batch size 1 in training mode"""
         for _ in range(100):
@@ -188,7 +189,7 @@ class TestResidualConvBlock(CustomModuleBaseTest):
                 input_tensor = self._get_valid_input(block)
             super()._test_batch_size_one_in_train_mode(block, input_tensor)
 
-    # @unittest.skip("skip for now")
+    # @unittest.skip("passed!!")
     def test_batch_size_one_in_eval_mode(self):
         """Test handling of batch size 1 in evaluation mode"""
         for _ in range(100):
@@ -199,14 +200,14 @@ class TestResidualConvBlock(CustomModuleBaseTest):
                 input_tensor = self._get_valid_input(block)
             super()._test_batch_size_one_in_eval_mode(block, input_tensor)
 
-    # @unittest.skip("skip for now")
+    # @unittest.skip("passed!!")
     def test_named_parameters_length(self):
         """Test that named_parameters and parameters have the same length"""
         for _ in range(100):
             block = self._generate_random_residual_conv_block()
             super()._test_named_parameters_length(block)
     
-    # @unittest.skip("skip for now")
+    # @unittest.skip("passed!!")
     def test_to_device(self):
         """Test that the block can be moved between devices"""
         for _ in range(100):
@@ -215,7 +216,7 @@ class TestResidualConvBlock(CustomModuleBaseTest):
     
     ########################## ResidualConvBlock specific tests ##########################
 
-    @unittest.skip("skip for now")
+    # @unittest.skip("passed!!")
     def test_block_structure(self):
         """Test that the ResidualConvBlock has the correct structure"""
         for _ in range(100):
@@ -234,28 +235,30 @@ class TestResidualConvBlock(CustomModuleBaseTest):
                 self.assertIsNone(block._adaptive_layer)
     
 
-    @unittest.skip("skip for now")
+    # @unittest.skip("passed!!")
     def test_adaptive_layer_creation(self):
         """Test that adaptive layer is created when necessary"""
-        # Test with matching dimensions and force_residual=False
-        block = self._generate_random_residual_conv_block(matching_dimensions=True, force_residual=False)
-        self.assertIsNone(block._adaptive_layer, 
-                         "Adaptive layer should not be created when dimensions match and force_residual=False")
-        
-        # Test with non-matching dimensions
-        block = self._generate_random_residual_conv_block(matching_dimensions=False, force_residual=False)
-        self.assertIsNotNone(block._adaptive_layer, 
-                            "Adaptive layer should be created when dimensions don't match")
-        self.assertEqual(block._adaptive_layer.in_channels, block._channels[0])
-        self.assertEqual(block._adaptive_layer.out_channels, block._channels[-1])
-        
-        # Test with force_residual=True
-        block = self._generate_random_residual_conv_block(matching_dimensions=True, force_residual=True)
-        self.assertIsNotNone(block._adaptive_layer, 
-                            "Adaptive layer should be created when force_residual=True")
+
+        for _ in tqdm(range(100), desc="Testing adaptive layer creation"):
+            # Test with matching dimensions and force_residual=False
+            block = self._generate_random_residual_conv_block(matching_dimensions=True, force_residual=False, strides=1)
+            self.assertIsNone(block._adaptive_layer, 
+                            "Adaptive layer should not be created when dimensions match and force_residual=False")
+            
+            # Test with non-matching dimensions
+            block = self._generate_random_residual_conv_block(matching_dimensions=False, force_residual=False)
+            self.assertIsNotNone(block._adaptive_layer, 
+                                "Adaptive layer should be created when dimensions don't match")
+            self.assertEqual(block._adaptive_layer.in_channels, block._channels[0])
+            self.assertEqual(block._adaptive_layer.out_channels, block._channels[-1])
+            
+            # Test with force_residual=True
+            block = self._generate_random_residual_conv_block(matching_dimensions=True, force_residual=True, strides=1)
+            self.assertIsNotNone(block._adaptive_layer, 
+                                "Adaptive layer should be created when force_residual=True")
     
     
-    @unittest.skip("skip for now")
+    # @unittest.skip("passed!!")
     def test_method_overrides(self):
         """Test that all overridden methods work correctly"""
         block = self._generate_random_residual_conv_block()
@@ -284,16 +287,17 @@ class TestResidualConvBlock(CustomModuleBaseTest):
         self.assertIs(block.eval(), block)
 
 
-    @unittest.skip("skip for now")
+    # @unittest.skip("passed!!")
     def test_error_on_large_kernel_without_input_shape(self):
         """Test that an error is raised when kernel_sizes > 1 and input_shape is not provided"""
         # Test with scalar kernel_size > 1
         with self.assertRaises(ValueError):
             ResidualConvBlock(
+                kernel_sizes=3,
                 num_conv_layers=2,
                 channels=[16, 16, 32],
                 strides=[1, 2, 1],
-                paddings='same',
+                paddings=0,
                 use_bn=True,
                 force_residual=False
             )
@@ -314,7 +318,7 @@ class TestResidualConvBlock(CustomModuleBaseTest):
                         channels=[16] * len(strides) + [32],
                         kernel_sizes=[1] * len(strides),
                         strides=strides,
-                        paddings='same',
+                        paddings=0,
                         use_bn=True,
                         force_residual=False
                     )
@@ -327,7 +331,7 @@ class TestResidualConvBlock(CustomModuleBaseTest):
                     channels=[16] * len(strides) + [32],
                     kernel_sizes=[1] * len(strides),
                     strides=strides,
-                    paddings='same',
+                    paddings=0,
                     use_bn=True,
                     force_residual=False,
                     input_shape=(16, 100, 100)
@@ -335,7 +339,7 @@ class TestResidualConvBlock(CustomModuleBaseTest):
             except ValueError:
                 self.fail(f"ResidualConvBlock with strides={strides} and input_shape should not raise ValueError")
                 
-        # Test that kernel_size=1 works without input_shape
+        # Test that strides = 1 works without input_shape
         try:
             for k in range(1, 11, 2):
                 ResidualConvBlock(
@@ -343,7 +347,7 @@ class TestResidualConvBlock(CustomModuleBaseTest):
                     channels=[16, 16, 32],
                     kernel_sizes=k,
                     strides=1,
-                    paddings='same',
+                    paddings=0, # can't have 'same' padding with strides = 1
                     use_bn=True,
                     force_residual=False
                 )
@@ -351,7 +355,7 @@ class TestResidualConvBlock(CustomModuleBaseTest):
             self.fail("ResidualConvBlock with kernel_size=1 should not require input_shape")
 
 
-    @unittest.skip("skip for now")
+    # @unittest.skip("passed!!")
     def test_input_shape_validation(self):
         """Test that the forward method validates input shape when input_shape is specified"""
         # Create a block with input_shape specified
@@ -377,7 +381,7 @@ class TestResidualConvBlock(CustomModuleBaseTest):
 
         for _ in range(100):
             # change one of the dimensions of the input shape
-            shape = input_shape.copy()
+            shape = list(input_shape)
             i = random.randint(0, 2) 
             shape[i] = random.randint(2, input_shape[i] - 1)
             
@@ -388,7 +392,7 @@ class TestResidualConvBlock(CustomModuleBaseTest):
 
 
 
-    @unittest.skip("skip for now")
+    # @unittest.skip("passed!!")
     def test_forward_md_true_fr_true(self):
         """
         Test forward pass with matching dimensions and force_residual=True
@@ -398,7 +402,7 @@ class TestResidualConvBlock(CustomModuleBaseTest):
         - An adaptive layer with 1x1 kernel should be created
         - Output should be main_stream + residual_stream
         """
-        for _ in range(100):
+        for _ in tqdm(range(100), desc="Testing forward pass with matching dimensions and force_residual=True"):
             
             # matching dimensions does not work with strides > 1
             block = self._generate_random_residual_conv_block(matching_dimensions=True, force_residual=True, strides=1)
@@ -433,7 +437,7 @@ class TestResidualConvBlock(CustomModuleBaseTest):
                 output = block(x)
                 self.assertTrue(torch.allclose(output, expected_output))
 
-    @unittest.skip("skip for now")
+    # @unittest.skip("passed!!")
     def test_forward_md_true_fr_false(self):
         """
         Test forward pass with matching dimensions and force_residual=False
@@ -443,7 +447,7 @@ class TestResidualConvBlock(CustomModuleBaseTest):
         - No adaptive layer should be created (direct identity connection)
         - Output should be main_stream + input
         """
-        for _ in range(100):
+        for _ in tqdm(range(100), desc="Testing forward pass with matching dimensions and force_residual=False"):
             block = self._generate_random_residual_conv_block(matching_dimensions=True, force_residual=False, strides=1)
             block.eval()  # Set to eval mode for consistent outputs
             
@@ -474,7 +478,7 @@ class TestResidualConvBlock(CustomModuleBaseTest):
                 self.assertTrue(torch.allclose(output, expected_output))
 
 
-    @unittest.skip("skip for now")
+    # @unittest.skip("passed!!")
     def test_forward_md_false_fr_true(self):
         """
         Test forward pass with non-matching dimensions and force_residual=True
@@ -484,7 +488,7 @@ class TestResidualConvBlock(CustomModuleBaseTest):
         - An adaptive layer must be created to match dimensions
         - Output should be main_stream + residual_stream
         """
-        for _ in range(100):
+        for _ in tqdm(range(100), desc="Testing forward pass with non-matching dimensions and force_residual=True"):
             # matching dimensions is set to False; then we can pass input_shape and strides > 1
 
             blocks_inputs = [None, None]
@@ -533,7 +537,7 @@ class TestResidualConvBlock(CustomModuleBaseTest):
                     self.assertTrue(torch.allclose(output, expected_output))
 
     
-    @unittest.skip("skip for now")
+    # @unittest.skip("skip for now")
     def test_forward_md_false_fr_false(self):
         """
         Test forward pass with non-matching dimensions and force_residual=False
@@ -543,7 +547,7 @@ class TestResidualConvBlock(CustomModuleBaseTest):
         - An adaptive layer must be created to match dimensions
         - Output should be main_stream + residual_stream
         """
-        for _ in range(100):
+        for _ in tqdm(range(100), desc="Testing forward pass with non-matching dimensions and force_residual=False"):
             blocks_inputs = [None, None]
 
             b1 = self._generate_random_residual_conv_block(matching_dimensions=False, force_residual=True, strides=1)
