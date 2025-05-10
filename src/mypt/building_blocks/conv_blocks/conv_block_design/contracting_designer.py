@@ -64,16 +64,24 @@ class ContractingCbDesigner:
                 self.min_conv_layers_per_block,
                 self.max_conv_layers_per_block
             )
+
+            if height_block is None:
+                raise ValueError(f"The internal algorithm failed to find a valid conv from {self.input_shape[1]} to {self.output_shape[1]} with the given parameters. Consider increasing the max_conv_layers_per_block parameter.")
+
             return height_block, height_block.copy()
         
         # Otherwise compute separately for height and width
         height_block, _ = best_conv_block(
             self.input_shape[1], 
             self.output_shape[1],
-            self.min_conv_layers_per_block,
+            self.min_conv_layers_per_block, 
             self.max_conv_layers_per_block
         )
         
+        if height_block is None:
+            raise ValueError(f"The internal algorithm failed to find a valid conv from {self.input_shape[1]} to {self.output_shape[1]} with the given parameters. Consider increasing the max_conv_layers_per_block parameter.")
+
+
         width_block, _ = best_conv_block(
             self.input_shape[2], 
             self.output_shape[2],
@@ -81,11 +89,8 @@ class ContractingCbDesigner:
             self.max_conv_layers_per_block
         )
         
-        if height_block is None:
-            raise ValueError("The internal algorithm failed to find a valid convolutional block mapping the input height to the output height with the given parameters. Consider increasing the max_conv_layers_per_block parameter.")
-
         if width_block is None:
-            raise ValueError("The internal algorithm failed to find a valid convolutional block mapping the input width to the output width with the given parameters. Consider increasing the max_conv_layers_per_block parameter.")
+            raise ValueError(f"The internal algorithm failed to find a valid conv from {self.input_shape[2]} to {self.output_shape[2]} with the given parameters. Consider increasing the max_conv_layers_per_block parameter.")
 
         return height_block, width_block
     

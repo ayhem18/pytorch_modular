@@ -61,6 +61,8 @@ class ModuleListMixin:
     
 
     def module_list_modules(self) -> Iterator[nn.Module]:
+        yield self
+        
         self._verify_instance_moduleListMixin()
 
         inner_model = getattr(self, self._inner_model_field_name)
@@ -87,8 +89,13 @@ class ModuleListMixin:
 
         for i in range(len(inner_model)):
             gen = inner_model[i].named_parameters(prefix, recurse)
-            for output in gen:
-                yield  output
+            for param_name, param in gen:
+                if prefix:
+                    yield f"{prefix}.{self._inner_model_field_name}.{i}.{param_name}", param
+                else:
+                    yield f"{self._inner_model_field_name}[{i}].{param_name}", param
+
+
 
 
     def __len__(self) -> int:

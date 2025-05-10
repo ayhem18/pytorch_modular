@@ -1,17 +1,15 @@
 import torch
 
 from torch import nn
-from copy import copy
 from typing import List, Tuple, Optional, Union
 
 from mypt.nets.conv_nets.unet_skip_connections import UnetSkipConnections
 from mypt.dimensions_analysis.dimension_analyser import DimensionsAnalyser
 from mypt.nets.conv_nets.uni_multi_residual_conv import UniformMultiResidualNet
-from mypt.building_blocks.mixins.custom_module_mixins import WrapperLikeModuleMixin
 from mypt.building_blocks.conv_blocks.composite_blocks import ContractingBlock, ExpandingBlock
 
 
-class AdaptiveUNet(WrapperLikeModuleMixin):
+class AdaptiveUNet(torch.nn.Module):
     """
     A flexible UNet architecture that adapts to input and output shapes.
     
@@ -41,7 +39,7 @@ class AdaptiveUNet(WrapperLikeModuleMixin):
             bottleneck_shape: Tuple of (channels, height, width) for the bottleneck
             bottleneck_out_channels: Number of output channels from bottleneck (defaults to bottleneck_shape[0])
         """
-        super().__init__('_unet', *args, **kwargs)
+        super().__init__(*args, **kwargs)
         
         # Validate shapes
         if len(input_shape) != 3 or len(output_shape) != 3 or len(bottleneck_shape) != 3:
@@ -55,19 +53,24 @@ class AdaptiveUNet(WrapperLikeModuleMixin):
         self.input_shape = input_shape
         self.output_shape = output_shape
         self.bottleneck_input_shape = bottleneck_shape
-        self.bottleneck_output_shape = copy(bottleneck_shape)
+    
+        # make sure the output shape takes the 'bottleneck_out_channels' into account
+        self.bottleneck_output_shape = list(bottleneck_shape)
         self.bottleneck_output_shape[0] = bottleneck_out_channels or bottleneck_shape[0]
-        
+        self.bottleneck_output_shape = tuple(self.bottleneck_output_shape)
+
         # These will be set by the build methods
         self.contracting_path = None
         self.bottleneck = None
         self.expanding_path = None
         self.skip_connections = None
         self._is_built = False
+
+        self.contracting_start_point = None
     
     def build_contracting_path(self, 
-                              max_conv_layers_per_block: int = 4,
-                              min_conv_layers_per_block: int = 2,
+                              max_conv_layers_per_block: int = 5,
+                              min_conv_layers_per_block: int = 1,
                               **kwargs) -> 'AdaptiveUNet':
         """
         Build the contracting path of the UNet.
@@ -87,7 +90,7 @@ class AdaptiveUNet(WrapperLikeModuleMixin):
         # Create the contracting path
         self.contracting_path = ContractingBlock(
             input_shape=self.input_shape,
-            output_shape=self.bottleneck_shape,
+            output_shape=self.bottleneck_input_shape,
             max_conv_layers_per_block=max_conv_layers_per_block,
             min_conv_layers_per_block=min_conv_layers_per_block,
             **kwargs
@@ -123,21 +126,21 @@ class AdaptiveUNet(WrapperLikeModuleMixin):
         # Create the bottleneck
         self.bottleneck = UniformMultiResidualNet(
             num_conv_blocks=num_blocks,
-            in_channels=self.bottleneck_shape[0],
-            out_channels=self.bottleneck_out_channels,
+            in_channels=self.bottleneck_input_shape[0],
+            out_channels=self.bottleneck_output_shape[0],
             conv_layers_per_block=conv_layers_per_block,
             kernel_sizes=kernel_sizes,
             strides=1,
             paddings='same',
-            input_shape=self.bottleneck_shape,
+            input_shape=self.bottleneck_input_shape,
             **kwargs
         )
         
         return self
     
     def build_expanding_path(self,
-                            max_conv_layers_per_block: int = 4,
-                            min_conv_layers_per_block: int = 2,
+                            max_conv_layers_per_block: int = 5,
+                            min_conv_layers_per_block: int = 1,
                             **kwargs) -> 'AdaptiveUNet':
         """
         Build the expanding path of the UNet.
@@ -158,12 +161,9 @@ class AdaptiveUNet(WrapperLikeModuleMixin):
         if self.expanding_path is not None:
             return self
         
-        # Create a starting shape for the expanding path - this will come from the bottleneck
-        bottleneck_output_shape = (self.bottleneck_out_channels,) + self.bottleneck_shape[1:]
-        
         # Create the expanding path
         self.expanding_path = ExpandingBlock(
-            input_shape=bottleneck_output_shape,
+            input_shape=self.bottleneck_output_shape,
             output_shape=self.output_shape,
             max_conv_layers_per_block=max_conv_layers_per_block,
             min_conv_layers_per_block=min_conv_layers_per_block,
@@ -180,44 +180,71 @@ class AdaptiveUNet(WrapperLikeModuleMixin):
         """
         
         # step1: find the number of blocks in each path
-        num_contracting_blocks = len(self.contracting_path.blocks)
-        num_expanding_blocks = len(self.expanding_path.blocks)
+        num_contracting_blocks = len(self.contracting_path)
+        num_expanding_blocks = len(self.expanding_path)
     
         # Number of skip connections is the minimum of the two
         num_skip_connections = min(num_contracting_blocks, num_expanding_blocks)
         
-        # the skip connections need to link the the last N blocks of the contracting path to the first N blocks of the expanding path
+        # the skip connections need to link the the last N blocks of the contracting path to the first N inputs of the expanding path
+        # in other words (self.bottleneck_output_shape) + the outputs of the (N - 1) first blocks of the expanding path
         
-        # step2: find the output shapes of the first N blocks of the expanding path
+        # step2: find the N - 1 output shapes of the expanding path
 
-        expanding_shapes = [None for _ in range(num_skip_connections)]
+        expanding_shapes = [self.bottleneck_output_shape] + [None for _ in range(num_skip_connections - 1)]
 
         # keep in mind that the input to the expanding path is the bottleneck output
-        traversal_input = torch.zeros((2,) + self.bottleneck_output_shape)
+        exp_shape = (2,) + self.bottleneck_output_shape
 
         dim_analyzer = DimensionsAnalyser(method='static')
 
-        for i in range(num_skip_connections):
-            shape = dim_analyzer.analyse_dimensions(traversal_input.shape, self.expanding_path[i])
-            expanding_shapes[i] = shape[1:]
-            traversal_input = torch.zeros(shape)
+        for i in range(num_skip_connections - 1):
+            exp_shape = dim_analyzer.analyse_dimensions(exp_shape, self.expanding_path[i])
+            expanding_shapes[i + 1] = exp_shape[1:]
+
 
         # step3: find the output shapes of the last N blocks of the contracting path
+        con_shape = (2,) + self.input_shape
+
         contracting_shapes = [None for _ in range(num_skip_connections)]
 
-        for i in range(num_skip_connections):
-            # the only part we really need is the number of output channels
-            shape = dim_analyzer.analyse_dimensions(traversal_input.shape, self.contracting_path[num_contracting_blocks - 1 - i].conv)
-            contracting_shapes[i] = shape[1:]
-            traversal_input = torch.zeros(shape)
+        contracting_start_point = len(self.contracting_path) - num_skip_connections        
+        
+        self.contracting_start_point = contracting_start_point
+
+        for index in range(len(self.contracting_path)):
+            # there are two cases: either we reached the starting point
+            # in this case we need to save 2 shapes: the output after the convolutional part of the block (using with the skip connection)
+            # and the output after the pooling part (used to calculated the correct shape)
+
+            # calculate the shape after the convolutional part of the block
+            con_shape = dim_analyzer.analyse_dimensions(con_shape, self.contracting_path[index].conv)
+            
+            if index >= contracting_start_point:
+                # save the shape for the skip connection
+                contracting_shapes[index - contracting_start_point] = con_shape[1:]
+
+            # calculate the shape after the pooling part of the block (make sure to use the `shape` calculated after the convolutional part)
+            con_shape = dim_analyzer.analyse_dimensions(con_shape, self.contracting_path[index].pool) 
+            
+        # shape at this point must be the same as the bottleneck_input_shape    
+        assert con_shape[1:] == self.bottleneck_input_shape, "Make sure the calculation of the shapes through the contracting path is correct!!!"
+        assert all(s is not None for s in contracting_shapes), "Make sure the calculation of the shapes through the contracting path is correct!!!"
+
+
+        # step4: build the skip connections. This is still tricky, so let's approach it step by step 
+        # contracting_shapes is a list of the outputs of the last N blocks of the contracting path 
+        # contracting_shapes[i] is the output shape of contracting_starting_point + i block
+        # contracting_shapes[i] must be matched with the i-th expanding block in the reverse order: expanding_shapes[num_skip_connections - 1 - i]
+        
 
         # the skip connection between the n - 1 - i)th block of the contracting path and the i)th block of the expanding path 
         # is a combination of a (1 * 1 convolutional layer) mapping the number of channels from the contracting block to the expanding block 
         # and then an adaptive average pooling to match the spatial dimensions
 
         skip_connections = [nn.Sequential(
-            nn.Conv2d(contracting_shapes[i][0], expanding_shapes[i][0], kernel_size=1, stride=1, padding=0),
-            nn.AdaptiveAvgPool2d(expanding_shapes[i][1:])
+            nn.Conv2d(contracting_shapes[i][0], expanding_shapes[num_skip_connections - 1 - i][0], kernel_size=1, stride=1, padding=0),
+            nn.AdaptiveAvgPool2d(expanding_shapes[num_skip_connections - 1 - i][1:])
         ) for i in range(num_skip_connections)]
 
         self.skip_connections = UnetSkipConnections(skip_connections)
@@ -275,15 +302,14 @@ class AdaptiveUNet(WrapperLikeModuleMixin):
         # 'x' at this point is the bottleneck output
         # for each block in the expanding path, we need to pass the current output + skipconnection(intermediate contracting block output)
 
-
         num_skip_connections = self.skip_connections.num_connections 
 
         for i in range(num_skip_connections):
-            # pass the corrresponding intermediate output through the skip connection
-            skip_input = self.skip_connections.apply_connection(contracting_outputs[i], i)
+            skip_connection_index = len(contracting_outputs) - 1 - i
+            skip_input = self.skip_connections.apply_connection(contracting_outputs[skip_connection_index], skip_connection_index)
 
             # pass the current output + skip_input through the expanding block
-            x = self.expanding_path[i](x, skip_input)    
+            x = self.expanding_path[i].forward(x + skip_input)    
 
         # at this point either the expanding or the contracting path is used
         if num_skip_connections == len(self.expanding_path.blocks):
@@ -291,8 +317,193 @@ class AdaptiveUNet(WrapperLikeModuleMixin):
             return x
 
         # at this point, we have still some expanding blocks left to use
-        for i in range(num_skip_connections, len(self.expanding_path.blocks)):
-            x = self.expanding_path[i](x)
+        for i in range(num_skip_connections, len(self.expanding_path)):
+            x = self.expanding_path[i].forward(x)
 
         return x
 
+    def train(self, mode: bool = True) -> 'AdaptiveUNet':
+        """
+        Set the UNet and all its components to training mode.
+        
+        Args:
+            mode: Boolean indicating whether to set to training mode (True) 
+                 or evaluation mode (False)
+                 
+        Returns:
+            Self for method chaining
+        """
+        # Set the training attribute of the model itself
+        self.training = mode
+        
+        # Set training mode for each component if they've been built
+        if self.contracting_path is not None:
+            self.contracting_path.train(mode)
+            
+        if self.bottleneck is not None:
+            self.bottleneck.train(mode)
+            
+        if self.expanding_path is not None:
+            self.expanding_path.train(mode)
+            
+        if self.skip_connections is not None:
+            self.skip_connections.train(mode)
+            
+        return self
+    
+    def eval(self) -> 'AdaptiveUNet':
+        """
+        Set the UNet and all its components to evaluation mode.
+        
+        Returns:
+            Self for method chaining
+        """
+        return self.train(mode=False)
+    
+    def to(self, *args, **kwargs) -> 'AdaptiveUNet':
+        """
+        Move the UNet and all its components to the specified device or dtype.
+        
+        Args:
+            *args, **kwargs: Arguments to pass to torch.nn.Module.to()
+            
+        Returns:
+            Self for method chaining
+        """
+        # Move each component if they've been built
+        if self.contracting_path is not None:
+            self.contracting_path.to(*args, **kwargs)
+            
+        if self.bottleneck is not None:
+            self.bottleneck.to(*args, **kwargs)
+            
+        if self.expanding_path is not None:
+            self.expanding_path.to(*args, **kwargs)
+            
+        if self.skip_connections is not None:
+            self.skip_connections.to(*args, **kwargs)
+            
+        return self
+
+    def parameters(self, recurse: bool = True):
+        """
+        Return an iterator over UNet's parameters.
+        
+        Args:
+            recurse: If True, yields parameters of this module and all submodules.
+                    Otherwise, yields only parameters that are direct members of this module.
+                    
+        Returns:
+            Iterator over parameters
+        """
+        # First, check if components are built
+        if not self._is_built:
+            # If no components are built, return empty iterator
+            return iter([])
+            
+        # Yield parameters from each component that has been built
+        for param in self.contracting_path.parameters(recurse):
+            yield param
+
+        for param in self.bottleneck.parameters(recurse):
+            yield param
+                
+        for param in self.expanding_path.parameters(recurse):
+            yield param
+                
+        for param in self.skip_connections.parameters(recurse):
+            yield param
+    
+    def named_parameters(self, prefix: str = '', recurse: bool = True):
+        """
+        Return an iterator over UNet's parameters, yielding both the name and the parameter.
+        
+        Args:
+            prefix: Prefix to prepend to all parameter names
+            recurse: If True, yields parameters of this module and all submodules.
+                    Otherwise, yields only parameters that are direct members of this module.
+                    
+        Returns:
+            Iterator over (name, parameter) tuples
+        """
+        if not self._is_built:
+            return iter([])
+            
+        # self._is_build == True, implies all the components are initialized
+
+        # Prepare component prefixes
+        cp_prefix = f"{prefix}.contracting_path." if prefix else "contracting_path."
+        bn_prefix = f"{prefix}.bottleneck." if prefix else "bottleneck."
+        ep_prefix = f"{prefix}.expanding_path." if prefix else "expanding_path."
+        sc_prefix = f"{prefix}.skip_connections." if prefix else "skip_connections."
+        
+        # Yield named parameters from each component that has been built
+        for name, param in self.contracting_path.named_parameters(recurse=recurse):
+            yield cp_prefix + name, param
+                
+        for name, param in self.bottleneck.named_parameters(recurse=recurse):
+            yield bn_prefix + name, param
+                
+        for name, param in self.expanding_path.named_parameters(recurse=recurse):
+            yield ep_prefix + name, param
+                
+        for name, param in self.skip_connections.named_parameters(recurse=recurse):
+            yield sc_prefix + name, param
+    
+    def modules(self):
+        """
+        Return an iterator over all modules in the UNet network.
+        
+        Returns:
+            Iterator over modules
+        """
+        # Yield self first, as per PyTorch convention
+        yield self
+        
+        # Yield modules from each component that has been built
+        if self.contracting_path is not None:
+            for module in self.contracting_path.modules():
+                yield module
+                
+        if self.bottleneck is not None:
+            for module in self.bottleneck.modules():
+                yield module
+                
+        if self.expanding_path is not None:
+            for module in self.expanding_path.modules():
+                yield module
+                
+        if self.skip_connections is not None:
+            for module in self.skip_connections.modules():
+                yield module
+
+
+    def children(self):
+        """
+        Return an iterator over all children modules in the UNet network.
+        
+        Returns:
+            Iterator over children modules
+        """        
+        if not self._is_built:
+            return iter([])
+
+        return iter([self.contracting_path, self.bottleneck, self.expanding_path, self.skip_connections])
+                
+    
+    def named_children(self):
+        """
+        Return an iterator over all named children modules in the UNet network.
+        
+        Returns:
+            Iterator over (name, module) tuples
+        """
+        if not self._is_built:
+            return iter([])
+
+        return iter([
+            ("contracting_path", self.contracting_path),
+            ("bottleneck", self.bottleneck),
+            ("expanding_path", self.expanding_path),
+            ("skip_connections", self.skip_connections)
+        ])
