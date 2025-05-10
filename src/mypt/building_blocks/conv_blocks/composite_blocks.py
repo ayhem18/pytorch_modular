@@ -69,6 +69,16 @@ class ContractingBlock(WrapperLikeModuleMixin, SequentialModuleListMixin):
     @property
     def block(self) -> List[nn.Module]:
         return self._block
+    
+
+    def __len__(self) -> int:
+        return len(self.blocks)
+    
+    def __getitem__(self, index: int) -> nn.Module:
+        if index < 0 or index >= len(self.blocks):
+            raise IndexError(f"Index {index} is out of bounds for the ContractingBlock. The block has {len(self.blocks)} blocks.")
+
+        return self.blocks[index]
 
 
 class ExpandingBlock(WrapperLikeModuleMixin, SequentialModuleListMixin):
@@ -133,3 +143,11 @@ class ExpandingBlock(WrapperLikeModuleMixin, SequentialModuleListMixin):
         return self._block
 
 
+    def __len__(self) -> int:
+        return len(self.blocks)
+    
+    def __getitem__(self, index: int) -> nn.Module:
+        if index < 0 or index >= len(self.blocks):
+            raise IndexError(f"Index {index} is out of bounds for the ExpandingBlock. The block has {len(self.blocks)} blocks.")
+
+        return self.blocks[index]

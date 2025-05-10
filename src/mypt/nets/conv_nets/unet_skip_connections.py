@@ -14,45 +14,51 @@ class UnetSkipConnections(ModuleListMixin):
     connections, including any necessary transformations to align feature dimensions.
     """
     
-    def __init__(self, inner_model_field_name: str = '_connections'):
+    def __init__(self, connections: Union[List[torch.nn.Module], torch.nn.ModuleList]):
         """
         Initialize the skip connections manager.
         
         Args:
             inner_model_field_name: Field name for the inner module list
         """
-        super().__init__(inner_model_field_name)
-        self._connections = nn.ModuleList()
-        self.num_connections = 0
-    
-    def add_connection(self, in_channels: int, out_channels: int, name: Optional[str] = None) -> int:
-        """
-        Add a new skip connection that transforms from in_channels to out_channels.
-        
-        Args:
-            in_channels: Number of input channels from the contracting path
-            out_channels: Number of output channels needed by the expanding path
-            name: Optional name for the connection
-            
-        Returns:
-            Index of the added connection
-        """
-        # Create a 1x1 convolution to align channel dimensions if needed
-        if in_channels != out_channels:
-            conn = nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=1, padding=0)
+        super().__init__("_connections")
+
+        if isinstance(connections, torch.nn.ModuleList):
+            self._connections = connections
         else:
-            conn = nn.Identity()
-        
-        # Add the connection to the module list
-        self._connections.append(conn)
-        
-        # Store the index for the new connection
-        idx = self.num_connections
-        self.num_connections += 1
-        
-        return idx
+            self._connections = nn.ModuleList(connections)
+
+        self.num_connections = len(self._connections)
+
     
-    def get_connection(self, index: int) -> nn.Module:
+    # def add_connection(self, in_channels: int, out_channels: int, name: Optional[str] = None) -> int:
+    #     """
+    #     Add a new skip connection that transforms from in_channels to out_channels.
+        
+    #     Args:
+    #         in_channels: Number of input channels from the contracting path
+    #         out_channels: Number of output channels needed by the expanding path
+    #         name: Optional name for the connection
+            
+    #     Returns:
+    #         Index of the added connection
+    #     """
+    #     # Create a 1x1 convolution to align channel dimensions if needed
+    #     if in_channels != out_channels:
+    #         conn = nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=1, padding=0)
+    #     else:
+    #         conn = nn.Identity()
+        
+    #     # Add the connection to the module list
+    #     self._connections.append(conn)
+        
+    #     # Store the index for the new connection
+    #     idx = self.num_connections
+    #     self.num_connections += 1
+        
+    #     return idx
+    
+    def __getitem__(self, index: int) -> nn.Module:
         """
         Get the skip connection module at the specified index.
         
@@ -78,7 +84,7 @@ class UnetSkipConnections(ModuleListMixin):
         Returns:
             Transformed tensor ready for the expanding path
         """
-        conn = self.get_connection(index)
+        conn = self[index]
         return conn(x)
     
     def to(self, *args, **kwargs) -> 'UnetSkipConnections':
@@ -103,13 +109,12 @@ class UnetSkipConnections(ModuleListMixin):
                 yield param
     
     def named_parameters(self, prefix: str = '', recurse: bool = True) -> Any:
-        """Return an iterator over module parameters with names"""
-        for idx, module in enumerate(self._connections):
-            for name, param in module.named_parameters(recurse=recurse):
-                yield f"{prefix}connection_{idx}.{name}", param
+        return super().module_list_named_parameters(prefix, recurse)
     
     def modules(self) -> Any:
         """Return an iterator over modules"""
-        yield self
-        for module in super().module_list_modules():
-            yield module 
+        return super().module_list_modules()
+    
+    def __len__(self) -> int:
+        return self.num_connections
+    

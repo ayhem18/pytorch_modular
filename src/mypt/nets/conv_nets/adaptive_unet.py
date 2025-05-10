@@ -1,12 +1,14 @@
 import torch
-from torch import nn
-from typing import List, Tuple, Optional, Union, Dict
 
+from torch import nn
+from copy import copy
+from typing import List, Tuple, Optional, Union
+
+from mypt.nets.conv_nets.unet_skip_connections import UnetSkipConnections
 from mypt.dimensions_analysis.dimension_analyser import DimensionsAnalyser
+from mypt.nets.conv_nets.uni_multi_residual_conv import UniformMultiResidualNet
 from mypt.building_blocks.mixins.custom_module_mixins import WrapperLikeModuleMixin
 from mypt.building_blocks.conv_blocks.composite_blocks import ContractingBlock, ExpandingBlock
-from mypt.nets.conv_nets.uni_multi_residual_conv import UniformMultiResidualNet
-from mypt.nets.conv_nets.unet_skip_connections import UnetSkipConnections
 
 
 class AdaptiveUNet(WrapperLikeModuleMixin):
@@ -52,8 +54,9 @@ class AdaptiveUNet(WrapperLikeModuleMixin):
         
         self.input_shape = input_shape
         self.output_shape = output_shape
-        self.bottleneck_shape = bottleneck_shape
-        self.bottleneck_out_channels = bottleneck_out_channels or bottleneck_shape[0]
+        self.bottleneck_input_shape = bottleneck_shape
+        self.bottleneck_output_shape = copy(bottleneck_shape)
+        self.bottleneck_output_shape[0] = bottleneck_out_channels or bottleneck_shape[0]
         
         # These will be set by the build methods
         self.contracting_path = None
@@ -169,6 +172,57 @@ class AdaptiveUNet(WrapperLikeModuleMixin):
         
         return self
 
+
+
+    def _set_skip_connections(self) -> None:
+        """
+        Set the skip connections for the UNet.
+        """
+        
+        # step1: find the number of blocks in each path
+        num_contracting_blocks = len(self.contracting_path.blocks)
+        num_expanding_blocks = len(self.expanding_path.blocks)
+    
+        # Number of skip connections is the minimum of the two
+        num_skip_connections = min(num_contracting_blocks, num_expanding_blocks)
+        
+        # the skip connections need to link the the last N blocks of the contracting path to the first N blocks of the expanding path
+        
+        # step2: find the output shapes of the first N blocks of the expanding path
+
+        expanding_shapes = [None for _ in range(num_skip_connections)]
+
+        # keep in mind that the input to the expanding path is the bottleneck output
+        traversal_input = torch.zeros((2,) + self.bottleneck_output_shape)
+
+        dim_analyzer = DimensionsAnalyser(method='static')
+
+        for i in range(num_skip_connections):
+            shape = dim_analyzer.analyse_dimensions(traversal_input.shape, self.expanding_path[i])
+            expanding_shapes[i] = shape[1:]
+            traversal_input = torch.zeros(shape)
+
+        # step3: find the output shapes of the last N blocks of the contracting path
+        contracting_shapes = [None for _ in range(num_skip_connections)]
+
+        for i in range(num_skip_connections):
+            # the only part we really need is the number of output channels
+            shape = dim_analyzer.analyse_dimensions(traversal_input.shape, self.contracting_path[num_contracting_blocks - 1 - i].conv)
+            contracting_shapes[i] = shape[1:]
+            traversal_input = torch.zeros(shape)
+
+        # the skip connection between the n - 1 - i)th block of the contracting path and the i)th block of the expanding path 
+        # is a combination of a (1 * 1 convolutional layer) mapping the number of channels from the contracting block to the expanding block 
+        # and then an adaptive average pooling to match the spatial dimensions
+
+        skip_connections = [nn.Sequential(
+            nn.Conv2d(contracting_shapes[i][0], expanding_shapes[i][0], kernel_size=1, stride=1, padding=0),
+            nn.AdaptiveAvgPool2d(expanding_shapes[i][1:])
+        ) for i in range(num_skip_connections)]
+
+        self.skip_connections = UnetSkipConnections(skip_connections)
+
+
     def build(self) -> 'AdaptiveUNet':
         """
         Build the complete UNet architecture with skip connections.
@@ -185,78 +239,13 @@ class AdaptiveUNet(WrapperLikeModuleMixin):
         
         if self._is_built:
             return self
-            
-        # Get the number of blocks in each path
-        num_contracting_blocks = len(self.contracting_path.blocks)
-        num_expanding_blocks = len(self.expanding_path.blocks)
-        
-        # Number of skip connections is the minimum of the two
-        num_skip_connections = min(num_contracting_blocks, num_expanding_blocks)
-        
-        # Initialize skip connections
-        self.skip_connections = UnetSkipConnections()
-        
-        # Use DimensionsAnalyzer to find the shapes at each level
-        dim_analyzer = DimensionsAnalyser(method='static')
-        
-        # Get the intermediate output shapes from the contracting path
-        # We use a dummy batch dimension (2) for the analysis
-        x = torch.zeros((2,) + self.input_shape)
-        contracting_shapes = []
-        
-        # Get intermediate shapes from the contracting path
-        for i in range(num_contracting_blocks):
-            block = self.contracting_path.blocks[i]
-            # Use dimension analyzer to get output shape without running the model
-            shape = dim_analyzer.analyse_dimensions(x.shape, block)
-            contracting_shapes.append(shape[1:])  # Remove batch dimension
-            x = torch.zeros(shape)  # Update x for next block
-        
-        # Get intermediate shapes from the expanding path (in reverse order)
-        # Start with the bottleneck output
-        bottleneck_output_shape = dim_analyzer.analyse_dimensions(
-            torch.zeros((2,) + self.bottleneck_shape).shape, 
-            self.bottleneck
-        )
-        
-        x = torch.zeros(bottleneck_output_shape)
-        expanding_shapes = []
-        
-        for i in range(num_expanding_blocks):
-            block = self.expanding_path.blocks[i]
-            shape = dim_analyzer.analyse_dimensions(x.shape, block)
-            expanding_shapes.append(shape[1:])  # Remove batch dimension
-            x = torch.zeros(shape)  # Update x for next block
-        
-        # Create skip connections for matching levels
-        # We connect contracting blocks to expanding blocks in reverse order
-        for i in range(num_skip_connections):
-            contracting_idx = i
-            expanding_idx = num_expanding_blocks - 1 - i
-            
-            if expanding_idx < 0:
-                continue  # Skip if we've run out of expanding blocks
-            
-            contracting_shape = contracting_shapes[contracting_idx]
-            expanding_input_shape = expanding_shapes[expanding_idx]
-            
-            # Check if spatial dimensions match
-            if contracting_shape[1:] != expanding_input_shape[1:]:
-                # Need adaptive pooling to match spatial dimensions
-                self.skip_connections.add_connection(
-                    in_channels=contracting_shape[0],
-                    out_channels=expanding_input_shape[0]
-                )
-            else:
-                # Simple 1x1 conv or identity for channel matching
-                self.skip_connections.add_connection(
-                    in_channels=contracting_shape[0],
-                    out_channels=expanding_input_shape[0]
-                )
+
+        self._set_skip_connections()
         
         self._is_built = True
         return self
     
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Forward pass through the UNet.
@@ -282,42 +271,28 @@ class AdaptiveUNet(WrapperLikeModuleMixin):
         
         # Pass through bottleneck
         x = self.bottleneck(x)
-        
-        # Compute how many skip connections we're using
-        num_skip_connections = self.skip_connections.num_connections
-        
-        # Prepare for expanding path
-        # We need to reverse contracting_outputs to match expanding path
-        contracting_outputs.reverse()
-        
-        # Pass through expanding path with skip connections
-        # Each block in expanding path gets a skip connection from contracting path
-        x_expanding, expanding_outputs = self.expanding_path(x, full=True)
-        
-        # Apply skip connections
-        final_output = x_expanding
-        
-        for i in range(min(num_skip_connections, len(expanding_outputs))):
-            # Get expanding block output
-            expanding_output = expanding_outputs[i]
-            
-            # Get corresponding contracting output
-            if i < len(contracting_outputs):
-                contracting_output = contracting_outputs[i]
-                
-                # Apply skip connection
-                skip_output = self.skip_connections.apply_connection(contracting_output, i)
-                
-                # Add skip output to expanding output
-                # We can only add if spatial dimensions match
-                if skip_output.shape[2:] == expanding_output.shape[2:]:
-                    final_output = expanding_output + skip_output
-                else:
-                    # Use adaptive pooling to match dimensions
-                    skip_output = nn.functional.adaptive_avg_pool2d(
-                        skip_output, 
-                        output_size=expanding_output.shape[2:]
-                    )
-                    final_output = expanding_output + skip_output
-        
-        return final_output
+
+        # 'x' at this point is the bottleneck output
+        # for each block in the expanding path, we need to pass the current output + skipconnection(intermediate contracting block output)
+
+
+        num_skip_connections = self.skip_connections.num_connections 
+
+        for i in range(num_skip_connections):
+            # pass the corrresponding intermediate output through the skip connection
+            skip_input = self.skip_connections.apply_connection(contracting_outputs[i], i)
+
+            # pass the current output + skip_input through the expanding block
+            x = self.expanding_path[i](x, skip_input)    
+
+        # at this point either the expanding or the contracting path is used
+        if num_skip_connections == len(self.expanding_path.blocks):
+            # at this point the expanding path is used; nothing left to do
+            return x
+
+        # at this point, we have still some expanding blocks left to use
+        for i in range(num_skip_connections, len(self.expanding_path.blocks)):
+            x = self.expanding_path[i](x)
+
+        return x
+
