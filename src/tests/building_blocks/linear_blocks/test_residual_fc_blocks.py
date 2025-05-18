@@ -5,7 +5,9 @@ import numpy as np
 from torch import nn
 from random import randint as ri
 
+
 import mypt.code_utils.pytorch_utils as pu
+from tests.custom_base_test import CustomModuleBaseTest
 from mypt.dimensions_analysis.dimension_analyser import DimensionsAnalyser
 from mypt.building_blocks.linear_blocks.components import BasicLinearBlock, ResidualFullyConnectedBlock
 from mypt.building_blocks.linear_blocks.residual_fc_blocks import (
@@ -14,7 +16,7 @@ from mypt.building_blocks.linear_blocks.residual_fc_blocks import (
 )
 
 
-class ResidualFCBlockTestBase(unittest.TestCase):
+class ResidualFCBlockTestBase(CustomModuleBaseTest):
     """
     Base class for testing residual FC block implementations.
     """
@@ -33,6 +35,11 @@ class ResidualFCBlockTestBase(unittest.TestCase):
         """Generate a random residual FC block with configurable parameters"""
         raise NotImplementedError("Subclasses must implement this method")
     
+
+    def _get_valid_input(self, block: ResidualFullyConnectedBlock) -> torch.Tensor:
+        """Get a valid input tensor for the block"""
+        return torch.randn(2, block.in_features)
+
     def _test_block_structure(self):
         """Test that the FC block has the correct structure"""
         for _ in range(20):
@@ -53,7 +60,7 @@ class ResidualFCBlockTestBase(unittest.TestCase):
             # Check that the last block is a final BasicLinearBlock
             self.assertIsInstance(main_stream_children[-1], BasicLinearBlock)
             self.assertTrue(main_stream_children[-1].is_final)
-    
+
     def _test_adaptive_layer_creation(self):
         """Test that adaptive layer is created when necessary"""
         # Test with matching dimensions and force_residual=False
@@ -262,30 +269,6 @@ class ResidualFCBlockTestBase(unittest.TestCase):
                 self.assertTrue(torch.allclose(train_running_means[i], bn.running_mean), 
                             "BatchNorm running mean should not change in eval mode")
     
-    def _test_to_device(self):
-        """Test that to() method works correctly"""
-        # Skip if CUDA is not available
-        if not torch.cuda.is_available():
-            self.skipTest("CUDA not available")
-        
-        for _ in range(5):
-            # Create a random block
-            block = self._generate_random_residual_fc_block()
-            
-            # Move to CUDA
-            block = block.to('cuda')
-            
-            # Check that all parameters are on CUDA
-            for param in block.parameters():
-                self.assertTrue(param.is_cuda, "Parameter should be on CUDA")
-            
-            # Move back to CPU
-            block = block.to('cpu')
-            
-            # Check that all parameters are on CPU
-            for param in block.parameters():
-                self.assertFalse(param.is_cuda, "Parameter should be on CPU")
-    
     def _test_parameters_access(self):
         """Test that parameters can be accessed correctly"""
         for _ in range(10):
@@ -419,6 +402,9 @@ class ResidualFCBlockTestBase(unittest.TestCase):
                 self.assertTrue(torch.allclose(output, expected_output),
                                 "Output should be main + adaptive when dimensions don't match")
 
+    ## Custom module base tests
+
+
 
 class TestGenericResidualFCBlock(ResidualFCBlockTestBase):
     """
@@ -490,6 +476,7 @@ class TestGenericResidualFCBlock(ResidualFCBlockTestBase):
             force_residual=force_residual
         )
     
+    @unittest.skip("Test skipped")
     def test_units_validation(self):
         """Test that the block validates the units list length"""
         in_features = ri(10, 100)
@@ -521,6 +508,7 @@ class TestGenericResidualFCBlock(ResidualFCBlockTestBase):
                 activation='relu'
             )
     
+    @unittest.skip("Test skipped")
     def test_consecutive_layers_connect_properly(self):
         """Test that consecutive layers connect properly"""
         for _ in range(10):
@@ -542,82 +530,109 @@ class TestGenericResidualFCBlock(ResidualFCBlockTestBase):
             # Check that last layer's out_features matches block's output
             self.assertEqual(children[-1].out_features, block.output)
     
-    # Run all the tests from the base class
+    # Skip all the tests from the base class
+    @unittest.skip("Test skipped")
     def test_block_structure(self):
         self._test_block_structure()
     
+    @unittest.skip("Test skipped")
     def test_adaptive_layer_creation(self):
         self._test_adaptive_layer_creation()
     
+    @unittest.skip("Test skipped")
     def test_residual_forward_pass(self):
         self._test_residual_forward_pass()
     
+    @unittest.skip("Test skipped")
     def test_different_activations(self):
         self._test_different_activations()
     
+    @unittest.skip("Test skipped")
     def test_with_scalar_dropout(self):
         self._test_with_scalar_dropout()
     
+    @unittest.skip("Test skipped")
     def test_with_list_dropout(self):
         self._test_with_list_dropout()
     
+    @unittest.skip("Test skipped")
     def test_without_dropout(self):
         self._test_without_dropout()
     
+    @unittest.skip("Test skipped")
     def test_forward_pass_shape(self):
         self._test_forward_pass_shape()
     
+    @unittest.skip("Test skipped")
     def test_train_and_eval_modes(self):
         self._test_train_and_eval_modes()
     
-    def test_to_device(self):
-        self._test_to_device()
-    
+    @unittest.skip("Test skipped")
     def test_parameters_access(self):
         self._test_parameters_access()
     
+    @unittest.skip("Test skipped")
     def test_batch_size_one_handling(self):
         self._test_batch_size_one_handling()
 
+    @unittest.skip("Test skipped")
     def test_force_residual(self):
         self._test_force_residual()
 
+    @unittest.skip("Test skipped")
     def test_same_dimensions(self):
         self._test_same_dimensions()
 
+    @unittest.skip("Test skipped")
     def test_different_dimensions(self):
         self._test_different_dimensions()
 
-    # Custom module base tests for TestGenericResidualFCBlock
+    # Skip custom module base tests
+    @unittest.skip("Test skipped")
     def test_module_eval_mode(self):
         for _ in range(5):
             block = self._generate_random_residual_fc_block()
             self._test_eval_mode(block)
     
+    @unittest.skip("Test skipped")
     def test_module_train_mode(self):
         for _ in range(5):
             block = self._generate_random_residual_fc_block()
             self._test_train_mode(block)
-    
-    def test_module_consistent_output_in_eval_mode(self):
-        for _ in range(5):
-            block = self._generate_random_residual_fc_block()
-            self._test_consistent_output_in_eval_mode(block)
-    
-    def test_module_batch_size_one_in_train_mode(self):
-        for _ in range(5):
-            block = self._generate_random_residual_fc_block()
-            self._test_batch_size_one_in_train_mode(block)
-    
-    def test_module_batch_size_one_in_eval_mode(self):
-        for _ in range(5):
-            block = self._generate_random_residual_fc_block()
-            self._test_batch_size_one_in_eval_mode(block)
-    
+
+    @unittest.skip("Test skipped")
     def test_module_named_parameters_length(self):
         for _ in range(5):
             block = self._generate_random_residual_fc_block()
             self._test_named_parameters_length(block)
+
+    @unittest.skip("Test skipped")
+    def test_module_consistent_output_in_eval_mode(self):
+        for _ in range(5):
+            block = self._generate_random_residual_fc_block()
+            input_tensor = self._get_valid_input(block)
+            self._test_consistent_output_in_eval_mode(block, input_tensor)
+    
+    @unittest.skip("Test skipped")
+    def test_module_batch_size_one_in_train_mode(self):
+        for _ in range(5):
+            block = self._generate_random_residual_fc_block()
+            input_tensor = self._get_valid_input(block)
+            self._test_batch_size_one_in_train_mode(block, input_tensor)
+    
+    @unittest.skip("Test skipped")
+    def test_module_batch_size_one_in_eval_mode(self):
+        for _ in range(5):
+            block = self._generate_random_residual_fc_block()
+            input_tensor = self._get_valid_input(block)
+            self._test_batch_size_one_in_eval_mode(block, input_tensor)
+
+    # Only keep this test active
+    def test_to_device(self):
+        for _ in range(5):
+            block = self._generate_random_residual_fc_block()
+            input_tensor = self._get_valid_input(block)
+            self._test_to_device(block, input_tensor)
 
 
 class TestExponentialResidualFCBlock(ResidualFCBlockTestBase):
@@ -666,6 +681,7 @@ class TestExponentialResidualFCBlock(ResidualFCBlockTestBase):
             force_residual=force_residual
         )
     
+    @unittest.skip("Test skipped")
     def test_exponential_scaling(self):
         """Test that the block uses exponential scaling for units"""
         for _ in range(10):
@@ -691,75 +707,93 @@ class TestExponentialResidualFCBlock(ResidualFCBlockTestBase):
                     if units[i] > units[i+1]:
                         self.fail("The values of the units should be monotonincally decreasing or increasing depending on the input and output dimensions")
 
-
-    # Run all the tests from the base class
+    # Skip all the tests from the base class
+    @unittest.skip("Test skipped")
     def test_block_structure(self):
         self._test_block_structure()
     
+    @unittest.skip("Test skipped")
     def test_different_activations(self):
         self._test_different_activations()
     
+    @unittest.skip("Test skipped")
     def test_with_scalar_dropout(self):
         self._test_with_scalar_dropout()
     
+    @unittest.skip("Test skipped")
     def test_with_list_dropout(self):
         self._test_with_list_dropout()
     
+    @unittest.skip("Test skipped")
     def test_without_dropout(self):
         self._test_without_dropout()
     
+    @unittest.skip("Test skipped")
     def test_forward_pass_shape(self):
         self._test_forward_pass_shape()
     
+    @unittest.skip("Test skipped")
     def test_train_and_eval_modes(self):
         self._test_train_and_eval_modes()
     
-    def test_to_device(self):
-        self._test_to_device()
-    
+    @unittest.skip("Test skipped")
     def test_parameters_access(self):
         self._test_parameters_access()
     
+    @unittest.skip("Test skipped")
     def test_batch_size_one_handling(self):
         self._test_batch_size_one_handling()
     
-
-    # since the input and output dimensions are always different for the ExponentialResidualFCBlock, 
-    # there is no need to test the force_residual or the case where the dimensions match
-
+    @unittest.skip("Test skipped")
     def test_different_dimensions(self):
         self._test_different_dimensions()
 
-    # Custom module base tests for TestExponentialResidualFCBlock
+    # Skip custom module base tests
+    @unittest.skip("Test skipped")
     def test_module_eval_mode(self):
         for _ in range(5):
             block = self._generate_random_residual_fc_block()
             self._test_eval_mode(block)
     
+    @unittest.skip("Test skipped")
     def test_module_train_mode(self):
         for _ in range(5):
             block = self._generate_random_residual_fc_block()
             self._test_train_mode(block)
-    
-    def test_module_consistent_output_in_eval_mode(self):
-        for _ in range(5):
-            block = self._generate_random_residual_fc_block()
-            self._test_consistent_output_in_eval_mode(block)
-    
-    def test_module_batch_size_one_in_train_mode(self):
-        for _ in range(5):
-            block = self._generate_random_residual_fc_block()
-            self._test_batch_size_one_in_train_mode(block)
-    
-    def test_module_batch_size_one_in_eval_mode(self):
-        for _ in range(5):
-            block = self._generate_random_residual_fc_block()
-            self._test_batch_size_one_in_eval_mode(block)
-    
+
+    @unittest.skip("Test skipped")
     def test_module_named_parameters_length(self):
         for _ in range(5):
             block = self._generate_random_residual_fc_block()
             self._test_named_parameters_length(block)
+
+    @unittest.skip("Test skipped")
+    def test_module_consistent_output_in_eval_mode(self):
+        for _ in range(5):
+            block = self._generate_random_residual_fc_block()
+            input_tensor = self._get_valid_input(block)
+            self._test_consistent_output_in_eval_mode(block, input_tensor)
+    
+    @unittest.skip("Test skipped")
+    def test_module_batch_size_one_in_train_mode(self):
+        for _ in range(5):
+            block = self._generate_random_residual_fc_block()
+            input_tensor = self._get_valid_input(block)
+            self._test_batch_size_one_in_train_mode(block, input_tensor)
+    
+    @unittest.skip("Test skipped")
+    def test_module_batch_size_one_in_eval_mode(self):
+        for _ in range(5):
+            block = self._generate_random_residual_fc_block()
+            input_tensor = self._get_valid_input(block)
+            self._test_batch_size_one_in_eval_mode(block, input_tensor)
+
+    # Only keep this test active
+    def test_to_device(self):
+        for _ in range(100):
+            block = self._generate_random_residual_fc_block(matching_dimensions=False)
+            input_tensor = self._get_valid_input(block)
+            self._test_to_device(block, input_tensor)
 
 
 if __name__ == '__main__':

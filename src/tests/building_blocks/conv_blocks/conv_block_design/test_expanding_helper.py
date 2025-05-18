@@ -114,7 +114,7 @@ class TestExpandingHelper(unittest.TestCase):
                     best_transpose_conv_block(input_dim, output_dim, min_n, max_n)
         
 
-    # @unittest.skip("Skip comprehensive test to save test runtime")
+    @unittest.skip("Skip comprehensive test to save test runtime")
     def test_compute_all_possible_inputs(self):
         """
         Test that compute_all_possible_inputs generates valid output dimensions

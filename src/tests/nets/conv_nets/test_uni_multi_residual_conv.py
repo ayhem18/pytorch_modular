@@ -315,7 +315,7 @@ class TestUniformMultiResidualNet(CustomModuleBaseTest):
 
     
             
-    @unittest.skip("passed")
+    # @unittest.skip("passed")
     def test_to_device(self):
         """Test device transfer functionality"""
         for _ in tqdm(range(5), desc="Testing device transfer functionality: strides=1, input_shape=(8, 64, 64)"):  # Fewer tests as this is expensive
@@ -323,13 +323,15 @@ class TestUniformMultiResidualNet(CustomModuleBaseTest):
                 strides=1,
                 input_shape=(8, 64, 64)
             )
-            super()._test_to_device(network)
+            input_tensor = self._get_valid_input(network, height=64, width=64)
+            super()._test_to_device(network, input_tensor)
 
         for _ in tqdm(range(5), desc="Testing device transfer functionality: strides=1, "):
             network = self._generate_random_uniform_multi_residual_net(
                 strides=1,
             )
-            super()._test_to_device(network)
+            input_tensor = self._get_valid_input(network, height=100, width=100)
+            super()._test_to_device(network, input_tensor)
         
         for _ in tqdm(range(5), desc="Testing device transfer functionality: strides=2, input_shape=(8, 64, 64)"):
             network = self._generate_random_uniform_multi_residual_net(
@@ -338,7 +340,8 @@ class TestUniformMultiResidualNet(CustomModuleBaseTest):
                 layers_per_block=2,
                 num_blocks=2
             )
-            super()._test_to_device(network)
+            input_tensor = self._get_valid_input(network, height=100, width=100)
+            super()._test_to_device(network, input_tensor)
 
     ########################## UniformMultiResidualNet specific tests ##########################
     @unittest.skip("passed")

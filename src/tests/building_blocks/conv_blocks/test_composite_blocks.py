@@ -75,7 +75,8 @@ class TestContractingBlock(CustomModuleBaseTest):
         for input_shape, output_shape in self.test_cases:
             with self.subTest(f"Input: {input_shape}, Output: {output_shape}"):
                 block = ContractingBlock(input_shape, output_shape)
-                super()._test_to_device(block)
+                input_tensor = self._get_valid_input(batch_size=2, channels=input_shape[0], height=input_shape[1], width=input_shape[2])
+                super()._test_to_device(block, input_tensor)
 
     
     def test_batch_size_one_in_eval_mode(self):
@@ -197,7 +198,8 @@ class TestExpandingBlock(CustomModuleBaseTest):
         for input_shape, output_shape in self.test_cases:
             with self.subTest(f"Input: {input_shape}, Output: {output_shape}"):
                 block = ExpandingBlock(input_shape, output_shape)
-                super()._test_to_device(block)
+                input_tensor = self._get_valid_input(batch_size=2, channels=input_shape[0], height=input_shape[1], width=input_shape[2])
+                super()._test_to_device(block, input_tensor)
 
     
     def test_batch_size_one_in_eval_mode(self):

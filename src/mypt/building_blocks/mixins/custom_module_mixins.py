@@ -67,7 +67,17 @@ class WrapperLikeModuleMixin(nn.Module):
         return self
     
     def to(self, *args, **kwargs) -> 'WrapperLikeModuleMixin':
-        setattr(self, self._inner_model_field_name, getattr(self, self._inner_model_field_name).to(*args, **kwargs))
+        
+        inner_model = getattr(self, self._inner_model_field_name)
+
+        if isinstance(inner_model, nn.Sequential):
+            # for whatever reason, the sequential module does not call the to method on every module...
+            for child in inner_model.children():
+                child = child.to(*args, **kwargs)
+        else:
+            inner_model = inner_model.to(*args, **kwargs)
+
+        setattr(self, self._inner_model_field_name, inner_model)
         return self
 
     # the forward method    

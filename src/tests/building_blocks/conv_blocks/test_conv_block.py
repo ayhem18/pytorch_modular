@@ -225,7 +225,7 @@ class TestConvBlocks(CustomModuleBaseTest):
             input_tensor = torch.randn(batch_size, channels[0], img_size, img_size)
             
             # Create block
-            block = ConvBlock(
+            block = BasicConvBlock(
                 num_conv_layers=num_layers,
                 channels=channels,
                 kernel_sizes=kernel_sizes,
@@ -395,6 +395,7 @@ class TestConvBlocks(CustomModuleBaseTest):
                 block, _, _ = self._generate_random_conv_block(use_bn=False, activation_after_each_layer=False, activation=activation)   
                 input_tensor = self._get_valid_input(random.randint(1, 10), block.channels[0])
                 super()._test_consistent_output_in_eval_mode(block, input_tensor)
+
         
     def test_batch_size_one_in_train_mode(self):
         """Test that the conv block handles batch size 1 in train mode"""
@@ -426,6 +427,8 @@ class TestConvBlocks(CustomModuleBaseTest):
                 input_tensor = self._get_valid_input(1, block.channels[0])
                 super()._test_batch_size_one_in_train_mode(block, input_tensor)
 
+
+
     def test_batch_size_one_in_eval_mode(self):
         """Test that the conv block handles batch size 1 in eval mode"""
         with self.subTest("Test batch size 1 in eval mode with ReLU activation"):
@@ -456,6 +459,7 @@ class TestConvBlocks(CustomModuleBaseTest):
                 input_tensor = self._get_valid_input(1, block.channels[0])
                 super()._test_batch_size_one_in_eval_mode(block, input_tensor)
     
+
     def test_named_parameters_length(self):
         """Test that named_parameters and parameters have the same length"""
         with self.subTest("Test named_parameters and parameters have the same length with ReLU activation"):

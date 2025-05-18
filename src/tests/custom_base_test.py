@@ -143,18 +143,28 @@ class CustomModuleBaseTest(unittest.TestCase):
         for param in cuda_block.parameters():
             self.assertTrue(param.is_cuda, "All parameters should be moved to CUDA")
         
+        # move the input tensor to the device
+        input_tensor = input_tensor.to('cuda')
+
+        try:
+            block = block.to('cuda').eval()
+            _ =  block(input_tensor)
+        except Exception as e:
+            self.fail(f"Calling the module on a tensor moved to cuda should not raise an error. Got: {e}")
+
         # Move back to CPU and check
         cpu_block = cuda_block.to('cpu')
         for param in cpu_block.parameters():
             self.assertFalse(param.is_cuda, "All parameters should be moved back to CPU")
 
-        # move the input tensor to the device
-        input_tensor = input_tensor.to('cuda')
+        # move the input tensor to the cpu
+        input_tensor = input_tensor.to('cpu')
 
         try:
+            block = block.to('cpu').eval()
             _ = block(input_tensor)
         except Exception as e:
-            self.fail(f"Calling the module on a tensor moved to cuda should not raise an error. Got: {e}")
+            self.fail(f"Calling the module on a tensor moved to cpu should not raise an error. Got: {e}")
 
 
     # TODO: better understand the clone behavior

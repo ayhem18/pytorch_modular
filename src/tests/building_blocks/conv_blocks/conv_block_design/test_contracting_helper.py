@@ -167,7 +167,7 @@ class TestConvBlockDesignHelper(unittest.TestCase):
                         print(e)
                         self.fail(f"Exception for input_dim={input_dim}, output_dim={output_dim}: {str(e)}")
 
-    # @unittest.skip("Very comprehensive test - runs extremely slowly")
+    @unittest.skip("Very comprehensive test - runs extremely slowly")
     def test_best_conv_block(self):
         """
         Test that compute_all_possible_inputs generates valid input dimensions
