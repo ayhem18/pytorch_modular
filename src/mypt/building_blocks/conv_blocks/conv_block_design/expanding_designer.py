@@ -260,7 +260,8 @@ class ExpandingCbDesigner:
             strides=strides,
             paddings=paddings,
             output_paddings=output_paddings,
-            use_bn=True
+            use_bn=True,
+            final_activation_layer=False # since this is the only block, it is indeed the last block: no activation layer
         )
 
         return [tconv]
@@ -308,7 +309,8 @@ class ExpandingCbDesigner:
                 strides=strides,
                 paddings=paddings,
                 output_paddings=output_paddings,
-                use_bn=True
+                use_bn=True,
+                final_activation_layer=(block_index != len(height_sub_blocks) - 1) # the last block should not have an activation layer
             )
 
             merged_blocks[block_index] = tconv

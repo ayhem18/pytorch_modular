@@ -127,7 +127,7 @@ class CustomModuleBaseTest(unittest.TestCase):
         self.assertEqual(len(param_names), len(set(param_names)),
                          "All parameters should have unique names")
     
-    def _test_to_device(self, block: torch.nn.Module) -> None:
+    def _test_to_device(self, block: torch.nn.Module, input_tensor: torch.Tensor) -> None:
         """Test that module can move between devices properly"""
         # Only run if CUDA is available
         if not torch.cuda.is_available():
@@ -147,7 +147,15 @@ class CustomModuleBaseTest(unittest.TestCase):
         cpu_block = cuda_block.to('cpu')
         for param in cpu_block.parameters():
             self.assertFalse(param.is_cuda, "All parameters should be moved back to CPU")
-    
+
+        # move the input tensor to the device
+        input_tensor = input_tensor.to('cuda')
+
+        try:
+            _ = block(input_tensor)
+        except Exception as e:
+            self.fail(f"Calling the module on a tensor moved to cuda should not raise an error. Got: {e}")
+
 
     # TODO: better understand the clone behavior
     def _test_clone_method(self, block: torch.nn.Module) -> None:

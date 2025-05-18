@@ -240,9 +240,9 @@ def directory_partition(src_dir: Union[str, Path],
     if not (isinstance(portion, float) and 1 >= portion > 0):
         raise ValueError(f"The portion of the dataset is expected to be a number from '0' to '1'.Found: {portion}")
 
-    src_dir = process_path(src_dir, dir_ok=True, file_ok=False)
+    src_dir = process_path(src_dir, dir_ok=True, file_ok=False, must_exist=True)
     # process the path
-    des_dir = process_path(des_dir, file_ok=False, dir_ok=True)    
+    des_dir = process_path(des_dir, dir_ok=True, file_ok=False, must_exist=False)    
 
     # sorting the files ensures the reproducibility of the function across different systems (since os.listdir is not uniform across different platforms)
     src_dir_files = np.asarray(sorted(os.listdir(src_dir)))

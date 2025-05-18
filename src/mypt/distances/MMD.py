@@ -5,9 +5,7 @@ equation '2' in the paper: "Unsupervised Domain Adaptation with Residual Transfe
 
 import torch
 from torch import nn
-from typing import Union
-from tqdm import tqdm
-from ..code_utilities import pytorch_utilities as pu
+from ..code_utils import pytorch_utils as pu
 # let's implement this function as a Pytorch Loss
 
 def _zero_diagonals(x: torch.Tensor) -> torch.Tensor: 

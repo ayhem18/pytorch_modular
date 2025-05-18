@@ -507,3 +507,91 @@ class AdaptiveUNet(torch.nn.Module):
             ("expanding_path", self.expanding_path),
             ("skip_connections", self.skip_connections)
         ])
+
+
+
+    # def state_dict(self):
+    #     """
+    #     Return a dictionary containing the model's state.
+        
+    #     Returns:
+    #         Dictionary containing the model's state
+    #     """
+    #     if not self._is_built:
+    #         raise RuntimeError("Model must be built before saving. Call build() first.")
+
+    #     state_dict = super().state_dict()
+
+    #     # Add the is_built attribute to the state dict
+    #     state_dict['is_built'] = self._is_built
+
+    #     state_dict['input_shape'] = self.input_shape
+    #     state_dict['output_shape'] = self.output_shape
+    #     state_dict['bottleneck_input_shape'] = self.bottleneck_input_shape
+    #     state_dict['bottleneck_output_shape'] = self.bottleneck_output_shape
+
+    #     state_dict['contracting_path'] = self.contracting_path.state_dict()
+    #     state_dict['bottleneck'] = self.bottleneck.state_dict()
+    #     state_dict['expanding_path'] = self.expanding_path.state_dict()
+    #     state_dict['skip_connections'] = self.skip_connections.state_dict()
+
+    #     return state_dict
+
+
+
+    # def save_model(self, path: str) -> None:
+    #     """
+    #     Save the model state dict to the specified path.
+        
+    #     Args:
+    #         path: Path where the model state dict will be saved
+            
+    #     Raises:
+    #         RuntimeError: If the model hasn't been built before saving
+    #     """
+    #     if not self._is_built:
+    #         raise RuntimeError("Model must be built before saving. Call build() first.")
+        
+    #     # Save model state dict with metadata
+    #     model_state = {
+    #         'model_state_dict': self.state_dict(),
+    #         'is_built': True,
+    #         'input_shape': self.input_shape,
+    #         'output_shape': self.output_shape,
+    #         'bottleneck_input_shape': self.bottleneck_input_shape,
+    #         'bottleneck_output_shape': self.bottleneck_output_shape
+    #     }
+        
+    #     torch.save(model_state, path)
+    
+    # def load_state_dict(self, state_dict: dict)     -> None:
+    #     """
+    #     Load the model's state from a dictionary.
+        
+    #     Args:
+    #         state_dict: Dictionary containing the mo    del's state
+    #     """
+    #     # call the parent's load_state_dict (load all fields I did not override)
+    #     super().load_state_dict(state_dict)
+
+    #     # Extract the is_built attribute from the state dict
+    #     self._is_built = state_dict.get('is_built', False)
+
+    #     # make sure the parameters are the same as the ones in the state_dict
+    #     if self.input_shape != state_dict.get('input_shape', None):
+    #         raise ValueError("The input shape is not the same as the one in the state dict.")       
+
+    #     if self.output_shape != state_dict.get('output_shape', None):
+    #         raise ValueError("The output shape is not the same as the one in the state dict.")
+
+    #     if self.bottleneck_input_shape != state_dict.get('bottleneck_input_shape', None):
+    #         raise ValueError("The bottleneck input shape is not the same as the one in the state dict.")
+
+    #     if self.bottleneck_output_shape != state_dict.get('bottleneck_output_shape', None):
+    #         raise ValueError("The bottleneck output shape is not the same as the one in the state dict.")
+
+    #     # load the state dict of the components
+    #     self.contracting_path.load_state_dict(state_dict.get('contracting_path'))
+    #     self.bottleneck.load_state_dict(state_dict.get('bottleneck'))
+    #     self.expanding_path.load_state_dict(state_dict.get('expanding_path'))
+    #     self.skip_connections.load_state_dict(state_dict.get('skip_connections'))   

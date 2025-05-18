@@ -27,7 +27,8 @@ class TransposeConvBlock(WrapperLikeModuleMixin):
                                        use_bn: bool, 
                                        activation: nn.Module, 
                                        activation_params: dict,
-                                       final_bn_layer: bool):
+                                       final_bn_layer: bool,
+                                       final_activation_layer: bool):
         # define the activation layer 
         activation_layer = activation(**activation_params) if activation_params else activation()
         layers = []
@@ -47,7 +48,9 @@ class TransposeConvBlock(WrapperLikeModuleMixin):
             layers.append((f"final_bn", nn.BatchNorm2d(channels[-1])))
             
         # at the very end, add the activation layer 
-        layers.append((f"activation_layer", activation_layer))
+        if final_activation_layer:
+            layers.append((f"activation_layer", activation_layer))
+        
         return nn.Sequential(OrderedDict(layers))
 
 
@@ -60,7 +63,8 @@ class TransposeConvBlock(WrapperLikeModuleMixin):
                                                 use_bn: bool, 
                                                 activation: nn.Module, 
                                                 activation_params: dict,
-                                                final_bn_layer: bool):
+                                                final_bn_layer: bool,
+                                                final_activation_layer:bool):
         layers = []
 
         for i in range(len(channels) - 2):
@@ -93,8 +97,9 @@ class TransposeConvBlock(WrapperLikeModuleMixin):
             layers.append((f"bn_{len(channels) - 1}", nn.BatchNorm2d(channels[-1])))
 
         # add the activation layer
-        activation_layer = activation(**activation_params) if activation_params else activation()
-        layers.append((f"activation_{len(channels) - 1}", activation_layer))
+        if final_activation_layer:
+            activation_layer = activation(**activation_params) if activation_params else activation()
+            layers.append((f"activation_{len(channels) - 1}", activation_layer))
             
         return nn.Sequential(OrderedDict(layers))
 
@@ -106,12 +111,12 @@ class TransposeConvBlock(WrapperLikeModuleMixin):
                  strides: Optional[Union[List[int], int]] = 2,  # Default to 2 for upsampling
                  paddings: Optional[Union[List[int], int]] = 1,
                  output_paddings: Optional[Union[List[int], int]] = 0,
+                 final_activation_layer: bool = True,
                  use_bn: bool = True,
                  activation_after_each_layer: bool = True,
                  activation: Optional[nn.Module] = None,
                  activation_params: Optional[dict] = None,
-                 final_bn_layer: bool = False,
-                ):
+                 final_bn_layer: bool = False):
         """
         Initialize a transpose convolutional block for upsampling operations.
 
@@ -209,11 +214,11 @@ class TransposeConvBlock(WrapperLikeModuleMixin):
         if activation_after_each_layer:
             self._block = self.__build_block_activation_after_each_layer(
                 channels, kernel_sizes, strides, paddings, output_paddings, use_bn, 
-                activation, activation_params, final_bn_layer) 
+                activation, activation_params, final_bn_layer, final_activation_layer) 
         else:
             self._block = self.__build_block_single_activation(
                 channels, kernel_sizes, strides, paddings, output_paddings, use_bn, 
-                activation, activation_params, final_bn_layer) 
+                activation, activation_params, final_bn_layer, final_activation_layer) 
 
     # Inherited methods from WrapperLikeModuleMixin
     # train(), eval(), to(), forward(), __str__(), __repr__(), etc.
