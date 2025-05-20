@@ -67,7 +67,7 @@ class SemanticSegmentationDS(Dataset):
 
     def __len__(self):
         # return len(self.images)
-        return 10 # a small comment added for debugging purposes
+        return 40 # a small comment added for debugging purposes
 
     def __getitem__(self, idx) -> Tuple[torch.Tensor, torch.Tensor]:
         # Load image and mask
@@ -86,6 +86,10 @@ class SemanticSegmentationDS(Dataset):
             image = transformed["image"]
             mask = transformed["mask"]
         
+        # not sure why but the pipeline does not seem to convert the mask to a proper tensor.
+        if mask.shape[0] != 3:
+            mask = mask.permute(2, 0, 1)
+
         if self.binary_mask:
             mask = (mask > 0.5).to(torch.float32)
         

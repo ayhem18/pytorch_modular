@@ -5,8 +5,8 @@ This script contains functionalities to visualize images with bounding boxes
 import cv2 as cv
 import numpy as np
 
-from typing import List, Tuple, Union
-from mypt.code_utilities.bbox_utilities import convert_bbox_annotation, _verify_pascal_voc_format, OBJ_DETECT_ANN_TYPE, PASCAL_VOC
+from typing import List, Optional, Tuple, Union
+from mypt.code_utils.bbox_utils import convert_bbox_annotation, _verify_pascal_voc_format, OBJ_DETECT_ANN_TYPE, PASCAL_VOC
 
 
 def draw_single_bounding_box(image: np.ndarray, 
@@ -14,7 +14,7 @@ def draw_single_bounding_box(image: np.ndarray,
                             y_min: Union[float, int], 
                             x_max: Union[float, int], 
                             x_min: Union[float, int],
-                            color: Union[str, Tuple[int]] = None,
+                            color: Optional[Union[str, Tuple[int]]] = None,
                             thickness: int = 3) -> np.ndarray:
     if color is None:
         color = (0, 255, 0)
