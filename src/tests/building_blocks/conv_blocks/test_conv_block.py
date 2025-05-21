@@ -5,7 +5,7 @@ import unittest
 from torch import nn
 from typing import List, Tuple
 
-from mypt.building_blocks.conv_blocks.conv_block import BasicConvBlock
+from mypt.building_blocks.conv_blocks.basic.conv_block import BasicConvBlock
 from mypt.dimensions_analysis.dimension_analyser import DimensionsAnalyser
 from tests.custom_base_test import CustomModuleBaseTest
 

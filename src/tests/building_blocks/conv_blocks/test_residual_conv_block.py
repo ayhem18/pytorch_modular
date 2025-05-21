@@ -10,7 +10,7 @@ from random import randint as ri
 import mypt.code_utils.pytorch_utils as pu
 
 from tests.custom_base_test import CustomModuleBaseTest
-from mypt.building_blocks.conv_blocks.conv_block import BasicConvBlock
+from mypt.building_blocks.conv_blocks.basic.conv_block import BasicConvBlock
 from mypt.dimensions_analysis.dimension_analyser import DimensionsAnalyser
 from mypt.building_blocks.conv_blocks.residual_conv_block import ResidualConvBlock
 

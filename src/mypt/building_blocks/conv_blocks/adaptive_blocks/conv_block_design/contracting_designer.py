@@ -7,7 +7,7 @@ from torch import nn
 from typing import Dict, List, OrderedDict, Tuple
 
 
-from mypt.building_blocks.conv_blocks.conv_block import BasicConvBlock
+from mypt.building_blocks.conv_blocks.basic.conv_block import BasicConvBlock
 from mypt.building_blocks.conv_blocks.conv_block_design.contracting_helper import best_conv_block
 from mypt.building_blocks.conv_blocks.conv_block_design.conv_design_utils import compute_log_linear_sequence
 

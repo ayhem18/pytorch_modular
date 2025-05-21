@@ -2,10 +2,10 @@ import torch
 from torch import nn
 from typing import Iterator, List, Tuple, Union, Optional
 
-from mypt.building_blocks.mixins.residual_mixins import GeneralResidualMixin
-from mypt.building_blocks.mixins.custom_module_mixins import WrapperLikeModuleMixin, CloneableModuleMixin
-from mypt.building_blocks.conv_blocks.conv_block import BasicConvBlock
 from mypt.dimensions_analysis.dimension_analyser import DimensionsAnalyser
+from mypt.building_blocks.mixins.residual_mixins import GeneralResidualMixin
+from mypt.building_blocks.conv_blocks.basic.conv_block import BasicConvBlock
+from mypt.building_blocks.mixins.custom_module_mixins import WrapperLikeModuleMixin
 
 
 class ResidualConvBlock(GeneralResidualMixin, WrapperLikeModuleMixin):

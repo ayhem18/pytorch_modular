@@ -8,7 +8,7 @@ from typing import Tuple
 import mypt.code_utils.pytorch_utils as pu
 from tests.custom_base_test import CustomModuleBaseTest
 from mypt.dimensions_analysis.dimension_analyser import DimensionsAnalyser
-from mypt.building_blocks.conv_blocks.composite_blocks import ContractingBlock, ExpandingBlock
+from mypt.building_blocks.conv_blocks.adaptive_blocks.composite_blocks import ContractingBlock, ExpandingBlock
 
 
 class TestContractingBlock(CustomModuleBaseTest):

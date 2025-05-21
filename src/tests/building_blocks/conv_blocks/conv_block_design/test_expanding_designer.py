@@ -3,7 +3,7 @@ import unittest
 
 from torch import nn
 
-from mypt.building_blocks.conv_blocks.transpose_conv_block import TransposeConvBlock
+from mypt.building_blocks.conv_blocks.basic.transpose_conv_block import TransposeConvBlock
 from mypt.building_blocks.conv_blocks.conv_block_design.expanding_designer import ExpandingCbDesigner
 
 

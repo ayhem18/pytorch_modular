@@ -3,7 +3,7 @@ import unittest
 
 from torch import nn
 
-from mypt.building_blocks.conv_blocks.conv_block import BasicConvBlock
+from mypt.building_blocks.conv_blocks.basic.conv_block import BasicConvBlock
 from mypt.building_blocks.conv_blocks.conv_block_design.contracting_designer import ContractingCbDesigner
 
 

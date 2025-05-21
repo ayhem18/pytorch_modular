@@ -5,7 +5,7 @@ from torch import nn
 from typing import List, Tuple
 
 import mypt.code_utils.pytorch_utils as pu
-from mypt.building_blocks.conv_blocks.transpose_conv_block import TransposeConvBlock
+from mypt.building_blocks.conv_blocks.basic.transpose_conv_block import TransposeConvBlock
 from mypt.dimensions_analysis.dimension_analyser import DimensionsAnalyser
 from tests.custom_base_test import CustomModuleBaseTest
 
