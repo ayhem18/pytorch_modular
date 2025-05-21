@@ -1,7 +1,7 @@
 import torch
 
 from torch import nn
-from typing import Iterator, Tuple
+from typing import Iterator, List, Tuple
 
 
 class ModuleListMixin:
@@ -132,4 +132,55 @@ class SequentialModuleListMixin(ModuleListMixin):
         for i in range(len(inner_model)):
             x = inner_model[i](x)
         return x
+
+
+
+class NonSequentialModuleMixin:
+    """
+    This mixin provides an implementation of the default methods for Modules with different components that play role in the forward pass.
+    """
+    
+    def __init__(self, inner_components_fields: List[str]):
+        self._inner_components_fields = inner_components_fields
+
+
+    def to(self, *args, **kwargs) -> 'NonSequentialModuleMixin':
+        for field in self._inner_components_fields:
+            getattr(self, field).to(*args, **kwargs)
+
+        return self
+
+    def train(self, mode: bool = True) -> 'NonSequentialModuleMixin':
+        self.training = mode
+        for field in self._inner_components_fields:
+            getattr(self, field).train(mode)
+
+        return self
+    
+    def eval(self) -> 'NonSequentialModuleMixin':
+        return self.train(mode=False)
+    
+    def children(self) -> Iterator[nn.Module]:
+        for field in self._inner_components_fields:
+            yield from getattr(self, field).children()
+
+    def named_children(self) -> Iterator[Tuple[str, nn.Module]]:
+        for field in self._inner_components_fields:
+            yield from getattr(self, field).named_children()
+
+    def modules(self) -> Iterator[nn.Module]:
+        for field in self._inner_components_fields:
+            yield from getattr(self, field).modules()
+
+    def named_modules(self) -> Iterator[Tuple[str, nn.Module]]:
+        for field in self._inner_components_fields:
+            yield from getattr(self, field).named_modules()
+
+    def parameters(self, recurse: bool = True) -> Iterator[torch.Tensor]:
+        for field in self._inner_components_fields:
+            yield from getattr(self, field).parameters(recurse)
+
+    def named_parameters(self, prefix: str = '', recurse: bool = True) -> Iterator[Tuple[str, torch.Tensor]]:
+        for field in self._inner_components_fields:
+            yield from getattr(self, field).named_parameters(prefix, recurse)
 

@@ -1,12 +1,15 @@
-from mypt.building_blocks.normalization.utils import get_normalization
+from mypt.building_blocks.auxiliary.norm_act import NormActBlock
 import torch
+
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Optional, OrderedDict, Union, Callable, Any, Iterator, Tuple
+
+from typing import Optional, OrderedDict, Union, Callable, Iterator, Tuple
 from torch.nn.parameter import Parameter
 
 from mypt.building_blocks.mixins.residual_mixins import GeneralResidualMixin
-from mypt.building_blocks.activations.activations import get_activation
+from mypt.building_blocks.auxiliary.normalization.utils import get_normalization
+from mypt.building_blocks.auxiliary.activations.activations import get_activation
 
 class WideResnetBlock(GeneralResidualMixin):
     """
@@ -90,9 +93,7 @@ class WideResnetBlock(GeneralResidualMixin):
         norm1_params["in_channels"] = in_channels 
 
         # first normalization layer
-        main_stream_ordered_dict["norm1"] = get_normalization(norm1, norm1_params)(in_channels)
-        # first activation layer
-        main_stream_ordered_dict["activation1"] = get_activation(activation, activation_params)
+        main_stream_ordered_dict['norm_act_1'] = NormActBlock(norm1, norm1_params, activation, activation_params)   
         # first convolution layer 
         main_stream_ordered_dict["conv1"] = nn.Conv2d(
             in_channels, 
@@ -109,9 +110,7 @@ class WideResnetBlock(GeneralResidualMixin):
         norm2_params = norm2_params or {}
         norm2_params["in_channels"] = out_channels
 
-        main_stream_ordered_dict["norm2"] = get_normalization(norm2, norm2_params)(out_channels)
-        # second activation layer
-        main_stream_ordered_dict["activation2"] = get_activation(activation, activation_params)
+        main_stream_ordered_dict["norm_act_2"] = NormActBlock(norm2, norm2_params, activation, activation_params)
         # second convolution layer
         main_stream_ordered_dict["conv2"] = nn.Conv2d(
             out_channels, 
@@ -132,7 +131,7 @@ class WideResnetBlock(GeneralResidualMixin):
         self._shortcut = nn.Conv2d(
             in_channels, 
             out_channels, 
-            kernel_size=1, 
+            kernel_size=3, 
             stride=stride, 
             padding=1, 
         )

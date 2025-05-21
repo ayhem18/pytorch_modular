@@ -6,11 +6,12 @@ import abc
 import torch
 
 from torch import nn
-from typing import Callable, OrderedDict, Union
+from typing import Callable, List, OrderedDict, Union
 
-from mypt.building_blocks.mixins.custom_module_mixins import WrapperLikeModuleMixin
+from mypt.building_blocks.mixins.general import NonSequentialModuleMixin
 from mypt.building_blocks.auxiliary.normalization.utils import get_normalization
 from mypt.building_blocks.auxiliary.activations.activations import get_activation
+from mypt.building_blocks.mixins.custom_module_mixins import WrapperLikeModuleMixin
 
 
 class NormActBlock(WrapperLikeModuleMixin):
@@ -27,6 +28,9 @@ class NormActBlock(WrapperLikeModuleMixin):
         
         super().__init__("_block")  
 
+        self._normalization = get_normalization(normalization, normalization_params)
+        self._activation = get_activation(activation, activation_params)
+
         block_ordered_dict = OrderedDict({"normalization": get_normalization(normalization, normalization_params)})
 
         block_ordered_dict["activation"] = get_activation(activation, activation_params)
@@ -42,7 +46,7 @@ class NormActBlock(WrapperLikeModuleMixin):
         return self._block
 
 
-class ConditionedNormActBlock(WrapperLikeModuleMixin, abc.ABC):
+class ConditionedNormActBlock(NonSequentialModuleMixin, abc.ABC):
     """
     A block that applies a normalization and an activation function to the input.
     """
@@ -52,13 +56,13 @@ class ConditionedNormActBlock(WrapperLikeModuleMixin, abc.ABC):
                  normalization_params: dict,
                  activation: Union[str, Callable],
                  activation_params: dict,
-                 
-                 ):
-        super().__init__("_block")
+                 inner_components_fields: List[str]
+                ):
+        super().__init__(inner_components_fields)
 
-        block_ordered_dict = OrderedDict({"normalization": get_normalization(normalization, normalization_params)})
+        self._normalization = get_normalization(normalization, normalization_params)
+        self._activation = get_activation(activation, activation_params) 
 
-        block_ordered_dict["activation"] = get_activation(activation, activation_params)
 
     @abc.abstractmethod
     def forward(self, x: torch.Tensor, condition: torch.Tensor) -> torch.Tensor:
