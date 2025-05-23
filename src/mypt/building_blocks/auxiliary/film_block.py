@@ -20,7 +20,8 @@ class TwoDimFiLMBlock(ConditionedNormActBlock):
                 activation_params: dict,
                 out_channels: int,
                 cond_channels: int,
-                hidden_units: int = 256,
+
+                inner_dim: int = 256,
                 film_activation: Union[str, Callable] = "relu",
                 film_activation_params: dict = {}
                 ):
@@ -28,9 +29,9 @@ class TwoDimFiLMBlock(ConditionedNormActBlock):
         super().__init__(normalization, normalization_params, activation, activation_params, ['_film_layer', '_normalization', '_activation'])
 
         self._film_layer = nn.Sequential(
-            nn.Linear(cond_channels, hidden_units),
+            nn.Linear(cond_channels, inner_dim),
             get_activation(film_activation, film_activation_params),
-            nn.Linear(hidden_units, 2 * out_channels)
+            nn.Linear(inner_dim, 2 * out_channels)
         )
         self._normalization = get_normalization(normalization, normalization_params)
         self._activation = get_activation(activation, activation_params)    
@@ -65,7 +66,7 @@ class ThreeDimFiLMBlock(ConditionedNormActBlock):
                 activation_params: dict,
                 out_channels: int,
                 cond_channels: int,
-                hidden_channels: int = 256,
+                inner_dim: int = 256,
                 film_activation: Union[str, Callable] = "relu",
                 film_activation_params: dict = {}
                 ):
@@ -73,9 +74,9 @@ class ThreeDimFiLMBlock(ConditionedNormActBlock):
         super().__init__(normalization, normalization_params, activation, activation_params, ['_film_layer', '_normalization', '_activation'])
 
         self._film_layer = nn.Sequential(
-            nn.Conv2d(cond_channels, hidden_channels, kernel_size=3, padding=1, stride=1),
+            nn.Conv2d(cond_channels, inner_dim, kernel_size=3, padding=1, stride=1),
             get_activation(film_activation, film_activation_params),
-            nn.Conv2d(hidden_channels, 2 * out_channels, kernel_size=3, padding=1, stride=1)
+            nn.Conv2d(inner_dim, 2 * out_channels, kernel_size=3, padding=1, stride=1)
         )
         self._normalization = get_normalization(normalization, normalization_params)
         self._activation = get_activation(activation, activation_params)
