@@ -28,9 +28,6 @@ class NormActBlock(WrapperLikeModuleMixin):
         
         super().__init__("_block")  
 
-        self._normalization = get_normalization(normalization, normalization_params)
-        self._activation = get_activation(activation, activation_params)
-
         block_ordered_dict = OrderedDict({"normalization": get_normalization(normalization, normalization_params)})
 
         block_ordered_dict["activation"] = get_activation(activation, activation_params)

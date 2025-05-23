@@ -39,7 +39,7 @@ class CustomModuleBaseTest(unittest.TestCase):
     def _has_stochastic_layers(self, block: torch.nn.Module) -> bool:
         """Check if the module contains dropout or batch normalization layers"""
         for module in block.modules():
-            if isinstance(module, (torch.nn.Dropout, torch.nn.BatchNorm1d, torch.nn.BatchNorm2d, torch.nn.BatchNorm3d)):
+            if isinstance(module, (torch.nn.Dropout, torch.nn.BatchNorm1d, torch.nn.BatchNorm2d, torch.nn.BatchNorm3d, torch.nn.GroupNorm, torch.nn.RMSNorm)):
                 return True
         return False
     

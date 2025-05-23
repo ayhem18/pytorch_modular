@@ -2,12 +2,12 @@ import torch
 import torch.nn as nn
 from typing import Iterator, List, Union, Optional, Callable, Tuple
 
-from mypt.building_blocks.mixins.general import ModuleListMixin
 from mypt.nets.conv_nets.diffusersUnet.unet_layers import DownLayer, UpLayer
+from mypt.building_blocks.mixins.general import ModuleListMixin, SequentialModuleListMixin
 from mypt.building_blocks.conv_blocks.conditioned.resnet_con_block import ConditionalWResBlock
 
 
-class DownBlock(ModuleListMixin):
+class UnetDownBlock(ModuleListMixin):
     """
     Downsampling block for UNet architecture using DownLayer components.
     
@@ -150,7 +150,7 @@ class DownBlock(ModuleListMixin):
 
 
 
-class UpBlock(nn.Module):
+class UnetUpBlock(ModuleListMixin):
     """
     Upsampling block for UNet architecture using UpLayer components.
     
@@ -232,26 +232,19 @@ class UpBlock(nn.Module):
             "force_residual": force_residual,
         }
         
-        # Create the up layers
-        self.up_layers = nn.ModuleList()
-        current_channels = in_channels
-        
-        for i in range(num_up_blocks):
-            # For the first block, we might not want to upsample
-            upsample = (i > 0)
-            
-            self.up_layers.append(
-                UpLayer(
-                    in_channels=current_channels,
-                    out_channels=out_channels[i],
-                    upsample=upsample,
-                    upsample_type=upsample_types[i] if upsample else "transpose_conv",
-                    **self.layer_params
-                )
+        up_layers = [None for _ in range(num_up_blocks)]
+
+        for i in range(num_up_blocks):            
+            up_layers[i] = UpLayer(
+                in_channels=in_channels if i == 0 else out_channels[i-1],
+                out_channels=out_channels[i],
+                upsample_type=upsample_types[i],
+                **self.layer_params
             )
-            current_channels = out_channels[i]
     
-    def forward(self, x: torch.Tensor, skip_connections: List[torch.Tensor], condition: torch.Tensor) -> torch.Tensor:
+        self.up_layers = nn.ModuleList(up_layers)
+    
+    def forward(self, x: torch.Tensor, skip_outputs: List[torch.Tensor], condition: torch.Tensor) -> torch.Tensor:
         """
         Forward pass through the up block.
         
@@ -263,18 +256,23 @@ class UpBlock(nn.Module):
         Returns:
             Output tensor
         """
-        # Reverse skip connections to match the order of up layers
-        skip_connections = skip_connections[::-1]
+        if len(skip_outputs) != len(self.up_layers):
+            raise ValueError(f"Expected skip_outputs to have {len(self.up_layers)} elements, but got {len(skip_outputs)}")
         
+        # Reverse skip connections to match the order of up layers
+        skip_outputs = skip_outputs[::-1]
+
         for i, layer in enumerate(self.up_layers):
-            # Get the corresponding skip connection if available
-            skip = skip_connections[i] if i < len(skip_connections) else None
-            x = layer(x, skip, condition)
+            if skip_outputs[i].shape != x.shape:
+                raise ValueError(f"Expected skip_outputs[{i}] to have shape {x.shape}, but got {skip_outputs[i].shape}")
+
+            layer_input = x + skip_outputs[i]
+            x = layer(layer_input, condition)
         
         return x
 
 
-class UNetMidBlock(nn.Module):
+class UNetMidBlock(SequentialModuleListMixin):
     """
     Middle block for UNet architecture.
     
@@ -283,9 +281,9 @@ class UNetMidBlock(nn.Module):
     Args:
         num_resnet_blocks: Number of residual blocks
         in_channels: Input channels
+        film_dimension: Dimension for FiLM conditioning
         out_channels: Output channels (default: same as input)
         cond_channels: Conditioning channels
-        film_dimension: Dimension for FiLM conditioning
         inner_dim: Inner dimension for FiLM layer
         dropout_rate: Dropout rate
         norm1: Normalization for the first residual block
@@ -302,9 +300,9 @@ class UNetMidBlock(nn.Module):
         self,
         num_resnet_blocks: int,
         in_channels: int,
+        film_dimension: int,
         out_channels: Optional[int] = None,
         cond_channels: int = 512,
-        film_dimension: int = 2,
         inner_dim: int = 256,
         dropout_rate: float = 0.0,
         norm1: Optional[nn.Module] = None,
@@ -328,49 +326,50 @@ class UNetMidBlock(nn.Module):
         self.cond_channels = cond_channels
         
         # Create the mid blocks directly as a sequence of ConditionalWResBlock
-        self.mid_blocks = nn.ModuleList()
-        current_channels = in_channels
-        
+        mid_blocks = [None for _ in range(num_resnet_blocks)]
+
         for i in range(num_resnet_blocks):
-            # For the last block, use out_channels as output
-            if i == num_resnet_blocks - 1:
-                out_ch = out_channels
-            else:
-                out_ch = current_channels
-                
-            self.mid_blocks.append(
-                ConditionalWResBlock(
-                    in_channels=current_channels,
-                    out_channels=out_ch,
-                    cond_channels=cond_channels,
-                    film_dimension=film_dimension,
-                    inner_dim=inner_dim,
-                    dropout_rate=dropout_rate,
-                    norm1=norm1,
-                    norm1_params=norm1_params,
-                    norm2=norm2,
-                    norm2_params=norm2_params,
-                    activation=activation,
-                    activation_params=activation_params,
-                    film_activation=film_activation,
-                    film_activation_params=film_activation_params,
-                    force_residual=force_residual,
-                )
+            mid_blocks[i] = ConditionalWResBlock(
+                in_channels=in_channels if i == 0 else out_channels,
+                out_channels=out_channels,
+                cond_channels=cond_channels,
+                film_dimension=film_dimension,
+                inner_dim=inner_dim,
+                dropout_rate=dropout_rate,
+                norm1=norm1,
+                norm1_params=norm1_params,
+                norm2=norm2,
+                norm2_params=norm2_params,
+                activation=activation,
+                activation_params=activation_params,
+                film_activation=film_activation,
+                film_activation_params=film_activation_params,
+                force_residual=force_residual,
             )
-            current_channels = out_ch
+
+        self.mid_blocks = nn.ModuleList(mid_blocks)
     
+
     def forward(self, x: torch.Tensor, condition: torch.Tensor) -> torch.Tensor:
-        """
-        Forward pass through the middle block.
-        
-        Args:
-            x: Input tensor [B, C, H, W]
-            condition: Conditioning tensor
-            
-        Returns:
-            Output tensor
-        """
-        for block in self.mid_blocks:
-            x = block(x, condition)
-        
-        return x
+        return super().sequential_module_list_forward(x, condition)
+    
+    def to(self, *args, **kwargs) -> 'UNetMidBlock':
+        super().module_list_to(*args, **kwargs)
+        return self
+    
+    def train(self, mode: bool = True) -> 'UNetMidBlock':
+        super().module_list_train(mode)
+        return self
+    
+    def eval(self) -> 'UNetMidBlock':
+        super().module_list_eval()
+        return self
+    
+    def modules(self) -> Iterator[nn.Module]:
+        return super().module_list_modules()
+    
+    def parameters(self, recurse: bool = True) -> Iterator[torch.Tensor]:
+        return super().module_list_parameters(recurse)
+    
+    def named_parameters(self, prefix: str = '', recurse: bool = True) -> Iterator[Tuple[str, torch.Tensor]]:
+        return super().module_list_named_parameters(prefix, recurse)

@@ -3,12 +3,21 @@ from typing import Callable, Optional, Union
 
 
 _normalization_functions = {
+    # batch normalization
     "batchnorm1d": nn.BatchNorm1d,
     "batchnorm2d": nn.BatchNorm2d,
-    "layernorm": nn.LayerNorm,
-    "instancenorm": nn.InstanceNorm2d,
+
+    # instance normalization
+    "instancenorm1d": nn.InstanceNorm1d,
+    "instancenorm2d": nn.InstanceNorm2d,
+
+
+    # layer normalization
+    # TODO: UNDERSTAND LAYERNORM AND ADD IT TO THE TESTS
+    # "layernorm": nn.LayerNorm,    
+
+    # group normalization
     "groupnorm": nn.GroupNorm,
-    "groupnorm2d": nn.GroupNorm2d,
 }
 
 
