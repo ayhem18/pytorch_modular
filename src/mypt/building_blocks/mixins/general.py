@@ -123,14 +123,14 @@ class SequentialModuleListMixin(ModuleListMixin):
     This mixin provides an implementation of the forward method for a class that uses a ModuleList but with a sequential structure.
     """
     
-    def sequential_module_list_forward(self, x: torch.Tensor) -> torch.Tensor:
+    def sequential_module_list_forward(self, x: torch.Tensor, *args, **kwargs) -> torch.Tensor:
         self._verify_instance_moduleListMixin()
 
         inner_model = getattr(self, self._inner_model_field_name)
 
         # call the forward method for each Module in the ModuleList
         for i in range(len(inner_model)):
-            x = inner_model[i](x)
+            x = inner_model[i](x, *args, **kwargs)
         return x
 
 

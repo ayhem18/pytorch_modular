@@ -3,9 +3,9 @@ import torch
 from torch import nn
 from typing import List, Tuple, Optional, Union
 
-from mypt.nets.conv_nets.unet_skip_connections import UnetSkipConnections
+from mypt.nets.conv_nets.adaptiveUnet.unet_skip_connections import UnetSkipConnections
 from mypt.dimensions_analysis.dimension_analyser import DimensionsAnalyser
-from mypt.nets.conv_nets.uni_multi_residual_conv import UniformMultiResidualNet
+from mypt.nets.conv_nets.adaptiveUnet.uni_multi_residual_conv import UniformMultiResidualNet
 from mypt.building_blocks.conv_blocks.adaptive_blocks.composite_blocks import ContractingBlock, ExpandingBlock
 
 

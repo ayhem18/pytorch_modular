@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from typing import Optional, OrderedDict, Union, Callable, Tuple
+from typing import Optional, Union, Callable, Tuple
 
 from mypt.building_blocks.mixins.general import NonSequentialModuleMixin
 from mypt.building_blocks.auxiliary.film_block import TwoDimFiLMBlock, ThreeDimFiLMBlock

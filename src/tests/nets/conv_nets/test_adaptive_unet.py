@@ -5,7 +5,7 @@ from typing import Tuple
 
 import mypt.code_utils.pytorch_utils as pu
 from tests.custom_base_test import CustomModuleBaseTest
-from mypt.nets.conv_nets.adaptive_unet import AdaptiveUNet
+from mypt.nets.conv_nets.adaptiveUnet.adaptive_unet import AdaptiveUNet
 
 
 class TestAdaptiveUNet(CustomModuleBaseTest):
