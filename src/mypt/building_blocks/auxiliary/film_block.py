@@ -133,3 +133,11 @@ class ThreeDimFiLMBlock(ConditionedNormActBlock):
         out = out * gamma + beta
         return self._activation(out)
 
+
+    @property
+    def cond_dimension(self) -> int:
+        return self._cond_dimension
+    
+    @property
+    def out_channels(self) -> int:
+        return self._out_channels

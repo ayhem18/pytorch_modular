@@ -42,10 +42,10 @@ class WideResnetBlock(GeneralResidualMixin):
 
 
         # normalization parameters  
-        norm1: Optional[nn.Module] = None,
-        norm1_params: Optional[dict] = None,
-        norm2: Optional[nn.Module] = None,
-        norm2_params: Optional[dict] = None,
+        norm1: Optional[nn.Module] = None, # the default normalization layer is BatchNorm2d
+        norm1_params: Optional[dict] = None, # the default parameters are num_features = in_channels
+        norm2: Optional[nn.Module] = None, # the default normalization layer is BatchNorm2d
+        norm2_params: Optional[dict] = None, # the default parameters are num_features = out_channels
        
         # activation parameters
         activation: Optional[Union[str, Callable]] = None,
@@ -78,17 +78,19 @@ class WideResnetBlock(GeneralResidualMixin):
         self._dropout_rate = dropout_rate
         self._activation = activation
         self._activation_params = activation_params
+        self._force_residual = force_residual 
 
         # First convolution block
 
         # let's build the dictionary to be passed to the nn.Sequential as the main stream
         main_stream_ordered_dict = OrderedDict()
 
-        # NOTE: THIS CODE IS EXPERIMENTAL SINCE I NEED TO UNDERSTAND HOW TO HANDLE ALL POPULAR NORMALIZATION LAYERS...  
-        # TODO: MAKE THIS MORE FLEXIBLE AND GENERAL
-
+        # the default parameters are
+        norm1 = nn.BatchNorm2d if norm1 is None else norm1
         norm1_params = norm1_params or {}
-        norm1_params["in_channels"] = in_channels 
+
+        if len(norm1_params) == 0:
+            norm1_params["num_features"] = in_channels
 
         # first normalization layer
         main_stream_ordered_dict['norm_act_1'] = NormActBlock(norm1, norm1_params, activation, activation_params)   
@@ -105,8 +107,11 @@ class WideResnetBlock(GeneralResidualMixin):
         main_stream_ordered_dict["dropout"] = nn.Dropout(dropout_rate) # with a dropout rate of 0.0, the layer works as an identity layer 
 
         # second normalization layer
+        norm2 = nn.BatchNorm2d if norm2 is None else norm2
         norm2_params = norm2_params or {}
-        norm2_params["in_channels"] = out_channels
+
+        if len(norm2_params) == 0:
+            norm2_params["num_features"] = out_channels
 
         main_stream_ordered_dict["norm_act_2"] = NormActBlock(norm2, norm2_params, activation, activation_params)
         # second convolution layer
@@ -114,7 +119,7 @@ class WideResnetBlock(GeneralResidualMixin):
             out_channels, 
             out_channels, 
             kernel_size=3, 
-            stride=stride, 
+            stride=1, # the second convolution layer is always 1-strided 
             padding=1, 
         )
 
