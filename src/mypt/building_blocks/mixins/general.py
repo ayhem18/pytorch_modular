@@ -146,14 +146,25 @@ class NonSequentialModuleMixin:
 
     def to(self, *args, **kwargs) -> 'NonSequentialModuleMixin':
         for field in self._inner_components_fields:
-            getattr(self, field).to(*args, **kwargs)
+            field_as_module = getattr(self, field) 
+
+            if field_as_module is None:
+                continue
+
+            field_as_module.to(*args, **kwargs)
 
         return self
 
     def train(self, mode: bool = True) -> 'NonSequentialModuleMixin':
         self.training = mode
+
         for field in self._inner_components_fields:
-            getattr(self, field).train(mode)
+            field_as_module = getattr(self, field) 
+
+            if field_as_module is None:
+                continue
+            
+            field_as_module.train(mode)
 
         return self
     
@@ -162,24 +173,52 @@ class NonSequentialModuleMixin:
     
     def children(self) -> Iterator[nn.Module]:
         for field in self._inner_components_fields:
-            yield from getattr(self, field).children()
+            for child in getattr(self, field).children():
+                yield child
 
     def named_children(self) -> Iterator[Tuple[str, nn.Module]]:
+        yield self
         for field in self._inner_components_fields:
-            yield from getattr(self, field).named_children()
+            field_as_module = getattr(self, field)
+
+            if field_as_module is None:
+                continue
+
+            for name, child in field_as_module.named_children():
+                yield f"{field}.{name}", child
 
     def modules(self) -> Iterator[nn.Module]:
+        yield self
         for field in self._inner_components_fields:
-            yield from getattr(self, field).modules()
+            field_as_module = getattr(self, field)
 
-    def named_modules(self) -> Iterator[Tuple[str, nn.Module]]:
-        for field in self._inner_components_fields:
-            yield from getattr(self, field).named_modules()
+            if field_as_module is None:
+                continue
+
+            for m in field_as_module.modules():
+                yield m
+
+    # def named_modules(self) -> Iterator[Tuple[str, nn.Module]]:
+    #     for field in self._inner_components_fields:
+    #         for name, m in getattr(self, field).named_modules():
+    #             yield f"{field}.{name}", m
 
     def parameters(self, recurse: bool = True) -> Iterator[torch.Tensor]:
         for field in self._inner_components_fields:
-            yield from getattr(self, field).parameters(recurse)
+            field_as_module = getattr(self, field)
+
+            if field_as_module is None:
+                continue
+
+            for p in field_as_module.parameters(recurse):
+                yield p
 
     def named_parameters(self, prefix: str = '', recurse: bool = True) -> Iterator[Tuple[str, torch.Tensor]]:
         for field in self._inner_components_fields:
-            yield from getattr(self, field).named_parameters(prefix, recurse)
+            field_as_module = getattr(self, field)
+
+            if field_as_module is None:
+                continue
+
+            for name, p in field_as_module.named_parameters(prefix, recurse):
+                yield f"{field}.{name}", p

@@ -3,10 +3,11 @@ import torch.nn as nn
 from typing import Optional, Union, Callable, Tuple
 
 from mypt.building_blocks.mixins.general import NonSequentialModuleMixin
-from mypt.building_blocks.auxiliary.film_block import TwoDimFiLMBlock, ThreeDimFiLMBlock
+from mypt.building_blocks.mixins.residual_mixins import GeneralResidualMixin
+from mypt.building_blocks.auxiliary.film_block import ThreeDimFiLMBlock, OneDimFiLMBlock
 
 
-class ConditionalWResBlock(NonSequentialModuleMixin):
+class ConditionalWResBlock(NonSequentialModuleMixin, GeneralResidualMixin, nn.Module):
     """
     A conditioned version of the WideResnet block that incorporates feature-wise
     conditioning through FiLM (Feature-wise Linear Modulation).
@@ -22,52 +23,128 @@ class ConditionalWResBlock(NonSequentialModuleMixin):
     5. Convolution
     6. Residual connection (either identity or 3x3 conv)
     """
+    def __set_norm_params(self, 
+                         norm: Optional[nn.Module],
+                         norm_params: Optional[dict],
+                         out_channels: int,
+                         ) -> Tuple[nn.Module, dict]:   
+        
+        norm = nn.BatchNorm2d if norm is None else norm
+        norm_params = norm_params or {}
+
+        if len(norm_params) == 0:
+            norm_params["num_features"] = out_channels
+
+        return norm, norm_params
+
     
     def __initialize_film_block(self, 
+                                film_dimension: int,
+                                out_channels: int,
+                                cond_dimension: int,
+
                                 normalization: Union[str, Callable],
                                 normalization_params: dict,
                                 activation: Union[str, Callable],
                                 activation_params: dict,
-                                out_channels: int,
-                                cond_channels: int,
-                                film_dimension: int,
+
                                 inner_dim: int,
                                 film_activation: Union[str, Callable],
                                 film_activation_params: dict,
-                                ) -> Union[TwoDimFiLMBlock, ThreeDimFiLMBlock]:
+                                ) -> Union[ThreeDimFiLMBlock, OneDimFiLMBlock]:
         
-        if film_dimension == 2:
-            return TwoDimFiLMBlock(
+        if film_dimension == 1:
+            return OneDimFiLMBlock(
+                out_channels=out_channels,
+                cond_dimension=cond_dimension,
+
                 normalization=normalization,
                 normalization_params=normalization_params,
+
                 activation=activation,
                 activation_params=activation_params,
-                out_channels=out_channels,
-                cond_channels=cond_channels,
+
                 inner_dim=inner_dim,
                 film_activation=film_activation,
                 film_activation_params=film_activation_params
             )
         elif film_dimension == 3:
             return ThreeDimFiLMBlock(
+                out_channels=out_channels,
+                cond_dimension=cond_dimension,
+
                 normalization=normalization,
                 normalization_params=normalization_params,
                 activation=activation,
                 activation_params=activation_params,
-                out_channels=out_channels,
-                cond_channels=cond_channels,
+
                 inner_dim=inner_dim,
                 film_activation=film_activation,
                 film_activation_params=film_activation_params
             )
         
-        raise ValueError(f"Invalid film dimension: {film_dimension}")
+        raise ValueError(f"Invalid film dimension. Expected 1 or 3, got {film_dimension}")
+
+    def __set_components(self) -> nn.ModuleDict:
+        
+        components = nn.ModuleDict()
+
+        components["film1"] = self.__initialize_film_block(
+            **self._film_params1
+        )
+        
+        components["conv1"] = nn.Conv2d(
+            self._in_channels, 
+            self._out_channels, 
+            kernel_size=3, 
+            stride=self._stride, 
+            padding=1, 
+        )
+        
+        components["dropout"] = nn.Dropout(self._dropout_rate)
+
+        components["film2"] = self.__initialize_film_block(
+            **self._film_params2
+        )
+        
+        components["conv2"] = nn.Conv2d(
+            self._out_channels, 
+            self._out_channels, 
+            kernel_size=3, 
+            stride=1,  # Always 1 for the second conv
+            padding=1, 
+        )
+
+        return components
+
+    def __set_residual_stream(self) -> Tuple[str, str]:
+        # can be a one-liner, but let's focus on clarify for now
+        if not self._force_residual and (self._stride == 1 and self._in_channels == self._out_channels):
+            # the shortcut connection can be a simple identity if the stride is 1 and the input and output channels are the same 
+            residual_stream_field_name = None
+
+        else:
+            residual_stream_field_name = "_shortcut"
+
+        # Create shortcut connection if needed
+        if residual_stream_field_name is not None:
+            self._shortcut = nn.Conv2d(
+                self._in_channels, 
+                self._out_channels, 
+                kernel_size=3, 
+                stride=self._stride, 
+                padding=1,
+            )
+        else:
+            self._shortcut = None
+
+        return "_components", residual_stream_field_name
 
     def __init__(
         self, 
         in_channels: int, 
         out_channels: int, 
-        cond_channels: int,
+        cond_dimension: int,
         
         film_dimension: int,
         inner_dim: int = 256,
@@ -91,11 +168,16 @@ class ConditionalWResBlock(NonSequentialModuleMixin):
         # whether to use a convolutional layer as the shortcut connection
         force_residual: bool = False, 
     ):
-        # Validate stride
+        # Validate the `stride` parameter
         if stride not in [1, 2]:
             raise ValueError(f"Stride must be 1 or 2, got {stride}")
-       # Initialize the mixin
-        super().__init__(
+       
+        # Initialize the nn.Module
+        nn.Module.__init__(self)
+       
+        # Initialize the NonSequentialModuleMixin
+        NonSequentialModuleMixin.__init__(
+            self,
             inner_components_fields=[
                 "_components",  
                 "_shortcut"
@@ -105,86 +187,63 @@ class ConditionalWResBlock(NonSequentialModuleMixin):
         # Store parameters
         self._in_channels = in_channels
         self._out_channels = out_channels
-        self._cond_channels = cond_channels
+        self._cond_dimension = cond_dimension
+
         self._stride = stride
-        self._dropout_rate = dropout_rate   
-        self._film_dimension = film_dimension
-        self._inner_dim = inner_dim
-        self._activation = activation
-        self._activation_params = activation_params
-        self._film_activation = film_activation
-        self._film_activation_params = film_activation_params
-        
-        # Prepare normalization params
-        norm1_params = norm1_params or {}
-        norm1_params["in_channels"] = in_channels
-        
-        norm2_params = norm2_params or {}
-        norm2_params["in_channels"] = out_channels
-        
-        # Create main stream components
-        # We'll use ModuleDict instead of OrderedDict to store the layers
-        # because the order of forward pass will be handled explicitly
-        self._components = nn.ModuleDict()
+        self._dropout_rate = dropout_rate  
+        self._force_residual = force_residual
 
-        self._components["film1"] = self.__initialize_film_block(
-            normalization=norm1,
-            normalization_params=norm1_params,
-            activation=activation,
-            activation_params=activation_params,
-            out_channels=in_channels,
-            cond_channels=cond_channels,
-            film_dimension=film_dimension,
-            inner_dim=inner_dim,
-            film_activation=film_activation,
-            film_activation_params=film_activation_params
-            )
-        
-        self._components["conv1"] = nn.Conv2d(
-            in_channels, 
-            out_channels, 
-            kernel_size=3, 
-            stride=stride, 
-            padding=1, 
-        )
-        
-        self._components["dropout"] = nn.Dropout(dropout_rate)
+        # set the normalization parameters
+        norm1, norm1_params = self.__set_norm_params(norm1, norm1_params, in_channels)
+        norm2, norm2_params = self.__set_norm_params(norm2, norm2_params, out_channels)
 
-        self._components["film2"] = self.__initialize_film_block(
-            normalization=norm2,
-            normalization_params=norm2_params,
-            activation=activation,
-            activation_params=activation_params,
-            out_channels=out_channels,
-            cond_channels=cond_channels,
-            film_dimension=film_dimension,
-            inner_dim=inner_dim,
-            film_activation=film_activation,
-            film_activation_params=film_activation_params
-        )
+        self._film_params1 = {
+            "out_channels": in_channels,
+            "cond_dimension": cond_dimension,
+            "film_dimension": film_dimension,
+
+            "normalization": norm1,
+            "normalization_params": norm1_params,
+            "activation": activation,
+            "activation_params": activation_params,
         
-        self._components["conv2"] = nn.Conv2d(
-            out_channels, 
-            out_channels, 
-            kernel_size=3, 
-            stride=1,  # Always 1 for the second conv
-            padding=1, 
+            "inner_dim": inner_dim,
+            "film_activation": film_activation,
+            "film_activation_params": film_activation_params
+        }
+
+        self._film_params2 = {            
+            "out_channels": out_channels,
+            "cond_dimension": cond_dimension,
+            "film_dimension": film_dimension,
+
+            "normalization": norm2,
+            "normalization_params": norm2_params,
+            "activation": activation,
+            "activation_params": activation_params,
+
+            "inner_dim": inner_dim,
+            "film_activation": film_activation,
+            "film_activation_params": film_activation_params,
+        }
+
+        self._components = self.__set_components()
+
+        main_stream_field_name, residual_stream_field_name = self.__set_residual_stream()
+
+        # initialize the GeneralResidualMixin
+        GeneralResidualMixin.__init__(
+            self,
+            main_stream_field_name=main_stream_field_name,
+            residual_stream_field_name=residual_stream_field_name  
         )
-        
-        # Create shortcut connection if needed
-        if force_residual:
-            self._shortcut = nn.Conv2d(
-                in_channels, 
-                out_channels, 
-                kernel_size=3, 
-                stride=stride, 
-                padding=1,
-            )
-    
+
+
     def _forward_main_stream(self, x: torch.Tensor, condition: torch.Tensor) -> torch.Tensor:
         """
         Forward pass through the main stream with conditioning.
-        
+        Overriding the GeneralResidualMixin._forward_main_stream method to call the GeneralResidualMixin.residual_forward()
+
         Args:
             x: Input feature tensor [B, C, H, W]
             condition: Conditioning tensor [B, cond_dim]
@@ -204,46 +263,17 @@ class ConditionalWResBlock(NonSequentialModuleMixin):
         return out
     
     def forward(self, x: torch.Tensor, condition: torch.Tensor, debug: bool = False) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]:
-        """
-        Forward pass through the conditioned residual block.
-        
-        Args:
-            x: Input tensor [B, C, H, W]
-            condition: Conditioning tensor [B, cond_dim]
-            debug: If True, returns intermediate tensors
-            
-        Returns:
-            Output tensor or (main_output, residual_output, final_output) if debug=True
-        """
-        # Process the main stream
-        main_stream_output = self._forward_main_stream(x, condition)
-        
-        # If no residual connection, add input directly
-        if self._shortcut is None:
-            if main_stream_output.shape != x.shape:
-                raise ValueError(f"Main stream output shape {main_stream_output.shape} doesn't match input shape {x.shape}")
-            
-            if debug:
-                return main_stream_output, x, main_stream_output + x
-            
-            return main_stream_output + x
-        
-        # Process the residual stream
-        residual_stream_output = self._shortcut(x)
-        
-        if residual_stream_output.shape != main_stream_output.shape:
-            raise ValueError(f"Residual output shape {residual_stream_output.shape} doesn't match main stream shape {main_stream_output.shape}")
-        
-        if debug:
-            return main_stream_output, residual_stream_output, main_stream_output + residual_stream_output
-        
-        return main_stream_output + residual_stream_output
-    
+        # to pass both the `debug` and `condition` parameters to the GeneralResidualMixin.residual_forward() method,
+        # debug must be passed as a positional argument and condition must be passed as an extra argument (as part of the `*args` argument)
+        return super().residual_forward(x, debug, condition)
+
+
     def __call__(self, x: torch.Tensor, condition: torch.Tensor, debug: bool = False) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]:
         """Support for optional debug parameter in __call__"""
         return self.forward(x, condition, debug=debug)
     
-    # the other methods are inherited from the NonSequentialModuleMixin 
+    # the NonSequentialModuleMixin implementation will take precedence over the torch.nn.Module implementation 
+
 
     # Properties
     @property
@@ -257,9 +287,9 @@ class ConditionalWResBlock(NonSequentialModuleMixin):
         return self._out_channels
     
     @property
-    def cond_channels(self) -> int:
-        """Returns the number of conditioning channels."""
-        return self._cond_channels
+    def cond_dimension(self) -> int:
+        """Returns the number of conditioning dimensions."""
+        return self._cond_dimension
     
     @property
     def stride(self) -> int:
@@ -272,7 +302,7 @@ class ConditionalWResBlock(NonSequentialModuleMixin):
         return self._dropout_rate
 
 
-class UpCondWResnetBlock(NonSequentialModuleMixin):
+class UpCondWResnetBlock(NonSequentialModuleMixin, nn.Module):
     """
     A conditioned WideResnet block with upsampling capabilities.
     The block passes the input through a ConditionalWResBlock and then applies upsampling.
@@ -287,7 +317,7 @@ class UpCondWResnetBlock(NonSequentialModuleMixin):
         self, 
         in_channels: int, 
         out_channels: int, 
-        cond_channels: int,
+        cond_dimension: int,
         film_dimension: int,
         inner_dim: int = 256,
         stride: int = 1,
@@ -309,7 +339,7 @@ class UpCondWResnetBlock(NonSequentialModuleMixin):
         # Store parameters
         self._in_channels = in_channels
         self._out_channels = out_channels
-        self._cond_channels = cond_channels
+        self._cond_dimension = cond_dimension
         self._upsample_type = upsample_type
 
 
@@ -317,7 +347,7 @@ class UpCondWResnetBlock(NonSequentialModuleMixin):
         self._resnet_block = ConditionalWResBlock(
             in_channels=in_channels,  
             out_channels=out_channels,
-            cond_channels=cond_channels,
+            cond_dimension=cond_dimension,
             film_dimension=film_dimension,
             inner_dim=inner_dim,
             stride=stride,
@@ -383,7 +413,7 @@ class UpCondWResnetBlock(NonSequentialModuleMixin):
         return x
 
 
-class DownCondWResnetBlock(NonSequentialModuleMixin):
+class DownCondWResnetBlock(NonSequentialModuleMixin, nn.Module):
     """
     A conditioned WideResnet block with downsampling capabilities.
     The block passes the input through a ConditionalWResBlock and then applies downsampling.
@@ -398,7 +428,7 @@ class DownCondWResnetBlock(NonSequentialModuleMixin):
         self, 
         in_channels: int, 
         out_channels: int, 
-        cond_channels: int,
+        cond_dimension: int,
         film_dimension: int,
         inner_dim: int = 256,
         stride: int = 1,
@@ -419,7 +449,7 @@ class DownCondWResnetBlock(NonSequentialModuleMixin):
         # Store parameters
         self._in_channels = in_channels
         self._out_channels = out_channels
-        self._cond_channels = cond_channels
+        self._cond_dimension = cond_dimension
         self._downsample_type = downsample_type
 
         
@@ -427,7 +457,7 @@ class DownCondWResnetBlock(NonSequentialModuleMixin):
         self._resnet_block = ConditionalWResBlock(
             in_channels=out_channels,  # Input channels is now out_channels after downsampling
             out_channels=out_channels,
-            cond_channels=cond_channels,
+            cond_dimension=cond_dimension,
             film_dimension=film_dimension,
             inner_dim=inner_dim,
             stride=stride,

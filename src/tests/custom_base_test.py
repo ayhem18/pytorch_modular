@@ -14,7 +14,7 @@ class CustomModuleBaseTest(unittest.TestCase):
         """
         raise NotImplementedError("Subclasses must implement this method")
 
-    def _test_eval_mode(self, block: torch.nn.Module, *args, **kwargs) -> None:
+    def _test_eval_mode(self, block: torch.nn.Module) -> None:
         """Test that calling eval() sets training=False for all parameters and submodules"""
         block.eval()
         
@@ -25,7 +25,7 @@ class CustomModuleBaseTest(unittest.TestCase):
         for module in block.modules():
             self.assertFalse(module.training, f"Submodule {module.__class__.__name__} should be in eval mode")
     
-    def _test_train_mode(self, block: torch.nn.Module, *args, **kwargs) -> None:
+    def _test_train_mode(self, block: torch.nn.Module) -> None:
         """Test that calling train() sets training=True for all parameters and submodules"""
         block.train()
         
@@ -120,7 +120,6 @@ class CustomModuleBaseTest(unittest.TestCase):
         except Exception as e:
             self.fail(f"Module in eval mode should not raise errors with batch size 1. Got: {e}")
     
-
     def _test_named_parameters_length(self, block: torch.nn.Module) -> None:
         """Test that named_parameters() and parameters() have the same length"""
         named_params = list(block.named_parameters())

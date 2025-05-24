@@ -50,9 +50,49 @@ class GeneralResidualMixin:
         return getattr(self, self._residual_stream_field_name)
 
 
-    def residual_forward(self, x: torch.Tensor, debug:bool=False) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]:
+    def _forward_main_stream(self, x: torch.Tensor, *args, **kwargs) -> torch.Tensor:
+        # try the different combinations of arguments
+        try:
+            # both *args and **kwargs are provided
+            return self._get_main_stream().forward(x, *args, **kwargs)
+        
+        except TypeError as e:
+            # only *args are provided
+            try:
+                return self._get_main_stream().forward(x, *args)
+            
+            except TypeError as e:
+                try:
+                    # only **kwargs are provided
+                    return self._get_main_stream().forward(x, **kwargs)
+                except TypeError as e:
+                    # no arguments are provided
+                    return self._get_main_stream().forward(x)
+
+    def _forward_residual_stream(self, x: torch.Tensor, *args, **kwargs) -> torch.Tensor:
+        # NOTE: this method should only be called when the residual stream is set 
+
+        try:
+            # both *args and **kwargs are provided
+            return self._get_residual_stream().forward(x, *args, **kwargs)
+        
+        except TypeError as e: 
+            try:
+                # only *args are provided
+                return self._get_residual_stream().forward(x, *args)
+            except TypeError as e:
+                try:
+                    # only **kwargs are provided
+                    return self._get_residual_stream().forward(x, **kwargs)
+                except TypeError as e:
+                    # no arguments are provided
+                    return self._get_residual_stream().forward(x)
+
+
+
+    def residual_forward(self, x: torch.Tensor, debug:bool=False, *args, **kwargs) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]:
         # first get the main stream output            
-        main_stream_output = self._get_main_stream().forward(x)
+        main_stream_output = self._forward_main_stream(x, *args, **kwargs)
 
         # if the residual stream is not set, then we can assume it is an identity function 
         if self._residual_stream_field_name is None:
@@ -65,7 +105,7 @@ class GeneralResidualMixin:
             return main_stream_output + x 
         
         # otherwise, get the residual stream output
-        residual_stream_output = self._get_residual_stream().forward(x)
+        residual_stream_output = self._forward_residual_stream(x, *args, **kwargs)
 
         if residual_stream_output.shape != main_stream_output.shape:
             raise ValueError(f"The residual stream output shape {residual_stream_output.shape} does not match the main stream output shape {main_stream_output.shape}")

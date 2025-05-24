@@ -10,7 +10,6 @@ from tests.custom_base_test import CustomModuleBaseTest
 from mypt.building_blocks.auxiliary.film_block import OneDimFiLMBlock, ThreeDimFiLMBlock
 
 
-@unittest.skip("skip for now")
 class TestOneDimFiLMBlock(CustomModuleBaseTest):
     """Test class for OneDimFiLMBlock implementation"""
     
@@ -68,7 +67,6 @@ class TestOneDimFiLMBlock(CustomModuleBaseTest):
         
         return x, condition
     
-    @unittest.skip("skip for now")
     def test_initialization(self):
         """Test that FiLM block initializes correctly"""
         for _ in range(100):
@@ -102,7 +100,6 @@ class TestOneDimFiLMBlock(CustomModuleBaseTest):
                 self.assertIsNotNone(film_block._activation)
 
 
-    @unittest.skip("Skipping forward pass shape test")
     def test_forward_pass_shape(self):
         """Test that forward pass produces output with expected shape"""
         for _ in range(100):
@@ -115,7 +112,7 @@ class TestOneDimFiLMBlock(CustomModuleBaseTest):
                 output = film_block(x, condition)
                 self.assertEqual(output.shape, (batch_size, channels, height, width))
 
-    @unittest.skip("skip for now")
+
     def test_film_zero_weights_with_bias(self):
         """Test the case where FiLM weights are zero and bias is set to a value 'a'"""
 
@@ -155,7 +152,6 @@ class TestOneDimFiLMBlock(CustomModuleBaseTest):
 
     # Tests inherited from CustomModuleBaseTest
 
-    # @unittest.skip("skip for now")
     def test_film_conditioning(self):
         """Test that different conditioning values produce different outputs"""
         film_block, batch_size, channels, height, width, condition_dim = self._get_random_film_block()
@@ -171,34 +167,27 @@ class TestOneDimFiLMBlock(CustomModuleBaseTest):
         # The outputs should be different due to different conditioning
         self.assertFalse(torch.allclose(output1, output2))
 
-    # @unittest.skip("skip for now")
     def test_eval_mode(self):
         """Test that eval mode is correctly set"""
         for _ in range(10):
             film_block, batch_size, _, height, width, _ = self._get_random_film_block()
-            x, condition = self._get_valid_input(film_block, batch_size, height, width)
-            
-            super()._test_eval_mode(film_block, x, condition)
+            super()._test_eval_mode(film_block)
     
-    # @unittest.skip("skip for now")
     def test_train_mode(self):
         """Test that train mode is correctly set"""
         for _ in range(100):     
-            film_block, batch_size, _, height, width, _ = self._get_random_film_block()
-            x, condition = self._get_valid_input(film_block, batch_size, height, width)
-            
-            super()._test_train_mode(film_block, x, condition)
+            film_block, batch_size, _, height, width, _ = self._get_random_film_block()            
+            super()._test_train_mode(film_block)
     
-    # @unittest.skip("skip for now")
+
     def test_consistent_output_in_eval_mode(self):
         """Test that the FiLM block produces consistent output in eval mode"""
         for _ in range(100):
             film_block, batch_size, _, height, width, _ = self._get_random_film_block()
             x, condition = self._get_valid_input(film_block, batch_size, height, width)
+            super()._test_consistent_output_in_eval_mode(film_block)
 
-            super()._test_consistent_output_in_eval_mode(film_block, x, condition)
-
-    # @unittest.skip("skip for now")
+    
     def test_to_device(self):
         """Test device transfer functionality"""
         if not torch.cuda.is_available():
@@ -207,16 +196,14 @@ class TestOneDimFiLMBlock(CustomModuleBaseTest):
         for _ in range(100):
             film_block, batch_size, _, height, width, _ = self._get_random_film_block()
             x, condition = self._get_valid_input(film_block, batch_size, height, width)
-            
-            # Test with super method
             super()._test_to_device(film_block, x, condition)
 
-    # @unittest.skip("skip for now")
+
     def _test_eval_mode(self, module, *args, **kwargs):
         """Custom implementation for FiLM modules"""
         super()._test_eval_mode(module, *args, **kwargs)
 
-    # @unittest.skip("skip for now")
+
     def _test_train_mode(self, module, *args, **kwargs):
         """Custom implementation for FiLM modules"""
         super()._test_train_mode(module, *args, **kwargs)
@@ -397,24 +384,19 @@ class TestThreeDimFiLMBlock(CustomModuleBaseTest):
         """Test that eval mode is correctly set"""
         for _ in range(100):
             film_block, batch_size, _, height, width, _ = self._get_random_film_block()
-            x, condition = self._get_valid_input(film_block, batch_size, height, width)
-            
-            super()._test_eval_mode(film_block, x, condition)
+            super()._test_eval_mode(film_block)
     
     def test_train_mode(self):
         """Test that train mode is correctly set"""
         for _ in range(100):
             film_block, batch_size, _, height, width, _ = self._get_random_film_block()
-            x, condition = self._get_valid_input(film_block, batch_size, height, width)
-            
-            super()._test_train_mode(film_block, x, condition)
+            super()._test_train_mode(film_block)
     
     def test_consistent_output_in_eval_mode(self):
         """Test that the FiLM block produces consistent output in eval mode"""
         for _ in range(100):
             film_block, batch_size, _, height, width, _ = self._get_random_film_block()
             x, condition = self._get_valid_input(film_block, batch_size, height, width)
-            
             super()._test_consistent_output_in_eval_mode(film_block, x, condition)
     
     def test_batch_size_one_in_train_mode(self):

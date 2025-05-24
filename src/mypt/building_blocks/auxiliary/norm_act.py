@@ -43,7 +43,7 @@ class NormActBlock(WrapperLikeModuleMixin):
         return self._block
 
 
-class ConditionedNormActBlock(NonSequentialModuleMixin, abc.ABC):
+class ConditionedNormActBlock(NonSequentialModuleMixin, torch.nn.Module, abc.ABC):
     """
     A block that applies a normalization and an activation function to the input.
     """
@@ -55,7 +55,10 @@ class ConditionedNormActBlock(NonSequentialModuleMixin, abc.ABC):
                  activation_params: dict,
                  inner_components_fields: List[str]
                 ):
-        super().__init__(inner_components_fields)
+        # initialize the torch.nn.Module
+        torch.nn.Module.__init__(self)
+        # initialize the NonSequentialModuleMixin
+        NonSequentialModuleMixin.__init__(self, inner_components_fields)
 
         self._normalization = get_normalization(normalization, normalization_params)
         self._activation = get_activation(activation, activation_params) 
