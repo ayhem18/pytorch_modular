@@ -434,7 +434,5 @@ class TestThreeDimFiLMBlock(CustomModuleBaseTest):
         super()._test_train_mode(module, *args, **kwargs)
 
     
-
-
 if __name__ == '__main__':
     unittest.main()

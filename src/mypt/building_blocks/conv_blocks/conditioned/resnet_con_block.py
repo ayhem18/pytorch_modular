@@ -188,6 +188,7 @@ class ConditionalWResBlock(NonSequentialModuleMixin, GeneralResidualMixin, nn.Mo
         self._in_channels = in_channels
         self._out_channels = out_channels
         self._cond_dimension = cond_dimension
+        self._film_dimension = film_dimension
 
         self._stride = stride
         self._dropout_rate = dropout_rate  
@@ -334,7 +335,8 @@ class UpCondWResnetBlock(NonSequentialModuleMixin, nn.Module):
 
         upsample_type: str = "transpose_conv",
     ):
-        super().__init__(inner_components_fields=["_upsample", "_resnet_block"])
+        nn.Module.__init__(self)
+        NonSequentialModuleMixin.__init__(self, inner_components_fields=["_upsample", "_resnet_block"])
                 
         # Store parameters
         self._in_channels = in_channels
@@ -366,16 +368,12 @@ class UpCondWResnetBlock(NonSequentialModuleMixin, nn.Module):
     
         # Create the upsampling layer
         self._upsample = self._create_upsample_layer(
-            in_channels=in_channels,
-            out_channels=out_channels,
             upsample_type=upsample_type,
         )
 
 
     def _create_upsample_layer(
         self,
-        in_channels: int,
-        out_channels: int,
         upsample_type: str,
     ) -> nn.Module:
         
@@ -383,8 +381,8 @@ class UpCondWResnetBlock(NonSequentialModuleMixin, nn.Module):
         if upsample_type == "transpose_conv":
             # the tranpose convolutional layer upsample the input by a factor of 2
             return nn.ConvTranspose2d(
-                out_channels,
-                out_channels,
+                in_channels=self._out_channels, # the convolutional layer will receive the output of the resnet block (in_channels of upsample layer is out_channels of resnet block)
+                out_channels=self._out_channels,
                 kernel_size=3,
                 stride=2,
                 padding=1
@@ -395,8 +393,8 @@ class UpCondWResnetBlock(NonSequentialModuleMixin, nn.Module):
                 nn.Upsample(scale_factor=2, mode='nearest'),
                 # apply a convolutional layer that does not change the dimensions
                 nn.Conv2d(
-                    in_channels,
-                    out_channels,
+                    in_channels=self._out_channels, # the convolutional layer will receive the output of the upsample layer (in_channels of upsample layer is out_channels of resnet block)
+                    out_channels=self._out_channels,
                     kernel_size=3,
                     padding=1
                 )
@@ -431,7 +429,6 @@ class DownCondWResnetBlock(NonSequentialModuleMixin, nn.Module):
         cond_dimension: int,
         film_dimension: int,
         inner_dim: int = 256,
-        stride: int = 1,
         dropout_rate: float = 0.0,
         norm1: Optional[nn.Module] = None,
         norm1_params: Optional[dict] = None,
@@ -444,23 +441,23 @@ class DownCondWResnetBlock(NonSequentialModuleMixin, nn.Module):
         force_residual: bool = False,
         downsample_type: str = "conv",
     ):
-        super().__init__(inner_components_fields=["_downsample", "_resnet_block"])
+        nn.Module.__init__(self)
+        NonSequentialModuleMixin.__init__(self, inner_components_fields=["_downsample", "_resnet_block"])
         
         # Store parameters
         self._in_channels = in_channels
         self._out_channels = out_channels
         self._cond_dimension = cond_dimension
         self._downsample_type = downsample_type
-
         
         # Create the conditional resnet block
         self._resnet_block = ConditionalWResBlock(
-            in_channels=out_channels,  # Input channels is now out_channels after downsampling
+            in_channels=in_channels,
             out_channels=out_channels,
             cond_dimension=cond_dimension,
             film_dimension=film_dimension,
             inner_dim=inner_dim,
-            stride=stride,
+            stride=1, # Stride is always 1 as downsampling is handled separately
             dropout_rate=dropout_rate,
             norm1=norm1,
             norm1_params=norm1_params,
@@ -488,7 +485,7 @@ class DownCondWResnetBlock(NonSequentialModuleMixin, nn.Module):
         """Creates the downsampling layer based on the specified type."""
         if downsample_type == "conv":
             return nn.Conv2d(
-                self._in_channels,
+                self._out_channels, # the convolutional layer will receive the output of the resnet block (in_channels of downsample layer is out_channels of resnet block)
                 self._out_channels,
                 kernel_size=3,
                 stride=2,
@@ -498,10 +495,11 @@ class DownCondWResnetBlock(NonSequentialModuleMixin, nn.Module):
             return nn.Sequential(
                 nn.AvgPool2d(kernel_size=2, stride=2),
                 nn.Conv2d(
-                    self._out_channels,
+                    self._out_channels, # the convolutional layer will receive the output of the resnet block (in_channels of downsample layer is out_channels of resnet block)
                     self._out_channels,
                     kernel_size=1,
-                    stride=1
+                    stride=1, 
+                    padding=0
                 )
             )
         elif downsample_type == "max_pool":
@@ -511,7 +509,8 @@ class DownCondWResnetBlock(NonSequentialModuleMixin, nn.Module):
                     self._out_channels,
                     self._out_channels,
                     kernel_size=1,
-                    stride=1
+                    stride=1, 
+                    padding=0
                 )
             )
         else:

@@ -42,6 +42,10 @@ class NormActBlock(WrapperLikeModuleMixin):
     def block(self) -> nn.Sequential:
         return self._block
 
+    def to(self, *args, **kwargs) -> 'NormActBlock':
+        super().to(*args, **kwargs)
+        return self
+
 
 class ConditionedNormActBlock(NonSequentialModuleMixin, torch.nn.Module, abc.ABC):
     """
@@ -69,4 +73,8 @@ class ConditionedNormActBlock(NonSequentialModuleMixin, torch.nn.Module, abc.ABC
         pass
 
     def __call__(self, *args, **kwargs) -> torch.Tensor:
-        return self.forward(*args, **kwargs)
+        return self.forward(*args, **kwargs)    
+    
+    def to(self, *args, **kwargs) -> 'ConditionedNormActBlock':
+        super().to(*args, **kwargs)
+        return self

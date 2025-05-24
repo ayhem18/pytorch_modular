@@ -314,7 +314,7 @@ class TestConditionalWResBlock1D(CustomModuleBaseTest):
 
     ########################## CustomModuleBaseTest Tests ##########################
     
-    @unittest.skip("Skipping residual path creation tests for now")
+    # @unittest.skip("Skipping residual path creation tests for now")
     def test_eval_mode(self):
         """Test that the block can be set to evaluation mode"""
         for _ in range(100):
