@@ -65,3 +65,5 @@ class ConditionedNormActBlock(NonSequentialModuleMixin, abc.ABC):
     def forward(self, x: torch.Tensor, condition: torch.Tensor) -> torch.Tensor:
         pass
 
+    def __call__(self, *args, **kwargs) -> torch.Tensor:
+        return self.forward(*args, **kwargs)

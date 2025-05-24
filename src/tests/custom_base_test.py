@@ -14,7 +14,7 @@ class CustomModuleBaseTest(unittest.TestCase):
         """
         raise NotImplementedError("Subclasses must implement this method")
 
-    def _test_eval_mode(self, block: torch.nn.Module) -> None:
+    def _test_eval_mode(self, block: torch.nn.Module, *args, **kwargs) -> None:
         """Test that calling eval() sets training=False for all parameters and submodules"""
         block.eval()
         
@@ -25,7 +25,7 @@ class CustomModuleBaseTest(unittest.TestCase):
         for module in block.modules():
             self.assertFalse(module.training, f"Submodule {module.__class__.__name__} should be in eval mode")
     
-    def _test_train_mode(self, block: torch.nn.Module) -> None:
+    def _test_train_mode(self, block: torch.nn.Module, *args, **kwargs) -> None:
         """Test that calling train() sets training=True for all parameters and submodules"""
         block.train()
         
@@ -61,24 +61,27 @@ class CustomModuleBaseTest(unittest.TestCase):
         self.assertTrue(torch.allclose(output1, output2),
                          "Module without stochastic layers should produce consistent outputs")
     
-    def _test_consistent_output_in_eval_mode(self, block: torch.nn.Module, input_tensor: torch.Tensor) -> None:
+    def _test_consistent_output_in_eval_mode(self, block: torch.nn.Module, input_tensor: torch.Tensor, *args, **kwargs) -> None:
         """Test that all modules in eval mode produce consistent output for the same input"""
         # Set to eval mode
         block.eval()
         
         # Get outputs from multiple forward passes
-        output1 = block(input_tensor)
-        output2 = block(input_tensor)
+        output1 = block(input_tensor, *args, **kwargs)
+        output2 = block(input_tensor, *args, **kwargs)
         
         # Check that outputs are identical
         self.assertTrue(torch.allclose(output1, output2),
                          "Module in eval mode should produce consistent outputs")
     
-    def _test_batch_size_one_in_train_mode(self, block: torch.nn.Module, input_tensor: torch.Tensor) -> None:
+    def _test_batch_size_one_in_train_mode(self, block: torch.nn.Module, input_tensor: torch.Tensor, *args, **kwargs) -> None:
         """
         Test that modules with batch normalization layers might raise errors 
         with batch size 1 in train mode
         """
+        if input_tensor.size(0) != 1:
+            raise ValueError("Input tensor should have batch size 1")
+
         # First check if the module has batch normalization layers
         has_batchnorm = False
         for module in block.modules():
@@ -96,24 +99,28 @@ class CustomModuleBaseTest(unittest.TestCase):
         # In train mode, BatchNorm1d with batch size 1 might raise an error
         # since variance can't be computed properly
         try:
-            _ = block(input_tensor)
+            _ = block(input_tensor, *args, **kwargs)
             # If it doesn't raise an error, it's acceptable
         except Exception as e:
             # Check if the error is related to batch size and BatchNorm
             self.assertIn('Expected more than 1 value per channel when training', str(e), 
                           "Module with BatchNorm in train mode may raise errors with batch size 1")
-    
-    def _test_batch_size_one_in_eval_mode(self, block: torch.nn.Module, input_tensor: torch.Tensor) -> None:
+
+    def _test_batch_size_one_in_eval_mode(self, block: torch.nn.Module, input_tensor: torch.Tensor, *args, **kwargs) -> None:
         """Test that modules in eval mode should not raise errors for batch size 1"""
         # Set to eval mode
         block.eval()
         
+        if input_tensor.size(0) != 1:
+            raise ValueError("Input tensor should have batch size 1")
+
         # This should not raise an error
         try:
-            _ = block(input_tensor)
+            _ = block(input_tensor, *args, **kwargs)
         except Exception as e:
             self.fail(f"Module in eval mode should not raise errors with batch size 1. Got: {e}")
     
+
     def _test_named_parameters_length(self, block: torch.nn.Module) -> None:
         """Test that named_parameters() and parameters() have the same length"""
         named_params = list(block.named_parameters())
@@ -127,12 +134,18 @@ class CustomModuleBaseTest(unittest.TestCase):
         self.assertEqual(len(param_names), len(set(param_names)),
                          "All parameters should have unique names")
     
-    def _test_to_device(self, block: torch.nn.Module, input_tensor: torch.Tensor) -> None:
+    def _test_to_device(self, block: torch.nn.Module, input_tensor: torch.Tensor, *args, **kwargs) -> None:
         """Test that module can move between devices properly"""
         # Only run if CUDA is available
         if not torch.cuda.is_available():
             return
         
+        if len(args) > 0:
+            args = [arg.to('cuda') if isinstance(arg, torch.Tensor) else arg for arg in args]
+
+        if len(kwargs) > 0:
+            kwargs = {k: v.to('cuda') if isinstance(v, torch.Tensor) else v for k, v in kwargs.items()}
+
         # Move to CUDA
         cuda_block = block.to('cuda')
         
@@ -148,7 +161,7 @@ class CustomModuleBaseTest(unittest.TestCase):
 
         try:
             block = block.to('cuda').eval()
-            _ =  block(input_tensor)
+            _ =  block(input_tensor, *args, **kwargs)
         except Exception as e:
             self.fail(f"Calling the module on a tensor moved to cuda should not raise an error. Got: {e}")
 
@@ -157,12 +170,18 @@ class CustomModuleBaseTest(unittest.TestCase):
         for param in cpu_block.parameters():
             self.assertFalse(param.is_cuda, "All parameters should be moved back to CPU")
 
+        if len(args) > 0:
+            args = [arg.to('cpu') if isinstance(arg, torch.Tensor) else arg for arg in args]
+
+        if len(kwargs) > 0:
+            kwargs = {k: v.to('cpu') if isinstance(v, torch.Tensor) else v for k, v in kwargs.items()}
+
         # move the input tensor to the cpu
         input_tensor = input_tensor.to('cpu')
 
         try:
             block = block.to('cpu').eval()
-            _ = block(input_tensor)
+            _ = block(input_tensor, *args, **kwargs)
         except Exception as e:
             self.fail(f"Calling the module on a tensor moved to cpu should not raise an error. Got: {e}")
 

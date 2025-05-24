@@ -183,4 +183,3 @@ class NonSequentialModuleMixin:
     def named_parameters(self, prefix: str = '', recurse: bool = True) -> Iterator[Tuple[str, torch.Tensor]]:
         for field in self._inner_components_fields:
             yield from getattr(self, field).named_parameters(prefix, recurse)
-

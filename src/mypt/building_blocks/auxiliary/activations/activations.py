@@ -1,5 +1,6 @@
 """
 This module provides a way to work uniformly with different activation functions.
+It will be extended after exploring the diffusers library (this file is inspired by the diffusers library)
 """
 
 
@@ -41,6 +42,6 @@ def get_activation(activation: Union[str, Callable], activation_params: Optional
 
 
     elif isinstance(activation, Callable):
-        return activation(activation_params)
+        return activation(**activation_params)
 
     raise TypeError(f"Activation must be a string or a callable, got {type(activation)}")

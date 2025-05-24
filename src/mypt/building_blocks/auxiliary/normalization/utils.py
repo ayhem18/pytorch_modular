@@ -7,9 +7,11 @@ _normalization_functions = {
     "batchnorm1d": nn.BatchNorm1d,
     "batchnorm2d": nn.BatchNorm2d,
 
+    # TODO: UNDERSTAND INSTANCE NORMALIZATION AND ADD IT TO THE TESTS 
+
     # instance normalization
-    "instancenorm1d": nn.InstanceNorm1d,
-    "instancenorm2d": nn.InstanceNorm2d,
+    # "instancenorm1d": nn.InstanceNorm1d,
+    # "instancenorm2d": nn.InstanceNorm2d,
 
 
     # layer normalization
