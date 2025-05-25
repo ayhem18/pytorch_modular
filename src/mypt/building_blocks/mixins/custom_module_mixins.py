@@ -1,22 +1,10 @@
-from abc import ABC, abstractmethod
 import torch
 import torch.nn as nn
 
+from abc import ABC, abstractmethod
 from typing import Iterator, Optional, Set, Tuple
 
-
-
-def generic_to_method(module: torch.nn.Module, *args, **kwargs) -> torch.nn.Module:
-    if isinstance(module, nn.Sequential):
-        for item in module:
-            generic_to_method(item, *args, **kwargs)
-    
-    elif isinstance(module, nn.ModuleDict):
-        for key, item in module.items():
-            generic_to_method(item, *args, **kwargs)
-
-    return module.to(*args, **kwargs)
-
+from mypt.building_blocks.mixins.general import generic_to
 
 class WrapperLikeModuleMixin(nn.Module):
     """
@@ -81,11 +69,11 @@ class WrapperLikeModuleMixin(nn.Module):
         return self
     
     def to(self, *args, **kwargs) -> 'WrapperLikeModuleMixin':
-        
+        # extract the model 
         inner_model = getattr(self, self._inner_model_field_name)
         
         # set the model to the device (take care of tricky cases such as torch.nn.Sequential and torch.nn.ModuleDict) 
-        inner_model = generic_to_method(inner_model, *args, **kwargs)
+        inner_model = generic_to(inner_model, *args, **kwargs)
 
         setattr(self, self._inner_model_field_name, inner_model)
         return self
@@ -100,10 +88,6 @@ class WrapperLikeModuleMixin(nn.Module):
     def __repr__(self) -> str:
         return getattr(self, self._inner_model_field_name).__repr__() 
     
-
-
-
-
 
 
 class CloneableModuleMixin(ABC):

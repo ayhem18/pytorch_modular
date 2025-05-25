@@ -4,6 +4,33 @@ from torch import nn
 from typing import Iterator, List, Tuple
 
 
+
+def generic_to(module: torch.nn.Module, *args, **kwargs) -> torch.nn.Module:
+    """This is a hacky solution simply because I do not exactly understand 
+
+    Args:
+        module (torch.nn.Module): _description_
+
+    Returns:
+        torch.nn.Module: _description_
+    """
+    
+    if isinstance(module, nn.Sequential):
+        for item in module:
+            generic_to(item, *args, **kwargs)
+    
+    elif isinstance(module, nn.ModuleDict):
+        for _, item in module.items():
+            generic_to(item, *args, **kwargs)
+
+    elif isinstance(module, nn.ModuleList):
+        for i in range(len(module)):
+            module[i] = module[i].to(*args, **kwargs)
+
+    return module.to(*args, **kwargs)
+
+
+
 class ModuleListMixin:
     """
     This mixin is used to provide default common implementations for a class that uses a ModuleList field.
@@ -151,7 +178,8 @@ class NonSequentialModuleMixin:
             if field_as_module is None:
                 continue
 
-            field_as_module.to(*args, **kwargs)
+            # use the generic_to method to handle tricky cases such as Sequential, ModuleDict, ModuleList and so on... 
+            field_as_module = generic_to(field_as_module, *args, **kwargs)
 
         return self
 

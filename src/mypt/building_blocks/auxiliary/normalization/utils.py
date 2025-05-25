@@ -37,7 +37,7 @@ def get_normalization(normalization: Union[str, Callable], normalization_params:
         raise ValueError(f"Unsupported normalization function: {normalization}")
 
     elif isinstance(normalization, Callable):
-        return normalization(normalization_params)
+        return normalization(**normalization_params)
     
     raise TypeError(f"Normalization must be a string or a callable, got {type(normalization)}")
 

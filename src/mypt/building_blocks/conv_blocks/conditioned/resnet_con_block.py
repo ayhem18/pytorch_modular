@@ -4,6 +4,7 @@ from typing import Optional, Union, Callable, Tuple
 
 from mypt.building_blocks.mixins.general import NonSequentialModuleMixin
 from mypt.building_blocks.mixins.residual_mixins import GeneralResidualMixin
+from mypt.building_blocks.auxiliary.normalization.utils import _normalization_functions
 from mypt.building_blocks.auxiliary.film_block import ThreeDimFiLMBlock, OneDimFiLMBlock
 
 
@@ -21,23 +22,50 @@ class ConditionalWResBlock(NonSequentialModuleMixin, GeneralResidualMixin, nn.Mo
     3. Dropout 
     4. FiLM-conditioned normalization and activation
     5. Convolution
-    6. Residual connection (either identity or 3x3 conv)
+
+    6. a residual connection guaranteed to map the input dimensions to the output dimensions (based on the design of the WideResnetBlock)
     """
-    def __set_norm_params(self, 
-                         norm: Optional[nn.Module],
-                         norm_params: Optional[dict],
-                         out_channels: int,
-                         ) -> Tuple[nn.Module, dict]:   
-        
-        norm = nn.BatchNorm2d if norm is None else norm
+
+    _WIDE_RESNET_BLOCK_NORMALIZATION_FUNCTIONS = {
+        "groupnorm": nn.GroupNorm,
+        "batchnorm": nn.BatchNorm2d,
+    }
+
+    def __validate_normalization_function(self, 
+                                          norm: Union[nn.Module, str],
+                                          norm_params: Optional[dict] = None) -> Tuple[nn.Module, dict]:
+        # TODO: MAKE SURE TO UPDATE THIS METHOD AS MORE NORMALIZATION FUNCTIONS ARE ADDED TO THE _normalization_functions DICTIONARY !!!
+
+        if isinstance(norm, str):
+            try:
+                norm = _normalization_functions.get(norm)
+            except KeyError:
+                raise NotImplementedError(f"Normalization type {norm} is not currently supported !!!")
+
+        norm = norm or nn.BatchNorm2d # the default normalization is batchnorm 
         norm_params = norm_params or {}
 
-        if len(norm_params) == 0:
-            norm_params["num_features"] = out_channels
+        if isinstance(norm, str):
+            if norm not in self._WIDE_RESNET_BLOCK_NORMALIZATION_FUNCTIONS:
+                raise NotImplementedError(f"Normalization type {norm} is not currently supported !!!")
 
         return norm, norm_params
 
-    
+    def __set_norm_params(self, film_block: int, norm: Union[nn.Module, str], norm_params: Optional[dict]) -> Tuple[nn.Module, dict]:
+        norm, norm_params = self.__validate_normalization_function(norm, norm_params)
+
+        channels = self._in_channels if film_block == 1 else self._out_channels
+
+        # at this point, norm is a Callable 
+        if norm == nn.GroupNorm:
+            norm_params["num_groups"] = norm_params.get("num_groups", 1)
+            norm_params["num_channels"] = norm_params.get("num_channels", channels) 
+        
+        elif norm == nn.BatchNorm2d:
+            norm_params["num_features"] = norm_params.get("num_features", channels)
+        
+        return norm, norm_params
+
     def __initialize_film_block(self, 
                                 film_dimension: int,
                                 out_channels: int,
@@ -195,8 +223,8 @@ class ConditionalWResBlock(NonSequentialModuleMixin, GeneralResidualMixin, nn.Mo
         self._force_residual = force_residual
 
         # set the normalization parameters
-        norm1, norm1_params = self.__set_norm_params(norm1, norm1_params, in_channels)
-        norm2, norm2_params = self.__set_norm_params(norm2, norm2_params, out_channels)
+        norm1, norm1_params = self.__set_norm_params(1, norm1, norm1_params)
+        norm2, norm2_params = self.__set_norm_params(2, norm2, norm2_params)
 
         self._film_params1 = {
             "out_channels": in_channels,
@@ -273,7 +301,7 @@ class ConditionalWResBlock(NonSequentialModuleMixin, GeneralResidualMixin, nn.Mo
         """Support for optional debug parameter in __call__"""
         return self.forward(x, condition, debug=debug)
     
-    # the NonSequentialModuleMixin implementation will take precedence over the torch.nn.Module implementation 
+    # the NonSequentialModuleMixin implementation will take precedence over the torch.nn.Module implementation for the `to, train, eval...` methods !!
 
 
     # Properties

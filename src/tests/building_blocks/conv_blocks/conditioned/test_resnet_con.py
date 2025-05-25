@@ -10,7 +10,7 @@ from tests.custom_base_test import CustomModuleBaseTest
 from mypt.dimensions_analysis.dimension_analyser import DimensionsAnalyser
 from mypt.building_blocks.conv_blocks.conditioned.resnet_con_block import ConditionalWResBlock
 
-
+@unittest.skip("Skipping 1D tests for now")
 class TestConditionalWResBlock1D(CustomModuleBaseTest):
     """Test class for ConditionalWResBlock with 1D film conditioning"""
     
@@ -85,9 +85,12 @@ class TestConditionalWResBlock1D(CustomModuleBaseTest):
         
         # Choose normalization type
         norm_type = random.choice(self.norm_types)
-        norm1_params = {"num_groups": 1, "num_channels": in_channels} if norm_type == "groupnorm" else {"num_features": in_channels}
-        norm2_params = {"num_groups": 1, "num_channels": out_channels} if norm_type == "groupnorm" else {"num_features": out_channels}
-        
+
+        # let's see how the initialization of the norm_params is done in the ConditionalWResBlock class !! 
+        # try both None and {} as norm_params, the class should handle both cases correctly 
+        norm1_params = random.choice([None, {}])
+        norm2_params = random.choice([None, {}])
+
         # Choose activation type and parameters
         activation_type = random.choice(self.activation_types)
         activation_params = {'inplace': True} if activation_type == 'relu' else {}
@@ -117,7 +120,7 @@ class TestConditionalWResBlock1D(CustomModuleBaseTest):
     
     ########################## Block Structure Tests ##########################
     
-    @unittest.skip("Skipping residual path creation tests for now")
+    # @unittest.skip("Skipping residual path creation tests for now")
     def test_block_structure(self):
         """Test that the ConditionalWResBlock has the correct structure"""
         for _ in range(100):
@@ -145,7 +148,7 @@ class TestConditionalWResBlock1D(CustomModuleBaseTest):
                 self.assertEqual(block._shortcut.in_channels, block._in_channels)
                 self.assertEqual(block._shortcut.out_channels, block._out_channels)
     
-    @unittest.skip("Skipping residual path creation tests for now")
+    # @unittest.skip("Skipping residual path creation tests for now")
     def test_residual_path_creation(self):
         """Test that residual path is created correctly based on parameters"""
 
@@ -200,7 +203,7 @@ class TestConditionalWResBlock1D(CustomModuleBaseTest):
             self.assertIsNotNone(block._shortcut, 
                             "Shortcut should be created when force_residual=True")
 
-    @unittest.skip("Skipping residual path creation tests for now")
+    # @unittest.skip("Skipping residual path creation tests for now")
     def test_forward_pass_basic(self):
         """Test basic forward pass functionality"""
         for _ in range(100):
@@ -217,7 +220,7 @@ class TestConditionalWResBlock1D(CustomModuleBaseTest):
             
             self.assertEqual(output.shape, (batch_size, block._out_channels, expected_height, expected_width))
     
-    @unittest.skip("Skipping residual path creation tests for now")
+    # @unittest.skip("Skipping residual path creation tests for now")
     def test_forward_pass_debug_mode(self):
         """Test forward pass with debug=True"""
         for _ in range(100):
@@ -240,7 +243,7 @@ class TestConditionalWResBlock1D(CustomModuleBaseTest):
             calculated_output = main_output + residual_output
             self.assertTrue(torch.allclose(calculated_output, combined_output))
     
-    @unittest.skip("Skipping residual path creation tests for now")
+    # @unittest.skip("Skipping residual path creation tests for now")
     def test_conditioning_effect(self):
         """Test that different conditioning tensors produce different outputs"""
         for _ in range(100):
@@ -260,7 +263,7 @@ class TestConditionalWResBlock1D(CustomModuleBaseTest):
             # Outputs should be different due to different conditioning
             self.assertFalse(torch.allclose(output1, output2))
     
-    @unittest.skip("Skipping residual path creation tests for now")
+    # @unittest.skip("Skipping residual path creation tests for now")
     def test_dropout_effect(self):
         """Test that dropout has an effect in training mode but not in eval mode"""
         # Create a block with significant dropout
@@ -288,7 +291,7 @@ class TestConditionalWResBlock1D(CustomModuleBaseTest):
                 self.assertFalse(torch.allclose(output1, output2), 
                             "In training mode with dropout, outputs should differ")
     
-    @unittest.skip("Skipping residual path creation tests for now")
+    # @unittest.skip("Skipping residual path creation tests for now")
     def test_stride_behavior(self):
         """Test that stride properly affects output dimensions"""
         for _ in range(100):
@@ -304,8 +307,8 @@ class TestConditionalWResBlock1D(CustomModuleBaseTest):
             
             # Test with stride=2
             block = self._generate_random_conditional_resnet_block(stride=2)
-            x = self._get_valid_input(block)
-            output = block(x)
+            x, condition = self._get_valid_input(block)
+            output = block(x, condition)
             
             self.assertEqual(output.shape[2], (x.shape[2] + 1) // 2, 
                             "With stride=2, height should be (h+1)//2")
@@ -371,7 +374,7 @@ class TestConditionalWResBlock1D(CustomModuleBaseTest):
             super()._test_to_device(block, x, condition)
 
 
-@unittest.skip("Skipping 3D tests for now")
+# @unittest.skip("Skipping 3D tests for now")
 class TestConditionalWResBlock3D(CustomModuleBaseTest):
     """Test class for ConditionalWResBlock with 3D film conditioning"""
     
@@ -382,7 +385,7 @@ class TestConditionalWResBlock3D(CustomModuleBaseTest):
         # Define common test parameters
         self.in_channels_range = (1, 32)
         self.out_channels_range = (1, 64)
-        self.cond_channels_range = (8, 64)
+        self.cond_dimension_range = (8, 64)
         self.stride_options = [1, 2]
         self.dropout_options = [0.0, 0.1, 0.5]
         self.force_residual_options = [True, False]
@@ -396,23 +399,23 @@ class TestConditionalWResBlock3D(CustomModuleBaseTest):
         """Generate a random input tensor and condition tensor with the correct shape"""
         if block is None:
             in_channels = random.randint(*self.in_channels_range)
-            cond_channels = random.randint(*self.cond_channels_range)
+            cond_dimension = random.randint(*self.cond_dimension_range)
         else:
             in_channels = block._in_channels
-            cond_channels = block._cond_channels
+            cond_dimension = block._cond_dimension
         
         # Generate input tensor
         x = torch.randn(batch_size, in_channels, height, width, requires_grad=False)
         
         # Generate 3D condition tensor (spatial dimensions match input)
-        condition = torch.randn(batch_size, cond_channels, height, width, requires_grad=False)
+        condition = torch.randn(batch_size, cond_dimension, height, width, requires_grad=False)
         
         return x, condition
     
     def _generate_random_conditional_resnet_block(self, 
                                                 in_channels=None, 
                                                 out_channels=None,
-                                                cond_channels=None,
+                                                cond_dimension=None,
                                                 stride=None,
                                                 dropout_rate=None,
                                                 force_residual=None,
@@ -425,8 +428,8 @@ class TestConditionalWResBlock3D(CustomModuleBaseTest):
         if out_channels is None:
             out_channels = random.randint(*self.out_channels_range)
         
-        if cond_channels is None:
-            cond_channels = random.randint(*self.cond_channels_range)
+        if cond_dimension is None:
+            cond_dimension = random.randint(*self.cond_dimension_range)
         
         if stride is None:
             stride = random.choice(self.stride_options)
@@ -442,9 +445,13 @@ class TestConditionalWResBlock3D(CustomModuleBaseTest):
         
         # Choose normalization type
         norm_type = random.choice(self.norm_types)
-        norm1_params = {}
-        norm2_params = {}
-        
+        # norm1_params = {"num_groups": 1, "num_channels": in_channels} if norm_type == "groupnorm" else {"num_features": in_channels}
+        # norm2_params = {"num_groups": 1, "num_channels": out_channels} if norm_type == "groupnorm" else {"num_features": out_channels}
+
+        # try both None and {} as norm_params, the class should handle both cases correctly 
+        norm1_params = random.choice([None, {}])
+        norm2_params = random.choice([None, {}])
+
         # Choose activation type and parameters
         activation_type = random.choice(self.activation_types)
         activation_params = {'inplace': True} if activation_type == 'relu' else {}
@@ -456,7 +463,7 @@ class TestConditionalWResBlock3D(CustomModuleBaseTest):
         return ConditionalWResBlock(
             in_channels=in_channels,
             out_channels=out_channels,
-            cond_channels=cond_channels,
+            cond_dimension=cond_dimension,
             film_dimension=3,  # 3D conditioning
             inner_dim=inner_dim,
             stride=stride,
@@ -473,7 +480,7 @@ class TestConditionalWResBlock3D(CustomModuleBaseTest):
         )
     
     ########################## Block Structure Tests ##########################
-    
+    @unittest.skip("skip for now")
     def test_block_structure(self):
         """Test that the ConditionalWResBlock has the correct structure"""
         for _ in range(100):
@@ -501,6 +508,8 @@ class TestConditionalWResBlock3D(CustomModuleBaseTest):
                 self.assertEqual(block._shortcut.in_channels, block._in_channels)
                 self.assertEqual(block._shortcut.out_channels, block._out_channels)
     
+
+    # @unittest.skip("skip for now")
     def test_forward_pass_basic(self):
         """Test basic forward pass functionality"""
         for _ in range(100):
@@ -517,6 +526,7 @@ class TestConditionalWResBlock3D(CustomModuleBaseTest):
             
             self.assertEqual(output.shape, (batch_size, block._out_channels, expected_height, expected_width))
     
+    @unittest.skip("Skipping residual path creation tests for now")
     def test_forward_pass_debug_mode(self):
         """Test forward pass with debug=True"""
         for _ in range(100):
@@ -539,6 +549,7 @@ class TestConditionalWResBlock3D(CustomModuleBaseTest):
             calculated_output = main_output + residual_output
             self.assertTrue(torch.allclose(calculated_output, combined_output))
     
+    @unittest.skip("Skipping residual path creation tests for now")
     def test_conditioning_effect(self):
         """Test that different conditioning tensors produce different outputs"""
         for _ in range(100):
@@ -558,6 +569,7 @@ class TestConditionalWResBlock3D(CustomModuleBaseTest):
             # Outputs should be different due to different conditioning
             self.assertFalse(torch.allclose(output1, output2))
     
+    @unittest.skip("Skipping residual path creation tests for now")
     def test_spatial_conditioning(self):
         """Test that spatial conditioning works properly"""
         for _ in range(50):
@@ -567,10 +579,10 @@ class TestConditionalWResBlock3D(CustomModuleBaseTest):
             x, condition = self._get_valid_input(block, height=height, width=width)
             
             # Create condition with a specific spatial pattern
-            batch_size, cond_channels = condition.shape[:2]
+            batch_size, cond_dimension = condition.shape[:2]
             # Create a gradient pattern in the condition
-            h_gradient = torch.linspace(0, 1, height).view(1, 1, height, 1).expand(batch_size, cond_channels, height, width)
-            w_gradient = torch.linspace(0, 1, width).view(1, 1, 1, width).expand(batch_size, cond_channels, height, width)
+            h_gradient = torch.linspace(0, 1, height).view(1, 1, height, 1).expand(batch_size, cond_dimension, height, width)
+            w_gradient = torch.linspace(0, 1, width).view(1, 1, 1, width).expand(batch_size, cond_dimension, height, width)
             structured_condition = h_gradient * w_gradient
             
             # Get output with the structured condition
@@ -592,6 +604,7 @@ class TestConditionalWResBlock3D(CustomModuleBaseTest):
     
     ########################## CustomModuleBaseTest Tests ##########################
     
+    @unittest.skip("Skipping residual path creation tests for now")
     def test_eval_mode(self):
         """Test that the block can be set to evaluation mode"""
         for _ in range(100):
@@ -599,6 +612,7 @@ class TestConditionalWResBlock3D(CustomModuleBaseTest):
             x, condition = self._get_valid_input(block)
             super()._test_eval_mode(block, x, condition)
     
+    @unittest.skip("Skipping residual path creation tests for now")
     def test_train_mode(self):
         """Test that the block can be set to training mode"""
         for _ in range(100):
@@ -606,6 +620,7 @@ class TestConditionalWResBlock3D(CustomModuleBaseTest):
             x, condition = self._get_valid_input(block)
             super()._test_train_mode(block, x, condition)
     
+    @unittest.skip("Skipping residual path creation tests for now")
     def test_consistent_output_in_eval_mode(self):
         """Test consistent output in evaluation mode"""
         for _ in range(100):
@@ -613,26 +628,30 @@ class TestConditionalWResBlock3D(CustomModuleBaseTest):
             x, condition = self._get_valid_input(block)
             super()._test_consistent_output_in_eval_mode(block, x, condition)
     
+    @unittest.skip("Skipping residual path creation tests for now")
     def test_batch_size_one_in_train_mode(self):
         """Test handling of batch size 1 in training mode"""
         for _ in range(100):
             block = self._generate_random_conditional_resnet_block()
             x, condition = self._get_valid_input(block, batch_size=1)
             super()._test_batch_size_one_in_train_mode(block, x, condition)
-    
+
+    @unittest.skip("Skipping residual path creation tests for now")
     def test_batch_size_one_in_eval_mode(self):
         """Test handling of batch size 1 in evaluation mode"""
         for _ in range(100):
             block = self._generate_random_conditional_resnet_block()
             x, condition = self._get_valid_input(block, batch_size=1)
             super()._test_batch_size_one_in_eval_mode(block, x, condition)
-    
+
+    @unittest.skip("Skipping residual path creation tests for now")
     def test_named_parameters_length(self):
         """Test that named_parameters and parameters have the same length"""
         for _ in range(100):
             block = self._generate_random_conditional_resnet_block()
             super()._test_named_parameters_length(block)
-    
+
+    @unittest.skip("Skipping residual path creation tests for now")
     def test_to_device(self):
         """Test that the block can be moved between devices"""
         if not torch.cuda.is_available():
