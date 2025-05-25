@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from typing import List, Union, Optional, Callable, Tuple, Dict, Any
 
-from mypt.nets.conv_nets.diffusersUnet.unet_blocks import (
+from mypt.nets.conv_nets.diffusersUnet.one_dim.unet_blocks import (
     UnetDownBlock,
     UnetUpBlock,
     UNetMidBlock

@@ -2,9 +2,9 @@ import torch
 import torch.nn as nn
 from typing import Iterator, List, Union, Optional, Callable, Tuple
 
-from mypt.nets.conv_nets.diffusersUnet.unet_layers import DownLayer, UpLayer
+from mypt.nets.conv_nets.diffusersUnet.one_dim.unet_layers import DownLayer, UpLayer
 from mypt.building_blocks.mixins.general import ModuleListMixin, SequentialModuleListMixin
-from mypt.building_blocks.conv_blocks.conditioned.resnet_con_block import ConditionalWResBlock
+from mypt.building_blocks.conv_blocks.conditioned.one_dim.resnet_con_block import CondOneDimWResBlock
 
 
 class UnetDownBlock(ModuleListMixin):
@@ -19,7 +19,6 @@ class UnetDownBlock(ModuleListMixin):
         in_channels: Input channels 
         cond_channels: Conditioning channels
         out_channels: List of output channels for each stage
-        film_dimension: Dimension for FiLM conditioning
         downsample_types: Downsampling method(s) to use
         inner_dim: Inner dimension for FiLM layer
         dropout_rate: Dropout rate
@@ -329,11 +328,10 @@ class UNetMidBlock(SequentialModuleListMixin):
         mid_blocks = [None for _ in range(num_resnet_blocks)]
 
         for i in range(num_resnet_blocks):
-            mid_blocks[i] = ConditionalWResBlock(
+            mid_blocks[i] = CondOneDimWResBlock(
                 in_channels=in_channels if i == 0 else out_channels,
                 out_channels=out_channels,
                 cond_channels=cond_channels,
-                film_dimension=film_dimension,
                 inner_dim=inner_dim,
                 dropout_rate=dropout_rate,
                 norm1=norm1,

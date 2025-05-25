@@ -2,13 +2,13 @@ import torch
 import torch.nn as nn
 from typing import Optional, Union, Callable, Tuple
 
+from mypt.building_blocks.auxiliary.film_block import OneDimFiLMBlock
 from mypt.building_blocks.mixins.general import NonSequentialModuleMixin
 from mypt.building_blocks.mixins.residual_mixins import GeneralResidualMixin
 from mypt.building_blocks.auxiliary.normalization.utils import _normalization_functions
-from mypt.building_blocks.auxiliary.film_block import ThreeDimFiLMBlock, OneDimFiLMBlock
 
 
-class ConditionalWResBlock(NonSequentialModuleMixin, GeneralResidualMixin, nn.Module):
+class CondOneDimWResBlock(NonSequentialModuleMixin, GeneralResidualMixin, nn.Module):
     """
     A conditioned version of the WideResnet block that incorporates feature-wise
     conditioning through FiLM (Feature-wise Linear Modulation).
@@ -66,58 +66,11 @@ class ConditionalWResBlock(NonSequentialModuleMixin, GeneralResidualMixin, nn.Mo
         
         return norm, norm_params
 
-    def __initialize_film_block(self, 
-                                film_dimension: int,
-                                out_channels: int,
-                                cond_dimension: int,
-
-                                normalization: Union[str, Callable],
-                                normalization_params: dict,
-                                activation: Union[str, Callable],
-                                activation_params: dict,
-
-                                inner_dim: int,
-                                film_activation: Union[str, Callable],
-                                film_activation_params: dict,
-                                ) -> Union[ThreeDimFiLMBlock, OneDimFiLMBlock]:
-        
-        if film_dimension == 1:
-            return OneDimFiLMBlock(
-                out_channels=out_channels,
-                cond_dimension=cond_dimension,
-
-                normalization=normalization,
-                normalization_params=normalization_params,
-
-                activation=activation,
-                activation_params=activation_params,
-
-                inner_dim=inner_dim,
-                film_activation=film_activation,
-                film_activation_params=film_activation_params
-            )
-        elif film_dimension == 3:
-            return ThreeDimFiLMBlock(
-                out_channels=out_channels,
-                cond_dimension=cond_dimension,
-
-                normalization=normalization,
-                normalization_params=normalization_params,
-                activation=activation,
-                activation_params=activation_params,
-
-                inner_dim=inner_dim,
-                film_activation=film_activation,
-                film_activation_params=film_activation_params
-            )
-        
-        raise ValueError(f"Invalid film dimension. Expected 1 or 3, got {film_dimension}")
-
     def __set_components(self) -> nn.ModuleDict:
         
         components = nn.ModuleDict()
 
-        components["film1"] = self.__initialize_film_block(
+        components["film1"] = OneDimFiLMBlock(
             **self._film_params1
         )
         
@@ -131,7 +84,7 @@ class ConditionalWResBlock(NonSequentialModuleMixin, GeneralResidualMixin, nn.Mo
         
         components["dropout"] = nn.Dropout(self._dropout_rate)
 
-        components["film2"] = self.__initialize_film_block(
+        components["film2"] = OneDimFiLMBlock(
             **self._film_params2
         )
         
@@ -174,7 +127,6 @@ class ConditionalWResBlock(NonSequentialModuleMixin, GeneralResidualMixin, nn.Mo
         out_channels: int, 
         cond_dimension: int,
         
-        film_dimension: int,
         inner_dim: int = 256,
         stride: int = 1, 
         dropout_rate: float = 0.0,
@@ -216,7 +168,6 @@ class ConditionalWResBlock(NonSequentialModuleMixin, GeneralResidualMixin, nn.Mo
         self._in_channels = in_channels
         self._out_channels = out_channels
         self._cond_dimension = cond_dimension
-        self._film_dimension = film_dimension
 
         self._stride = stride
         self._dropout_rate = dropout_rate  
@@ -229,7 +180,6 @@ class ConditionalWResBlock(NonSequentialModuleMixin, GeneralResidualMixin, nn.Mo
         self._film_params1 = {
             "out_channels": in_channels,
             "cond_dimension": cond_dimension,
-            "film_dimension": film_dimension,
 
             "normalization": norm1,
             "normalization_params": norm1_params,
@@ -244,7 +194,6 @@ class ConditionalWResBlock(NonSequentialModuleMixin, GeneralResidualMixin, nn.Mo
         self._film_params2 = {            
             "out_channels": out_channels,
             "cond_dimension": cond_dimension,
-            "film_dimension": film_dimension,
 
             "normalization": norm2,
             "normalization_params": norm2_params,
@@ -331,10 +280,10 @@ class ConditionalWResBlock(NonSequentialModuleMixin, GeneralResidualMixin, nn.Mo
         return self._dropout_rate
 
 
-class UpCondWResnetBlock(NonSequentialModuleMixin, nn.Module):
+class UpCondOneDimWResBlock(NonSequentialModuleMixin, nn.Module):
     """
     A conditioned WideResnet block with upsampling capabilities.
-    The block passes the input through a ConditionalWResBlock and then applies upsampling.
+    The block passes the input through a CondOneDimWResBlock and then applies upsampling.
     
     Supports multiple upsampling methods:
     - transpose_conv: Uses ConvTranspose2d
@@ -347,7 +296,6 @@ class UpCondWResnetBlock(NonSequentialModuleMixin, nn.Module):
         in_channels: int, 
         out_channels: int, 
         cond_dimension: int,
-        film_dimension: int,
         inner_dim: int = 256,
         stride: int = 1,
         dropout_rate: float = 0.0,
@@ -374,11 +322,10 @@ class UpCondWResnetBlock(NonSequentialModuleMixin, nn.Module):
 
 
         # Create the conditional resnet block
-        self._resnet_block = ConditionalWResBlock(
+        self._resnet_block = CondOneDimWResBlock(
             in_channels=in_channels,  
             out_channels=out_channels,
             cond_dimension=cond_dimension,
-            film_dimension=film_dimension,
             inner_dim=inner_dim,
             stride=stride,
             dropout_rate=dropout_rate,
@@ -439,10 +386,10 @@ class UpCondWResnetBlock(NonSequentialModuleMixin, nn.Module):
         return x
 
 
-class DownCondWResnetBlock(NonSequentialModuleMixin, nn.Module):
+class DownCondOneDimWResBlock(NonSequentialModuleMixin, nn.Module):
     """
     A conditioned WideResnet block with downsampling capabilities.
-    The block passes the input through a ConditionalWResBlock and then applies downsampling.
+    The block passes the input through a CondOneDimWResBlock and then applies downsampling.
     
     Supports multiple downsampling methods:
     - conv: Uses strided convolution
@@ -455,7 +402,6 @@ class DownCondWResnetBlock(NonSequentialModuleMixin, nn.Module):
         in_channels: int, 
         out_channels: int, 
         cond_dimension: int,
-        film_dimension: int,
         inner_dim: int = 256,
         dropout_rate: float = 0.0,
         norm1: Optional[nn.Module] = None,
@@ -479,11 +425,10 @@ class DownCondWResnetBlock(NonSequentialModuleMixin, nn.Module):
         self._downsample_type = downsample_type
         
         # Create the conditional resnet block
-        self._resnet_block = ConditionalWResBlock(
+        self._resnet_block = CondOneDimWResBlock(
             in_channels=in_channels,
             out_channels=out_channels,
             cond_dimension=cond_dimension,
-            film_dimension=film_dimension,
             inner_dim=inner_dim,
             stride=1, # Stride is always 1 as downsampling is handled separately
             dropout_rate=dropout_rate,

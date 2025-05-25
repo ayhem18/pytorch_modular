@@ -3,15 +3,15 @@ import random
 import unittest
 
 from torch import nn
-from typing import Optional, Tuple, List
+from typing import Optional, Tuple
 
 from tests.custom_base_test import CustomModuleBaseTest
 from mypt.dimensions_analysis.dimension_analyser import DimensionsAnalyser
-from mypt.building_blocks.conv_blocks.conditioned.resnet_con_block import DownCondWResnetBlock
+from mypt.building_blocks.conv_blocks.conditioned.one_dim.resnet_con_block import DownCondOneDimWResBlock
 
 
-class TestDownCondWResnetBlock(CustomModuleBaseTest):
-    """Test class for DownCondWResnetBlock with spatial downsampling"""
+class TestDownCondOneDimWResBlock(CustomModuleBaseTest):
+    """Test class for DownCondOneDimWResBlock with spatial downsampling"""
     
     def setUp(self):
         """Initialize test parameters"""
@@ -23,7 +23,6 @@ class TestDownCondWResnetBlock(CustomModuleBaseTest):
         self.cond_dimension_range = (8, 64)
         self.dropout_options = [0.0, 0.1, 0.3]
         self.downsample_types = ["conv", "avg_pool", "max_pool"][1:]
-        self.film_dimensions = [1, 3]  # Test both 1D and 3D conditioning
         self.inner_dim_range = (16, 128)
         
         # For normalization and activation
@@ -31,7 +30,7 @@ class TestDownCondWResnetBlock(CustomModuleBaseTest):
         self.activation_types = ['relu', 'leaky_relu', 'gelu']
     
     def _get_valid_input(self, 
-                         block: Optional[DownCondWResnetBlock] = None, 
+                         block: Optional[DownCondOneDimWResBlock] = None, 
                          batch_size: int = 2, 
                          height: int = 32, 
                          width: int = 32) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -39,22 +38,13 @@ class TestDownCondWResnetBlock(CustomModuleBaseTest):
         if block is None:
             in_channels = random.randint(*self.in_channels_range)
             cond_dimension = random.randint(*self.cond_dimension_range)
-            film_dimension = random.choice(self.film_dimensions)
         else:
             in_channels = block._in_channels
             cond_dimension = block._cond_dimension
-            film_dimension = block._resnet_block._film_dimension
         
         # Generate input tensor
         x = torch.randn(batch_size, in_channels, height, width)
-        
-        # Generate condition tensor based on film_dimension
-        if film_dimension == 1:
-            # 1D condition tensor (batch_size, cond_dim)
-            condition = torch.randn(batch_size, cond_dimension)
-        else:
-            # 3D condition tensor (batch_size, cond_dim, height, width)
-            condition = torch.randn(batch_size, cond_dimension, height, width)
+        condition = torch.randn(batch_size, cond_dimension)
         
         return x, condition
     
@@ -62,11 +52,10 @@ class TestDownCondWResnetBlock(CustomModuleBaseTest):
                                        in_channels=None,
                                        out_channels=None,
                                        cond_dimension=None,
-                                       film_dimension=None,
                                        dropout_rate=None,
                                        downsample_type=None,
-                                       inner_dim=None) -> DownCondWResnetBlock:
-        """Generate a random DownCondWResnetBlock with configurable parameters"""
+                                       inner_dim=None) -> DownCondOneDimWResBlock:
+        """Generate a random DownCondOneDimWResBlock with configurable parameters"""
         # Set parameters or choose random values
         if in_channels is None:
             in_channels = random.randint(*self.in_channels_range)
@@ -76,9 +65,6 @@ class TestDownCondWResnetBlock(CustomModuleBaseTest):
         
         if cond_dimension is None:
             cond_dimension = random.randint(*self.cond_dimension_range)
-        
-        if film_dimension is None:
-            film_dimension = random.choice(self.film_dimensions)
         
         if dropout_rate is None:
             dropout_rate = random.choice(self.dropout_options)
@@ -106,11 +92,10 @@ class TestDownCondWResnetBlock(CustomModuleBaseTest):
         film_activation_params = {'inplace': True} if film_activation == 'relu' else {}
         
         # Create the block
-        return DownCondWResnetBlock(
+        return DownCondOneDimWResBlock(
             in_channels=in_channels,
             out_channels=out_channels,
             cond_dimension=cond_dimension,
-            film_dimension=film_dimension,
             inner_dim=inner_dim,
             dropout_rate=dropout_rate,
             norm1=norm_type,
@@ -128,7 +113,7 @@ class TestDownCondWResnetBlock(CustomModuleBaseTest):
     ########################## Block Structure Tests ##########################
     
     def test_downcond_block_structure(self):
-        """Test that DownCondWResnetBlock is structured correctly"""
+        """Test that DownCondOneDimWResBlock is structured correctly"""
         for _ in range(100):
             # Create a block with each downsampling type
             for downsample_type in self.downsample_types:
@@ -227,7 +212,7 @@ class TestDownCondWResnetBlock(CustomModuleBaseTest):
             output = block(x, condition)
             self.assertEqual(output.shape[1], out_channels)
     
-    @unittest.skip("Skipping conditioning effect tests as they are not needed")
+    # @unittest.skip("Skipping conditioning effect tests as they are not needed")
     def test_conditioning_effect(self):
         """Test that different conditioning tensors produce different outputs"""
         for _ in range(100):
@@ -252,7 +237,7 @@ class TestDownCondWResnetBlock(CustomModuleBaseTest):
     
     ########################## Downsample Type Tests ##########################
 
-    @unittest.skip("Skipping convolutional downsampling tests as they are not needed")
+    # @unittest.skip("Skipping convolutional downsampling tests as they are not needed")
     def test_conv_downsample(self):
         """Test the convolutional downsampling method"""
         for _ in range(50):
@@ -262,7 +247,7 @@ class TestDownCondWResnetBlock(CustomModuleBaseTest):
             self.assertIsInstance(block._downsample, nn.Conv2d)
             self.assertEqual(block._downsample.stride, (2, 2))
             self.assertEqual(block._downsample.kernel_size, (3, 3))
-            self.assertEqual(block._downsample.in_channels, block._in_channels)
+            self.assertEqual(block._downsample.in_channels, block._out_channels)
             self.assertEqual(block._downsample.out_channels, block._out_channels)
             
             # Test forward pass
@@ -274,7 +259,7 @@ class TestDownCondWResnetBlock(CustomModuleBaseTest):
             self.assertEqual(output.shape[3], x.shape[3] // 2)
     
 
-    @unittest.skip("Skipping average pooling downsampling tests as they are not needed")
+    # @unittest.skip("Skipping average pooling downsampling tests as they are not needed")
     def test_avg_pool_downsample(self):
         """Test the average pooling downsampling method"""
         for _ in range(50):
@@ -302,7 +287,7 @@ class TestDownCondWResnetBlock(CustomModuleBaseTest):
             self.assertEqual(output.shape[2], x.shape[2] // 2)
             self.assertEqual(output.shape[3], x.shape[3] // 2)
     
-    @unittest.skip("Skipping max pooling downsampling tests as they are not needed")
+    # @unittest.skip("Skipping max pooling downsampling tests as they are not needed")
     def test_max_pool_downsample(self):
         """Test the max pooling downsampling method"""
         for _ in range(50):
@@ -390,7 +375,7 @@ class TestDownCondWResnetBlock(CustomModuleBaseTest):
     
     ########################## Special Property Tests ##########################
 
-    @unittest.skip("Skipping property accessors tests as they are not needed")
+    # @unittest.skip("Skipping property accessors tests as they are not needed")
     def test_property_accessors(self):
         """Test that property accessors return correct values"""
         for _ in range(50):
