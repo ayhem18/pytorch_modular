@@ -145,17 +145,17 @@ class UnetUpLayer1D(AbstractUpLayer):
 
         for i in range(num_resnet_blocks - 1):
             resnet_blocks[i] = CondOneDimWResBlock(
-                in_channels=in_channels if i == 0 else out_channels[i-1],
-                out_channels=out_channels[i],
-                cond_dimension=cond_dimension,
+                in_channels=self.in_channels if i == 0 else self.out_channels[i-1],
+                out_channels=self.out_channels[i],
+                cond_dimension=self.cond_dimension,
                 stride=1, # Conditional Resnet Blocks must have a stride of 1
                 **resnet_parameters
             )
 
         resnet_blocks[-1] = UpCondOneDimWResBlock(
-            in_channels=out_channels[-2], # using -2 is okay since the super constructor verifies that there are at least 2 resnet blocks !!!
-            out_channels=out_channels[-1],
-            cond_dimension=cond_dimension,
+            in_channels=self.out_channels[-2], # using -2 is okay since the super constructor verifies that there are at least 2 resnet blocks !!!
+            out_channels=self.out_channels[-1],
+            cond_dimension=self.cond_dimension,
             upsample_type=upsample_type, # the upsample type must not be passed to the CondOneDimWResBlock
             **resnet_parameters
         )

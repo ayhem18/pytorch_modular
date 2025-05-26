@@ -73,7 +73,8 @@ class AbstractUnetDownBlock(ModuleListMixin, torch.nn.Module, ABC):
         self.num_down_layers = num_down_layers
         self.in_channels = in_channels
         self.out_channels = out_channels
-        
+        self.cond_dimension = cond_dimension
+
         # Common parameters for all layers
         self._layer_params = {
             "num_resnet_blocks": num_resnet_blocks,
@@ -123,8 +124,8 @@ class AbstractUnetDownBlock(ModuleListMixin, torch.nn.Module, ABC):
         skip_connections = [None for _ in self.down_layers]
         
         for i, layer in enumerate(self.down_layers):
-            x, skip = layer(x, condition)
-            skip_connections[i] = skip
+            x = layer(x, condition)
+            skip_connections[i] = x
         
         return x, skip_connections
     
@@ -183,7 +184,7 @@ class AbstractUnetUpBlock(ModuleListMixin, torch.nn.Module, ABC):
     """
     def __init__(
         self,
-        num_up_blocks: int,
+        num_up_layers: int,
         num_resnet_blocks: int,
         in_channels: int,
         cond_dimension: int,
@@ -205,22 +206,23 @@ class AbstractUnetUpBlock(ModuleListMixin, torch.nn.Module, ABC):
         ModuleListMixin.__init__(self, "up_layers")
         
         # Validate inputs
-        if len(out_channels) != num_up_blocks:
-            raise ValueError(f"Expected out_channels to have {num_up_blocks} elements, but got {len(out_channels)}")
+        if len(out_channels) != num_up_layers:
+            raise ValueError(f"Expected out_channels to have {num_up_layers} elements, but got {len(out_channels)}")
         
         # Convert upsample_types to list if it's a string
         if isinstance(upsample_types, str):
-            upsample_types = [upsample_types] * num_up_blocks
-        elif len(upsample_types) != num_up_blocks:
-            raise ValueError(f"Expected upsample_types to have {num_up_blocks} elements, but got {len(upsample_types)}")
+            upsample_types = [upsample_types] * num_up_layers
+        elif len(upsample_types) != num_up_layers:
+            raise ValueError(f"Expected upsample_types to have {num_up_layers} elements, but got {len(upsample_types)}")
         
         # Store parameters
-        self.num_up_blocks = num_up_blocks
+        self.num_up_layers = num_up_layers
         self.in_channels = in_channels
         self.out_channels = out_channels
+        self.cond_dimension = cond_dimension
         
         # Common parameters for all layers
-        self.layer_params = {
+        self._layer_params = {
             "num_resnet_blocks": num_resnet_blocks,
             "cond_dimension": cond_dimension,
             "inner_dim": inner_dim,
@@ -240,7 +242,11 @@ class AbstractUnetUpBlock(ModuleListMixin, torch.nn.Module, ABC):
 
 
     @abstractmethod
-    def forward(self, x: torch.Tensor, skip_outputs: List[torch.Tensor], condition: torch.Tensor) -> torch.Tensor:
+    def forward(self, 
+                x: torch.Tensor, 
+                skip_outputs: List[torch.Tensor], 
+                condition: torch.Tensor, 
+                reverse_skip_connections: bool = True) -> torch.Tensor:
         """
         Forward pass through the up block.
         
@@ -256,7 +262,8 @@ class AbstractUnetUpBlock(ModuleListMixin, torch.nn.Module, ABC):
             raise ValueError(f"Expected skip_outputs to have {len(self.up_layers)} elements, but got {len(skip_outputs)}")
         
         # Reverse skip connections to match the order of up layers
-        skip_outputs = skip_outputs[::-1]
+        if reverse_skip_connections:
+            skip_outputs = skip_outputs[::-1]
 
         for i, layer in enumerate(self.up_layers):
             if skip_outputs[i].shape != x.shape:
@@ -267,12 +274,36 @@ class AbstractUnetUpBlock(ModuleListMixin, torch.nn.Module, ABC):
         
         return x
 
-    def __call__(self, x: torch.Tensor, skip_outputs: List[torch.Tensor], condition: torch.Tensor) -> torch.Tensor:
-        return self.forward(x, skip_outputs, condition)
+    def __call__(self, x: torch.Tensor, skip_outputs: List[torch.Tensor], condition: torch.Tensor, reverse_skip_connections: bool = True) -> torch.Tensor:
+        return self.forward(x, skip_outputs, condition, reverse_skip_connections)
+
+
+    # use the ModuleListMixin implementations of the helper methods
+    def to(self, *args, **kwargs) -> 'AbstractUnetUpBlock':
+        super().module_list_to(*args, **kwargs)
+        return self
+    
+    def train(self, mode: bool = True) -> 'AbstractUnetUpBlock':
+        super().module_list_train(mode)
+        return self
+    
+    def eval(self) -> 'AbstractUnetUpBlock':    
+        super().module_list_eval()
+        return self
+    
+    def modules(self) -> Iterator[nn.Module]:
+        return super().module_list_modules()
+    
+
+    def parameters(self, recurse: bool = True) -> Iterator[torch.Tensor]:
+        return super().module_list_parameters(recurse)
+    
+    def named_parameters(self, prefix: str = '', recurse: bool = True) -> Iterator[Tuple[str, torch.Tensor]]:
+        return super().module_list_named_parameters(prefix, recurse)
 
 
 
-class AbstractUnetMidBlock(SequentialModuleListMixin, torch.nn.Module, ABC):
+class AbstractUnetMidBlock(ModuleListMixin, torch.nn.Module, ABC):
     """
     Middle block for UNet architecture.
     

@@ -1,5 +1,6 @@
 import torch
 import unittest
+from typing import Any, List, Tuple, Union
 
 
 class CustomModuleBaseTest(unittest.TestCase):
@@ -65,6 +66,26 @@ class CustomModuleBaseTest(unittest.TestCase):
         self.assertTrue(torch.allclose(output1, output2),
                          "Module without stochastic layers should produce consistent outputs")
     
+
+    def _test_outputs(self, output1: Union[torch.Tensor, Tuple, List], output2: Union[torch.Tensor, Tuple, List]) -> None:
+        """Test that outputs are identical"""
+
+        if isinstance(output1, torch.Tensor):
+            self.assertIsInstance(output2, torch.Tensor, "Output should be a tensor")
+            self.assertTrue(torch.allclose(output1, output2),
+                         "Module in eval mode should produce consistent outputs")
+            return 
+        
+        if isinstance(output1, (tuple, list)):
+            self.assertIsInstance(output2, (tuple, list), "Output should be a tuple or list")
+            self.assertEqual(len(output1), len(output2), "Output tuples or lists should have the same length")
+
+            for o1, o2 in zip(output1, output2):
+                self._test_outputs(o1, o2)
+                
+        else:
+            self.fail("Output should be a tensor, a tuple or a list")
+
     def _test_consistent_output_in_eval_mode(self, block: torch.nn.Module, input_tensor: torch.Tensor, *args, **kwargs) -> None:
         """Test that all modules in eval mode produce consistent output for the same input"""
         # Set to eval mode
@@ -74,9 +95,7 @@ class CustomModuleBaseTest(unittest.TestCase):
         output1 = block(input_tensor, *args, **kwargs)
         output2 = block(input_tensor, *args, **kwargs)
         
-        # Check that outputs are identical
-        self.assertTrue(torch.allclose(output1, output2),
-                         "Module in eval mode should produce consistent outputs")
+        self._test_outputs(output1, output2)
     
     def _test_batch_size_one_in_train_mode(self, block: torch.nn.Module, input_tensor: torch.Tensor, *args, **kwargs) -> None:
         """
@@ -103,7 +122,7 @@ class CustomModuleBaseTest(unittest.TestCase):
         # In train mode, BatchNorm1d with batch size 1 might raise an error
         # since variance can't be computed properly
         try:
-            _ = block(input_tensor, *args, **kwargs)
+            _ = block.forward(input_tensor, *args, **kwargs)
             # If it doesn't raise an error, it's acceptable
         except Exception as e:
             # Check if the error is related to batch size and BatchNorm
@@ -137,6 +156,16 @@ class CustomModuleBaseTest(unittest.TestCase):
         self.assertEqual(len(param_names), len(set(param_names)),
                          "All parameters should have unique names")
     
+
+    def _set_arguments_to_device(self, arg: Union[torch.Tensor, Tuple, List, Any], device: str) -> Union[torch.Tensor, Tuple, List]:
+        """Set the arguments to CUDA"""
+        if isinstance(arg, torch.Tensor):
+            return arg.to(device)
+        elif isinstance(arg, (tuple, list)):
+            return [self._set_arguments_to_device(a, device) for a in arg]
+        return arg
+
+
     def _test_to_device(self, block: torch.nn.Module, input_tensor: torch.Tensor, *args, **kwargs) -> None:
         """Test that module can move between devices properly"""
         # Only run if CUDA is available
@@ -144,10 +173,10 @@ class CustomModuleBaseTest(unittest.TestCase):
             return
         
         if len(args) > 0:
-            args = [arg.to('cuda') if isinstance(arg, torch.Tensor) else arg for arg in args]
+            args = [self._set_arguments_to_device(arg, 'cuda') for arg in args]
 
         if len(kwargs) > 0:
-            kwargs = {k: v.to('cuda') if isinstance(v, torch.Tensor) else v for k, v in kwargs.items()}
+            kwargs = {k: self._set_arguments_to_device(v, 'cuda') for k, v in kwargs.items()}
 
         # Move to CUDA
         cuda_block = block.to('cuda')
@@ -160,7 +189,7 @@ class CustomModuleBaseTest(unittest.TestCase):
             self.assertTrue(param.is_cuda, "All parameters should be moved to CUDA")
         
         # move the input tensor to the device
-        input_tensor = input_tensor.to('cuda')
+        input_tensor = self._set_arguments_to_device(input_tensor, 'cuda')
 
         try:
             block = block.to('cuda').eval()
@@ -174,13 +203,13 @@ class CustomModuleBaseTest(unittest.TestCase):
             self.assertFalse(param.is_cuda, "All parameters should be moved back to CPU")
 
         if len(args) > 0:
-            args = [arg.to('cpu') if isinstance(arg, torch.Tensor) else arg for arg in args]
+            args = [self._set_arguments_to_device(arg, 'cpu') for arg in args]
 
         if len(kwargs) > 0:
-            kwargs = {k: v.to('cpu') if isinstance(v, torch.Tensor) else v for k, v in kwargs.items()}
+            kwargs = {k: self._set_arguments_to_device(v, 'cpu') for k, v in kwargs.items()}
 
         # move the input tensor to the cpu
-        input_tensor = input_tensor.to('cpu')
+        input_tensor = self._set_arguments_to_device(input_tensor, 'cpu')
 
         try:
             block = block.to('cpu').eval()

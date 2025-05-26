@@ -118,6 +118,18 @@ class AbstractUpLayer(SequentialModuleListMixin, torch.nn.Module, ABC):
         nn.Module.__init__(self, *args, **kwargs)
         SequentialModuleListMixin.__init__(self, "_resnet_blocks")
         
+        # a few sanity checks
+        if isinstance(out_channels, int):
+            out_channels = [out_channels] * num_resnet_blocks
+
+        if len(out_channels) != num_resnet_blocks:
+            raise ValueError(f"The length of out_channels must be equal to the number of resnet blocks. Got {len(out_channels)} and {num_resnet_blocks}.")
+
+        # the number of resnet blocks cannot be less than 2
+        if num_resnet_blocks < 2:
+            raise ValueError(f"The number of resnet blocks must be at least 2. Got {num_resnet_blocks}.")
+
+
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.cond_dimension = cond_dimension
