@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 
 from abc import ABC, abstractmethod
-from typing import Iterator, List, Tuple
+from typing import Iterator, List, Tuple, Union
 
 
 from mypt.building_blocks.mixins.general import SequentialModuleListMixin
@@ -23,22 +23,10 @@ class AbstractDownLayer(SequentialModuleListMixin, torch.nn.Module, ABC):
         out_channels: Number of output channels
         cond_dimension: Number of conditioning dimensions
         num_resnet_blocks: Number of residual blocks to use
-        downsample_type: Type of downsampling to use ("conv", "avg_pool", "max_pool")
-        inner_dim: Inner dimension for FiLM layer
-        dropout_rate: Dropout rate
-        norm1: Normalization for the first residual block
-        norm1_params: Parameters for the first normalization
-        norm2: Normalization for the second residual block
-        norm2_params: Parameters for the second normalization
-        activation: Activation function
-        activation_params: Parameters for activation function
-        film_activation: Activation function for FiLM
-        film_activation_params: Parameters for FiLM activation
-        force_residual: Whether to force residual connections    
     """
     def __init__(self, 
             in_channels: int,
-            out_channels: List[int],
+            out_channels: Union[int, List[int]],
             cond_dimension: int,
             num_resnet_blocks: int,
             *args, **kwargs):
@@ -49,6 +37,9 @@ class AbstractDownLayer(SequentialModuleListMixin, torch.nn.Module, ABC):
         SequentialModuleListMixin.__init__(self, "_resnet_blocks")
 
         # a few sanity checks
+        if isinstance(out_channels, int):
+            out_channels = [out_channels] * num_resnet_blocks
+
         if len(out_channels) != num_resnet_blocks:
             raise ValueError(f"The length of out_channels must be equal to the number of resnet blocks. Got {len(out_channels)} and {num_resnet_blocks}.")
 

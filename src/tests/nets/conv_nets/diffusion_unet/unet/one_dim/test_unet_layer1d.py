@@ -9,7 +9,7 @@ from mypt.dimensions_analysis.dimension_analyser import DimensionsAnalyser
 from mypt.nets.conv_nets.diffusion_unet.unet.one_dim.unet_layer1d import UnetDownLayer1D, UnetUpLayer1D
 
 
-@unittest.skip("skip for now")
+# @unittest.skip("skip for now")
 class TestUnetDownLayer1D(CustomModuleBaseTest):
     """Test class for UnetDownLayer1D that verifies downsampling behavior"""
     

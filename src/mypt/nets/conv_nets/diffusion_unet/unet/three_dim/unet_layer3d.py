@@ -18,8 +18,8 @@ class UnetDownLayer3D(AbstractDownLayer):
     def __init__(self, 
         num_resnet_blocks: int,
         in_channels: int,
-        cond_channels: int,
-        out_channels: List[int],
+        cond_dimension: int,
+        out_channels: Union[List[int], int],
         inner_dim: int = 256,
         dropout_rate: float = 0.0,
         norm1: Optional[nn.Module] = None,
@@ -34,10 +34,10 @@ class UnetDownLayer3D(AbstractDownLayer):
         downsample_type: str = 'con'):
 
         super().__init__(
-            in_channels,
-            cond_channels,
-            out_channels,
-            num_resnet_blocks,
+            in_channels=in_channels,
+            out_channels=out_channels,
+            cond_dimension=cond_dimension,
+            num_resnet_blocks=num_resnet_blocks,
         )
 
         resnet_parameters = {
@@ -53,31 +53,39 @@ class UnetDownLayer3D(AbstractDownLayer):
             'force_residual': force_residual,
             'dropout_rate': dropout_rate,
             'inner_dim': inner_dim,
-            'downsample_type': downsample_type,
         }
 
         resnet_blocks = [None for _ in range(num_resnet_blocks)]
 
         for i in range(num_resnet_blocks - 1):
             resnet_blocks[i] = CondThreeDimWResBlock(
-                in_channels=in_channels if i == 0 else out_channels[i-1],
-                out_channels=out_channels[i],
-                cond_channels=cond_channels,
+                in_channels=self.in_channels if i == 0 else self.out_channels[i-1],
+                out_channels=self.out_channels[i],
+                cond_dimension=self.cond_dimension,
+                stride=1, # the stride must be 1, the down sampling is handled by the downsample_layer
                 **resnet_parameters
             )
 
         resnet_blocks[-1] = DownCondThreeDimWResBlock(
-            in_channels=out_channels[-1],
-            out_channels=out_channels[-1],
-            cond_channels=cond_channels,
+            in_channels=self.out_channels[-2],
+            out_channels=self.out_channels[-1],
+            cond_dimension=self.cond_dimension,
+            downsample_type=downsample_type, # the downsample argument must be passed to the CondThreeDimWResBlock class
             **resnet_parameters
         )
 
-        self.resnet_blocks = nn.ModuleList(resnet_blocks)
+        self._resnet_blocks = nn.ModuleList(resnet_blocks)
 
     def forward(self, x: torch.Tensor, condition: torch.Tensor) -> torch.Tensor:
         # just use the super class forward method 
-        return super().forward(x, condition)
+        return super().forward(x, condition) 
+    
+    def __call__(self, x: torch.Tensor, condition: torch.Tensor) -> torch.Tensor:
+        return self.forward(x, condition)
+    
+    @property
+    def downsample_type(self) -> str:
+        return self._resnet_blocks[-1]._downsample_type
     
 
 class UnetUpLayer3D(AbstractUpLayer):
@@ -87,7 +95,7 @@ class UnetUpLayer3D(AbstractUpLayer):
     def __init__(self, 
         num_resnet_blocks: int,
         in_channels: int,
-        cond_channels: int,
+        cond_dimension: int,
         out_channels: List[int],
         inner_dim: int = 256,
         dropout_rate: float = 0.0,
@@ -103,10 +111,10 @@ class UnetUpLayer3D(AbstractUpLayer):
         upsample_type: str = 'con'):
 
         super().__init__(
-            in_channels,
-            cond_channels,
-            out_channels,
-            num_resnet_blocks,
+            in_channels=in_channels,
+            out_channels=out_channels,
+            cond_dimension=cond_dimension,
+            num_resnet_blocks=num_resnet_blocks,
         )
 
         resnet_parameters = {
@@ -121,30 +129,37 @@ class UnetUpLayer3D(AbstractUpLayer):
             'force_residual': force_residual,
             'dropout_rate': dropout_rate,
             'inner_dim': inner_dim,
-            'upsample_type': upsample_type,
         }
 
         resnet_blocks = [None for _ in range(num_resnet_blocks)]
 
         for i in range(num_resnet_blocks - 1):
             resnet_blocks[i] = CondThreeDimWResBlock(
-                in_channels=in_channels if i == 0 else out_channels[i-1],
-                out_channels=out_channels[i],
-                cond_channels=cond_channels,
+                in_channels=self.in_channels if i == 0 else self.out_channels[i-1],
+                out_channels=self.out_channels[i],
+                cond_dimension=self.cond_dimension,
+                stride=1, # the stride must be 1, the up sampling is handled by the upsample_layer
                 **resnet_parameters
             )
 
         resnet_blocks[-1] = UpCondThreeDimWResBlock(
-            in_channels=out_channels[-1],
-            out_channels=out_channels[-1],
-            cond_channels=cond_channels,
+            in_channels=self.out_channels[-2],
+            out_channels=self.out_channels[-1],
+            cond_dimension=self.cond_dimension,
+            upsample_type=upsample_type, # the upsample argument must be passed to the CondThreeDimWResBlock class
             **resnet_parameters
         )
 
-        self.resnet_blocks = nn.ModuleList(resnet_blocks)
+        self._resnet_blocks = nn.ModuleList(resnet_blocks)
 
     def forward(self, x: torch.Tensor, condition: torch.Tensor) -> torch.Tensor:
         # just use the super class forward method 
         return super().forward(x, condition)
 
+    def __call__(self, x: torch.Tensor, condition: torch.Tensor) -> torch.Tensor:
+        return self.forward(x, condition)   
+        
+    @property
+    def upsample_type(self) -> str:
+        return self._resnet_blocks[-1]._upsample_type
     

@@ -5,7 +5,7 @@ from typing import Optional, Tuple, Union, Callable
 
 from mypt.building_blocks.auxiliary.film_block import ThreeDimFiLMBlock
 from mypt.building_blocks.mixins.general import NonSequentialModuleMixin
-from mypt.building_blocks.conv_blocks.conditioned.abstract_cond_resnet import AbstractCondResnetBlock, AbstractCondUpWResBlock
+from mypt.building_blocks.conv_blocks.conditioned.abstract_cond_resnet import AbstractCondDownWResBlock, AbstractCondResnetBlock, AbstractCondUpWResBlock
 
 class CondThreeDimWResBlock(AbstractCondResnetBlock):
     """
@@ -185,7 +185,7 @@ class UpCondThreeDimWResBlock(AbstractCondUpWResBlock):
         
 
 
-class DownCondThreeDimWResBlock(NonSequentialModuleMixin, nn.Module):
+class DownCondThreeDimWResBlock(AbstractCondDownWResBlock):
     """
     A conditioned WideResnet block with downsampling capabilities.
     The block passes the input through a CondOneDimWResBlock and then applies downsampling.
@@ -213,7 +213,8 @@ class DownCondThreeDimWResBlock(NonSequentialModuleMixin, nn.Module):
         film_activation_params: dict = {},
         force_residual: bool = False,
         downsample_type: str = "conv",
-    ):
+    ):  
+        
         super().__init__(
             in_channels=in_channels,
             out_channels=out_channels,
