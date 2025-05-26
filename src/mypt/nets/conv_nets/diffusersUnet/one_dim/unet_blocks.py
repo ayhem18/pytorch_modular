@@ -4,7 +4,7 @@ from typing import Iterator, List, Union, Optional, Callable, Tuple
 
 from mypt.nets.conv_nets.diffusersUnet.one_dim.unet_layers import DownLayer, UpLayer
 from mypt.building_blocks.mixins.general import ModuleListMixin, SequentialModuleListMixin
-from mypt.building_blocks.conv_blocks.conditioned.one_dim.resnet_con_block import CondOneDimWResBlock
+from mypt.building_blocks.conv_blocks.conditioned.one_dim.resnet_con1d import CondOneDimWResBlock
 
 
 class UnetDownBlock(ModuleListMixin):
@@ -122,15 +122,15 @@ class UnetDownBlock(ModuleListMixin):
         
         return x, skip_connections
     
-    def to(self, *args, **kwargs) -> 'DownBlock':
+    def to(self, *args, **kwargs) -> 'UnetDownBlock':
         super().module_list_to(*args, **kwargs)
         return self
     
-    def train(self, mode: bool = True) -> 'DownBlock':
+    def train(self, mode: bool = True) -> 'UnetDownBlock':
         super().module_list_train(mode)
         return self
     
-    def eval(self) -> 'DownBlock':
+    def eval(self) -> 'UnetDownBlock':
         super().module_list_eval()
         return self
     

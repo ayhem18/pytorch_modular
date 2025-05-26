@@ -5,7 +5,7 @@ from typing import Iterator, List, Union, Optional, Callable, Tuple
 
 
 from mypt.building_blocks.mixins.general import SequentialModuleListMixin
-from mypt.building_blocks.conv_blocks.conditioned.one_dim.resnet_con_block import (
+from mypt.building_blocks.conv_blocks.conditioned.one_dim.resnet_con1d import (
     CondOneDimWResBlock,
     DownCondOneDimWResBlock,
     UpCondOneDimWResBlock

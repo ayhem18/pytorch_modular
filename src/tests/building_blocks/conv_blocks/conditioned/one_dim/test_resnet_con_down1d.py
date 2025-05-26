@@ -7,7 +7,7 @@ from typing import Optional, Tuple
 
 from tests.custom_base_test import CustomModuleBaseTest
 from mypt.dimensions_analysis.dimension_analyser import DimensionsAnalyser
-from mypt.building_blocks.conv_blocks.conditioned.one_dim.resnet_con_block import DownCondOneDimWResBlock
+from mypt.building_blocks.conv_blocks.conditioned.one_dim.resnet_con1d import DownCondOneDimWResBlock
 
 
 class TestDownCondOneDimWResBlock(CustomModuleBaseTest):

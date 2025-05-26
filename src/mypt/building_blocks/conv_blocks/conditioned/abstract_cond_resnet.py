@@ -1,30 +1,31 @@
-import torch
-import torch.nn as nn
-from typing import Optional, Union, Callable, Tuple
+"""
+This script contains the implementation of the functionalities shared among the One Dimensional and Three Dimensional CondResnetBlocks. 
 
-from mypt.building_blocks.auxiliary.film_block import OneDimFiLMBlock
+The functionalities shared are:
+- the conditional residual block
+- the conditional residual block with spatial downsampling
+- the conditional residual block with spatial upsampling
+
+"""
+
+import torch
+
+from torch import nn
+from abc import abstractmethod, ABC
+from typing import Callable, List, Optional, Tuple, Union
+
 from mypt.building_blocks.mixins.general import NonSequentialModuleMixin
 from mypt.building_blocks.mixins.residual_mixins import GeneralResidualMixin
 from mypt.building_blocks.auxiliary.normalization.utils import _normalization_functions
 
 
-class CondOneDimWResBlock(NonSequentialModuleMixin, GeneralResidualMixin, nn.Module):
+class AbstractCondResnetBlock(NonSequentialModuleMixin, GeneralResidualMixin, nn.Module, ABC):
     """
-    A conditioned version of the WideResnet block that incorporates feature-wise
-    conditioning through FiLM (Feature-wise Linear Modulation).
-    
-    This block follows the same architectural principles as WideResnetBlock but 
-    allows for external conditioning information to modulate the features.
-    
-    The structure includes:
-    1. FiLM-conditioned normalization and activation
-    2. Convolution
-    3. Dropout 
-    4. FiLM-conditioned normalization and activation
-    5. Convolution
+    Abstract class for the conditional residual blocks.
+    """
 
-    6. a residual connection guaranteed to map the input dimensions to the output dimensions (based on the design of the WideResnetBlock)
-    """
+    def __init__(self, *args, **kwargs):
+        super().__init__()
 
     _WIDE_RESNET_BLOCK_NORMALIZATION_FUNCTIONS = {
         "groupnorm": nn.GroupNorm,
@@ -64,39 +65,8 @@ class CondOneDimWResBlock(NonSequentialModuleMixin, GeneralResidualMixin, nn.Mod
         elif norm == nn.BatchNorm2d:
             norm_params["num_features"] = norm_params.get("num_features", channels)
         
-        return norm, norm_params
-
-    def __set_components(self) -> nn.ModuleDict:
-        
-        components = nn.ModuleDict()
-
-        components["film1"] = OneDimFiLMBlock(
-            **self._film_params1
-        )
-        
-        components["conv1"] = nn.Conv2d(
-            self._in_channels, 
-            self._out_channels, 
-            kernel_size=3, 
-            stride=self._stride, 
-            padding=1, 
-        )
-        
-        components["dropout"] = nn.Dropout(self._dropout_rate)
-
-        components["film2"] = OneDimFiLMBlock(
-            **self._film_params2
-        )
-        
-        components["conv2"] = nn.Conv2d(
-            self._out_channels, 
-            self._out_channels, 
-            kernel_size=3, 
-            stride=1,  # Always 1 for the second conv
-            padding=1, 
-        )
-
-        return components
+        return norm, norm_params 
+    
 
     def __set_residual_stream(self) -> Tuple[str, str]:
         # can be a one-liner, but let's focus on clarify for now
@@ -120,6 +90,12 @@ class CondOneDimWResBlock(NonSequentialModuleMixin, GeneralResidualMixin, nn.Mod
             self._shortcut = None
 
         return "_components", residual_stream_field_name
+
+
+    @abstractmethod
+    def set_components(self) -> nn.ModuleDict:
+        pass
+
 
     def __init__(
         self, 
@@ -147,6 +123,8 @@ class CondOneDimWResBlock(NonSequentialModuleMixin, GeneralResidualMixin, nn.Mod
 
         # whether to use a convolutional layer as the shortcut connection
         force_residual: bool = False, 
+
+        extra_components_fields: Optional[List[str]] = None,
     ):
         # Validate the `stride` parameter
         if stride not in [1, 2]:
@@ -161,7 +139,7 @@ class CondOneDimWResBlock(NonSequentialModuleMixin, GeneralResidualMixin, nn.Mod
             inner_components_fields=[
                 "_components",  
                 "_shortcut"
-            ]
+            ] + (extra_components_fields or []) # do not add any fields if the 'extra_components_fields' is None
         )
         
         # Store parameters
@@ -205,7 +183,7 @@ class CondOneDimWResBlock(NonSequentialModuleMixin, GeneralResidualMixin, nn.Mod
             "film_activation_params": film_activation_params,
         }
 
-        self._components = self.__set_components()
+        self._components = self.set_components()
 
         main_stream_field_name, residual_stream_field_name = self.__set_residual_stream()
 
@@ -217,29 +195,12 @@ class CondOneDimWResBlock(NonSequentialModuleMixin, GeneralResidualMixin, nn.Mod
         )
 
 
+    @abstractmethod
     def _forward_main_stream(self, x: torch.Tensor, condition: torch.Tensor) -> torch.Tensor:
-        """
-        Forward pass through the main stream with conditioning.
-        Overriding the GeneralResidualMixin._forward_main_stream method to call the GeneralResidualMixin.residual_forward()
+        # this must be overriden by the subsequent classes
+        pass
 
-        Args:
-            x: Input feature tensor [B, C, H, W]
-            condition: Conditioning tensor [B, cond_dim]
-            
-        Returns:
-            Output tensor after passing through the main stream
-        """
-        # First FiLM -> Conv -> Dropout sequence
-        out = self._components['film1'](x, condition)
-        out = self._components['conv1'](out)
-        out = self._components['dropout'](out)
-        
-        # Second FiLM -> Conv sequence
-        out = self._components['film2'](out, condition)
-        out = self._components['conv2'](out)
-        
-        return out
-    
+
     def forward(self, x: torch.Tensor, condition: torch.Tensor, debug: bool = False) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]:
         # to pass both the `debug` and `condition` parameters to the GeneralResidualMixin.residual_forward() method,
         # debug must be passed as a positional argument and condition must be passed as an extra argument (as part of the `*args` argument)
@@ -266,7 +227,7 @@ class CondOneDimWResBlock(NonSequentialModuleMixin, GeneralResidualMixin, nn.Mod
     
     @property
     def cond_dimension(self) -> int:
-        """Returns the number of conditioning dimensions."""
+        """the number of features in the conditioning tensor"""
         return self._cond_dimension
     
     @property
@@ -280,37 +241,17 @@ class CondOneDimWResBlock(NonSequentialModuleMixin, GeneralResidualMixin, nn.Mod
         return self._dropout_rate
 
 
-class UpCondOneDimWResBlock(NonSequentialModuleMixin, nn.Module):
+class AbstractCondUpWResBlock(NonSequentialModuleMixin, nn.Module):
     """
-    A conditioned WideResnet block with upsampling capabilities.
-    The block passes the input through a CondOneDimWResBlock and then applies upsampling.
-    
-    Supports multiple upsampling methods:
-    - transpose_conv: Uses ConvTranspose2d
-    - conv: Uses Conv2d after interpolation
-    - interpolate: Uses only interpolation
+    Abstract class for the conditional upsampling residual blocks.
     """
-    
-    def __init__(
-        self, 
+
+    def __init__(self,
         in_channels: int, 
         out_channels: int, 
         cond_dimension: int,
-        inner_dim: int = 256,
-        stride: int = 1,
-        dropout_rate: float = 0.0,
-        norm1: Optional[nn.Module] = None,
-        norm1_params: Optional[dict] = None,
-        norm2: Optional[nn.Module] = None,
-        norm2_params: Optional[dict] = None,
-        activation: Optional[Union[str, Callable]] = None,
-        activation_params: Optional[dict] = None,
-        film_activation: Union[str, Callable] = "relu",
-        film_activation_params: dict = {},
-        force_residual: bool = False,
+        upsample_type: str):
 
-        upsample_type: str = "transpose_conv",
-    ):
         nn.Module.__init__(self)
         NonSequentialModuleMixin.__init__(self, inner_components_fields=["_upsample", "_resnet_block"])
                 
@@ -320,26 +261,9 @@ class UpCondOneDimWResBlock(NonSequentialModuleMixin, nn.Module):
         self._cond_dimension = cond_dimension
         self._upsample_type = upsample_type
 
+        # the self._resnet_block must be initialized by sub-classe
+        self._resnet_block: AbstractCondResnetBlock = None
 
-        # Create the conditional resnet block
-        self._resnet_block = CondOneDimWResBlock(
-            in_channels=in_channels,  
-            out_channels=out_channels,
-            cond_dimension=cond_dimension,
-            inner_dim=inner_dim,
-            stride=stride,
-            dropout_rate=dropout_rate,
-            norm1=norm1,
-            norm1_params=norm1_params,
-            norm2=norm2,
-            norm2_params=norm2_params,
-            activation=activation,
-            activation_params=activation_params,
-            film_activation=film_activation,
-            film_activation_params=film_activation_params,
-            force_residual=force_residual
-        )
-        
     
         # Create the upsampling layer
         self._upsample = self._create_upsample_layer(
@@ -352,20 +276,30 @@ class UpCondOneDimWResBlock(NonSequentialModuleMixin, nn.Module):
         upsample_type: str,
     ) -> nn.Module:
         
-        """Creates the upsampling layer based on the specified type."""
+        """
+        Creates the upsampling layer based on the specified type.
+        
+        for interpolation and upsampling, the mode is set to 'nearest-exact' because of the note in the pytorch documentation: 
+        https://docs.pytorch.org/docs/stable/generated/torch.nn.functional.interpolate.html 
+
+    
+        """
+        
         if upsample_type == "transpose_conv":
             # the tranpose convolutional layer upsample the input by a factor of 2
+            # every single parameter below was chosen carefully to ensure that h_out = h_in * 2 (regardless of h_in!!) 
             return nn.ConvTranspose2d(
                 in_channels=self._out_channels, # the convolutional layer will receive the output of the resnet block (in_channels of upsample layer is out_channels of resnet block)
                 out_channels=self._out_channels,
                 kernel_size=3,
                 stride=2,
-                padding=1
+                padding=1, 
+                output_padding=1 
             )
         elif upsample_type == "conv":
             return nn.Sequential(
                 # upsample
-                nn.Upsample(scale_factor=2, mode='nearest'),
+                nn.Upsample(scale_factor=2, mode='nearest-exact'),
                 # apply a convolutional layer that does not change the dimensions
                 nn.Conv2d(
                     in_channels=self._out_channels, # the convolutional layer will receive the output of the upsample layer (in_channels of upsample layer is out_channels of resnet block)
@@ -375,7 +309,7 @@ class UpCondOneDimWResBlock(NonSequentialModuleMixin, nn.Module):
                 )
             )
         elif upsample_type == "interpolate":
-            return nn.Upsample(scale_factor=2, mode='nearest')
+            return nn.Upsample(scale_factor=2, mode='nearest-exact')
         else:
             raise ValueError(f"Unknown upsample type: {upsample_type}")
     
@@ -386,35 +320,18 @@ class UpCondOneDimWResBlock(NonSequentialModuleMixin, nn.Module):
         return x
 
 
-class DownCondOneDimWResBlock(NonSequentialModuleMixin, nn.Module):
+class AbstractCondDownWResBlock(NonSequentialModuleMixin, nn.Module):
     """
-    A conditioned WideResnet block with downsampling capabilities.
-    The block passes the input through a CondOneDimWResBlock and then applies downsampling.
-    
-    Supports multiple downsampling methods:
-    - conv: Uses strided convolution
-    - avg_pool: Uses average pooling
-    - max_pool: Uses max pooling
+    Abstract class for the conditional downsampling residual blocks.
     """
-    
+
     def __init__(
         self, 
         in_channels: int, 
         out_channels: int, 
         cond_dimension: int,
-        inner_dim: int = 256,
-        dropout_rate: float = 0.0,
-        norm1: Optional[nn.Module] = None,
-        norm1_params: Optional[dict] = None,
-        norm2: Optional[nn.Module] = None,
-        norm2_params: Optional[dict] = None,
-        activation: Optional[Union[str, Callable]] = None,
-        activation_params: Optional[dict] = None,
-        film_activation: Union[str, Callable] = "relu",
-        film_activation_params: dict = {},
-        force_residual: bool = False,
-        downsample_type: str = "conv",
-    ):
+        downsample_type: str):
+
         nn.Module.__init__(self)
         NonSequentialModuleMixin.__init__(self, inner_components_fields=["_downsample", "_resnet_block"])
         
@@ -425,23 +342,7 @@ class DownCondOneDimWResBlock(NonSequentialModuleMixin, nn.Module):
         self._downsample_type = downsample_type
         
         # Create the conditional resnet block
-        self._resnet_block = CondOneDimWResBlock(
-            in_channels=in_channels,
-            out_channels=out_channels,
-            cond_dimension=cond_dimension,
-            inner_dim=inner_dim,
-            stride=1, # Stride is always 1 as downsampling is handled separately
-            dropout_rate=dropout_rate,
-            norm1=norm1,
-            norm1_params=norm1_params,
-            norm2=norm2,
-            norm2_params=norm2_params,
-            activation=activation,
-            activation_params=activation_params,
-            film_activation=film_activation,
-            film_activation_params=film_activation_params,
-            force_residual=force_residual
-        )
+        self._resnet_block: AbstractCondResnetBlock = None
 
         # Create the downsampling layer
         self._downsample = self._create_downsample_layer(
@@ -449,7 +350,6 @@ class DownCondOneDimWResBlock(NonSequentialModuleMixin, nn.Module):
         )
 
 
-    
     def _create_downsample_layer(
         self,
         downsample_type: str,
