@@ -7,7 +7,7 @@ from typing import Tuple
 
 from tests.custom_base_test import CustomModuleBaseTest
 from mypt.dimensions_analysis.dimension_analyser import DimensionsAnalyser
-from mypt.building_blocks.conv_blocks.conditioned.three_dim.resnet_con_3d import CondThreeDimWResBlock
+from mypt.building_blocks.conv_blocks.conditioned.three_dim.resnet_con3d import CondThreeDimWResBlock
 
 
 class TestConditionalWResBlock3D(CustomModuleBaseTest):
@@ -251,6 +251,43 @@ class TestConditionalWResBlock3D(CustomModuleBaseTest):
             block = self._generate_random_conditional_resnet_block()
             x, condition = self._get_valid_input(block)
             super()._test_to_device(block, x, condition)
+
+    def test_condition_interpolation(self):
+        """Test that condition is properly interpolated based on stride"""
+        for _ in range(100):
+            # Test with stride=1
+            block_stride1 = self._generate_random_conditional_resnet_block(stride=1)
+            
+            # Get random input and condition
+            x, condition = self._get_valid_input(block_stride1)
+            
+            # Call the internal _forward_main_stream method directly with debug=True
+            main_output, returned_condition = block_stride1._forward_main_stream(x, condition, return_condition=True)
+            
+            # For stride=1, the returned condition should be identical to the input condition
+            self.assertTrue(torch.allclose(condition, returned_condition), 
+                           "With stride=1, condition should remain unchanged")
+            
+            # Test with stride=2
+            block_stride2 = self._generate_random_conditional_resnet_block(stride=2)
+            
+            # Get random input and condition
+            x, condition = self._get_valid_input(block_stride2)
+            
+            # Call the internal _forward_main_stream method directly with debug=True
+            main_output, returned_condition = block_stride2._forward_main_stream(x, condition, return_condition=True)
+            
+            # For stride=2, the returned condition's spatial dimensions should match the output's
+            self.assertEqual(returned_condition.shape[2], main_output.shape[2],
+                            "With stride=2, condition height should match output height")
+            self.assertEqual(returned_condition.shape[3], main_output.shape[3],
+                            "With stride=2, condition width should match output width")
+            
+            # Additionally verify that batch size and channel dimensions are preserved
+            self.assertEqual(returned_condition.shape[0], condition.shape[0],
+                            "Batch size should be preserved in the condition")
+            self.assertEqual(returned_condition.shape[1], condition.shape[1],
+                            "Channel dimension should be preserved in the condition")
 
 
 if __name__ == '__main__':

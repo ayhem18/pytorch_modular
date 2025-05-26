@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from typing import Optional, Union, Callable
+from typing import Optional, Tuple, Union, Callable
 
 from mypt.building_blocks.auxiliary.film_block import ThreeDimFiLMBlock
 from mypt.building_blocks.mixins.general import NonSequentialModuleMixin
@@ -92,7 +92,7 @@ class CondThreeDimWResBlock(AbstractCondResnetBlock):
         )
 
 
-    def _forward_main_stream(self, x: torch.Tensor, condition: torch.Tensor) -> torch.Tensor:
+    def _forward_main_stream(self, x: torch.Tensor, condition: torch.Tensor, return_condition: bool = False) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
         """
         Forward pass through the main stream with conditioning.
         Overriding the GeneralResidualMixin._forward_main_stream method to call the GeneralResidualMixin.residual_forward()
@@ -100,7 +100,7 @@ class CondThreeDimWResBlock(AbstractCondResnetBlock):
         Args:
             x: Input feature tensor [B, C, H, W]
             condition: Conditioning tensor [B, cond_dim]
-            
+            return_condition: added mainly for testing purposes.
         Returns:
             Output tensor after passing through the main stream
         """
@@ -117,6 +117,10 @@ class CondThreeDimWResBlock(AbstractCondResnetBlock):
         out = self._components['film2'](out, condition)
         out = self._components['conv2'](out)
         
+
+        if return_condition:
+            return out, condition
+
         return out
     
 

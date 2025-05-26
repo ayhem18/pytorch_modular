@@ -8,6 +8,10 @@ class CustomModuleBaseTest(unittest.TestCase):
     Provides common test methods that should apply to all properly-implemented modules.
     """
     
+    def _test_module_is_nn_module(self, block: torch.nn.Module) -> None:
+        """Test that the module is an instance of torch.nn.Module. THIS IS VERY IMPORTANT"""
+        self.assertIsInstance(block, torch.nn.Module, "Module should be an instance of torch.nn.Module")
+
     def _get_valid_input(self, *args, **kwargs) -> torch.Tensor:
         """
         Generate a random input tensor with the correct shape.
@@ -186,6 +190,7 @@ class CustomModuleBaseTest(unittest.TestCase):
 
 
     # TODO: better understand the clone behavior
+    # NOTE: this test is not used for now...
     def _test_clone_method(self, block: torch.nn.Module) -> None:
         """Test the clone() method if it exists"""
         if not hasattr(block, 'clone'):

@@ -155,6 +155,11 @@ class AbstractCondResnetBlock(NonSequentialModuleMixin, GeneralResidualMixin, nn
         norm1, norm1_params = self.__set_norm_params(1, norm1, norm1_params)
         norm2, norm2_params = self.__set_norm_params(2, norm2, norm2_params)
 
+        # set the default values for the activation parameters (using ReLu until I learn more about activation functions and their properties)
+        activation = activation or nn.ReLU
+        activation_params = activation_params or {}
+
+
         self._film_params1 = {
             "out_channels": in_channels,
             "cond_dimension": cond_dimension,

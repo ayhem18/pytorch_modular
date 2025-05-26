@@ -8,7 +8,7 @@ from typing import Optional, Tuple
 
 from tests.custom_base_test import CustomModuleBaseTest
 from mypt.dimensions_analysis.dimension_analyser import DimensionsAnalyser
-from mypt.building_blocks.conv_blocks.conditioned.three_dim.resnet_con_3d import UpCondThreeDimWResBlock
+from mypt.building_blocks.conv_blocks.conditioned.three_dim.resnet_con3d import UpCondThreeDimWResBlock
 
 
 class TestUpCondThreeDimWResBlock(CustomModuleBaseTest):

@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from typing import Iterator, List, Union, Optional, Callable, Tuple
 
-from mypt.nets.conv_nets.diffusersUnet.one_dim.unet_layers import DownLayer, UpLayer
+from mypt.nets.conv_nets.diffusion_unet.unet.abstract_unet_layers import DownLayer, UpLayer
 from mypt.building_blocks.mixins.general import ModuleListMixin, SequentialModuleListMixin
 from mypt.building_blocks.conv_blocks.conditioned.one_dim.resnet_con1d import CondOneDimWResBlock
 
@@ -144,10 +144,6 @@ class UnetDownBlock(ModuleListMixin):
     def named_parameters(self, prefix: str = '', recurse: bool = True) -> Iterator[Tuple[str, torch.Tensor]]:
         return super().module_list_named_parameters(prefix, recurse)
     
-    
-    
-
-
 
 class UnetUpBlock(ModuleListMixin):
     """
