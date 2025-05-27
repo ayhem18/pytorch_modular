@@ -93,7 +93,6 @@ class UnetDownLayer1D(AbstractDownLayer):
     
 
 
-
 class UnetUpLayer1D(AbstractUpLayer):
     """
     Upsampling layer for UNet architecture using UpLayer components.

@@ -56,7 +56,7 @@ class AbstractDownLayer(SequentialModuleListMixin, torch.nn.Module, ABC):
         self._resnet_blocks: nn.ModuleList = None
 
 
-    def forward(self, x: torch.Tensor, condition: torch.Tensor) -> List[torch.Tensor]:
+    def forward(self, x: torch.Tensor, condition: torch.Tensor) -> torch.Tensor:
         """
         Forward pass through the down layer.
         
@@ -65,7 +65,7 @@ class AbstractDownLayer(SequentialModuleListMixin, torch.nn.Module, ABC):
             condition: Conditioning tensor
             
         Returns:
-            List of tensors from each resnet block
+            Output tensor
         """
         return super().sequential_module_list_forward(x, condition)
 

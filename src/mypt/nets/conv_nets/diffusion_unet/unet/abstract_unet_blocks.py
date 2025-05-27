@@ -63,6 +63,9 @@ class AbstractUnetDownBlock(ModuleListMixin, torch.nn.Module, ABC):
         if len(out_channels) != num_down_layers:
             raise ValueError(f"Expected out_channels to have {num_down_layers} elements, but got {len(out_channels)}")
 
+        # convert the out_channels into a list of list if it's not already
+        out_channels = [c if isinstance(c, list) else [c] * num_resnet_blocks for c in out_channels]
+
         # Convert downsample_types to list if it's a string
         if isinstance(downsample_types, str):
             downsample_types = [downsample_types] * num_down_layers
@@ -74,6 +77,7 @@ class AbstractUnetDownBlock(ModuleListMixin, torch.nn.Module, ABC):
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.cond_dimension = cond_dimension
+        self.downsample_types = downsample_types
 
         # Common parameters for all layers
         self._layer_params = {
@@ -95,17 +99,6 @@ class AbstractUnetDownBlock(ModuleListMixin, torch.nn.Module, ABC):
         # the sub-classes must implement this attribute
         self.down_layers: torch.nn.ModuleList[AbstractDownLayer] = None
 
-
-        # # Create the down layers
-        # down_layers = [None for _ in range(num_down_blocks)]
-
-        # for i in range(num_down_blocks):
-        #     down_layers[i] = DownLayer(
-        #         in_channels=in_channels if i == 0 else out_channels[i-1],
-        #         out_channels=out_channels[i],
-        #         downsample_type=downsample_types[i],
-        #         **self._layer_params
-        #     )
 
     @abstractmethod
     def forward(self, x: torch.Tensor, condition: torch.Tensor) -> Tuple[torch.Tensor, List[torch.Tensor]]:
@@ -209,6 +202,9 @@ class AbstractUnetUpBlock(ModuleListMixin, torch.nn.Module, ABC):
         if len(out_channels) != num_up_layers:
             raise ValueError(f"Expected out_channels to have {num_up_layers} elements, but got {len(out_channels)}")
         
+        # convert the out_channels into a list of list if it's not already
+        out_channels = [c if isinstance(c, list) else [c] * num_resnet_blocks for c in out_channels]
+
         # Convert upsample_types to list if it's a string
         if isinstance(upsample_types, str):
             upsample_types = [upsample_types] * num_up_layers
@@ -220,6 +216,7 @@ class AbstractUnetUpBlock(ModuleListMixin, torch.nn.Module, ABC):
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.cond_dimension = cond_dimension
+        self.upsample_types = upsample_types
         
         # Common parameters for all layers
         self._layer_params = {

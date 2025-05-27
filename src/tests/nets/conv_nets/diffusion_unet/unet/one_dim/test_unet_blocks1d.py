@@ -10,7 +10,7 @@ from mypt.dimensions_analysis.dimension_analyser import DimensionsAnalyser
 from mypt.nets.conv_nets.diffusion_unet.unet.one_dim.unet_block1d import UnetDownBlock1D, UnetUpBlock1D
 
 
-@unittest.skip("Skipping UnetDownBlock1D tests")
+# @unittest.skip("Skipping UnetDownBlock1D tests")
 class TestUnetDownBlock1D(CustomModuleBaseTest):
     """Test class for UnetDownBlock1D that verifies downsampling behavior"""
     
@@ -361,7 +361,11 @@ class TestUnetUpBlock1D(CustomModuleBaseTest):
         for i in range(num_up_layers):
             # Each skip connection has progressively larger spatial dimensions
             skip_height = skip_width = input_height * (2 ** i)
-            skip_channels = out_channels[i - 1] if i > 0 else in_channels
+            # out_channels is a list of lists
+            # skip_channels is either in_channels
+            # or the input to the i-th up_layer: which is the output of the (i-1)-th up_layer 
+            # which can be found as the last element in the out_channels[i - 1] list
+            skip_channels = out_channels[i - 1][-1] if i > 0 else in_channels
             skip = torch.randn(batch_size, skip_channels, skip_height, skip_width)
             skip_outputs[i] = skip
         
