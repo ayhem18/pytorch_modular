@@ -1,3 +1,4 @@
+from mypt.building_blocks.mixins.general import NonSequentialModuleMixin
 import torch
 import torch.nn as nn
 
@@ -10,7 +11,7 @@ from mypt.nets.conv_nets.diffusion_unet.unet.three_dim.unet_blocks3d import (
 )
 
 
-class UNet3DCond(nn.Module):
+class UNet3DCond(NonSequentialModuleMixin, nn.Module):
     """
     UNet architecture implementation using the builder design pattern.
     
@@ -24,25 +25,40 @@ class UNet3DCond(nn.Module):
     Args:
         cond_dimension: Dimension of the conditioning input
     """
-    def __init__(self, cond_dimension: int, film_dimension: int):
-        super().__init__()
+    def __init__(self, in_channels:int, out_channels: int, cond_dimension: int, *args, **kwargs):
         
-        self.cond_dimension = cond_dimension
-        self.film_dimension = film_dimension
+        torch.nn.Module.__init__(self, *args, **kwargs)
+        NonSequentialModuleMixin.__init__(self, ["_down_block", "_middle_block", "_up_block"])
         
-        self.num_down_layers: int = None
-        self.out_channels: Union[List[int], List[List[int]]] = None
+        self.input_channels: int = in_channels # the number of channels of the Unet input 
+        self.final_out_channels: int = out_channels # the number of channels of the Unet output 
+        self.cond_dimension = cond_dimension # the dimension of the conditioning input
+
+        # the number of downsampling layers 
+        self.num_down_layers: int = None # the number of downsampling layers 
+
+        # the out channels of the unetDownBlock 
+        self.down_block_out_channels: Union[List[int], List[List[int]]] = None
+        # the number of resnet blocks in the unetDownBlock 
+        self.down_block_num_resnet_blocks: int = None
         
+        # the number of middle resnet blocks in the middle block 
+        self.middle_block_num_resnet_blocks: int = None 
+
+        # the number of resnet blocks in the unetUpBlock 
+        self.up_block_num_resnet_blocks: int = None
+
         # Initialize components as None
-        self._down_block: UnetDownBlock1D = None
-        self._middle_block: UNetMidBlock1D = None
-        self._up_block: UnetUpBlock1D = None
+        self._down_block: UnetDownBlock3D = None
+        self._middle_block: UNetMidBlock3D = None
+        self._up_block: UnetUpBlock3D = None
+
+        self._is_built: bool = False
     
     def build_down_block(
         self,
         num_down_layers: int,
         num_resnet_blocks: int,
-        in_channels: int,
         out_channels: List[int],
         downsample_types: Union[str, List[str]] = "conv",
         inner_dim: int = 256,
@@ -61,7 +77,7 @@ class UNet3DCond(nn.Module):
         Configure and build the downsampling block.
         
         Args:
-            num_down_blocks: Number of downsampling stages
+            num_down_layers: Number of downsampling layers
             num_resnet_blocks: Number of residual blocks per stage
             in_channels: Input channels for the network
             out_channels: List of output channels for each stage
@@ -77,17 +93,23 @@ class UNet3DCond(nn.Module):
         Returns:
             self (for method chaining)
         """
+        
+        if isinstance(out_channels, list) and isinstance(out_channels[0], list):
+            raise NotImplementedError("Although the UnetDownBlock can have output channels specified for each resnet block, this feature is not implemented with the Unet architecture to keep things simple for now...")
+
         # save the important parameters
         self.num_down_layers = num_down_layers
-        self.out_channels = out_channels
+        self.num_down_block_resnet_blocks = num_resnet_blocks 
+        self.down_block_out_channels = out_channels
 
-        self._down_block = UnetDownBlock1D(
+        self._down_block = UnetDownBlock3D(
             num_down_layers=num_down_layers,
             num_resnet_blocks=num_resnet_blocks,
-            in_channels=in_channels,
+            in_channels=self.input_channels, # the number of channels of the Unet input
             cond_dimension=self.cond_dimension,
             out_channels=out_channels,
             downsample_types=downsample_types,
+
             inner_dim=inner_dim,
             dropout_rate=dropout_rate,
             norm1=norm1,
@@ -100,12 +122,12 @@ class UNet3DCond(nn.Module):
             film_activation_params=film_activation_params,
             force_residual=force_residual,
         )
+
         return self
     
     def build_middle_block(
         self,
         num_resnet_blocks: int,
-        in_channels: int,
         inner_dim: int = 256,
         dropout_rate: float = 0.0,
         norm1: Optional[nn.Module] = None,
@@ -123,8 +145,6 @@ class UNet3DCond(nn.Module):
         
         Args:
             num_resnet_blocks: Number of residual blocks
-            in_channels: Input channels
-            out_channels: Output channels (default: same as input)
             inner_dim: Inner dimension for FiLM layer
             dropout_rate: Dropout rate
             norm1, norm1_params: Normalization for the first block
@@ -136,12 +156,18 @@ class UNet3DCond(nn.Module):
         Returns:
             self (for method chaining)
         """
-        self._middle_block = UNetMidBlock(
+
+        if self._down_block is None:
+            raise ValueError("Cannot build a middle block without building the down block first")
+
+        self.middle_block_num_resnet_blocks = num_resnet_blocks
+
+        self._middle_block = UNetMidBlock3D(
             num_resnet_blocks=num_resnet_blocks,
-            in_channels=in_channels,
-            film_dimension=self.film_dimension,
-            out_channels=in_channels, # this ensures that output of the middle block has the same shape as its input
-            cond_channels=self.cond_channels,
+            in_channels=self.down_block_out_channels[-1], # the number of input channels is the same as the number of output channels of the last downsampling layer 
+            cond_dimension=self.cond_dimension,
+            out_channels=None, # the number of output channels must be the same as the number of output channels of the last downsampling layer  
+
             inner_dim=inner_dim,
             dropout_rate=dropout_rate,
             norm1=norm1,
@@ -192,19 +218,25 @@ class UNet3DCond(nn.Module):
         Returns:
             self (for method chaining)
         """
-        if self._down_block is None:
-            raise ValueError("Cannot build symmetric up block - down block has not been built yet")
+        if self._down_block is None or self._middle_block is None:
+            raise ValueError("Cannot build an up block without building the down and middle blocks first")
         
-        # reverse the order of the output channels of the down block
-        up_out_channels = self.out_channels[::-1]
-    
+        self.up_block_num_resnet_blocks = num_resnet_blocks
+
+        # the last output channel of the down block is the same as the input channel of the up block 
+        # so block_down_output_channels[::-1][1:] is the list of output channels of the up block  
+        # and the last output channel must match the entire architecture output channel saved in self.final_out_channels
+        up_out_channels = self.down_block_out_channels[::-1][1:] + [self.final_out_channels]
+
         # Build the up block
-        self._up_block = UnetUpBlock(
-            num_up_blocks=self.num_down_blocks,
+        self._up_block = UnetUpBlock3D(
+            num_up_layers = self.num_down_layers, # the number of upsampling layers must be the same the number of downsampling layers
             num_resnet_blocks=num_resnet_blocks,
-            in_channels=self.out_channels[-1],
+            in_channels=self.down_block_out_channels[-1], # the number of input channels is the same as the number of output channels of the last downsampling layer 
             out_channels=up_out_channels,
             upsample_types=upsample_types,
+            cond_dimension=self.cond_dimension,
+
             inner_dim=inner_dim,
             dropout_rate=dropout_rate,
             norm1=norm1,
@@ -217,8 +249,28 @@ class UNet3DCond(nn.Module):
             film_activation_params=film_activation_params,
             force_residual=force_residual,
         )
+
+        self._is_built = True   
         return self
-    
+
+    def _verify_input(self, x: torch.Tensor) -> None:
+        num_2_expo_height = 0
+        num_2_expo_width = 0
+
+        h, w = x.shape[2:]
+
+        while h % (2) == 0:
+            num_2_expo_height += 1
+            h = h // 2
+
+        while w % (2) == 0:
+            num_2_expo_width += 1
+            w = w // 2
+        
+        if min(num_2_expo_height, num_2_expo_width) < self.num_down_layers:
+            raise ValueError(f"Although unexplicit, the architecture of the UNet3DCond assumes that the input height and width are divisible by 2^(number of downsampling layers). Otherwise, the skip connections would get fairly complex...")
+
+
     def forward(self, x: torch.Tensor, condition: torch.Tensor) -> torch.Tensor:
         """
         Forward pass through the UNet.
@@ -230,23 +282,32 @@ class UNet3DCond(nn.Module):
         Returns:
             Output tensor
         """
-        # Validate that all components have been built
-        if self._down_block is None:
-            raise RuntimeError("Down block has not been built. Call build_down_block first.")
-        if self._middle_block is None:
-            raise RuntimeError("Middle block has not been built. Call build_middle_block first.")
-        if self._up_block is None:
-            raise RuntimeError("Up block has not been built. Call build_symmetric_up_block first.")
+        if not self._is_built:
+            raise RuntimeError("UNet3DCond has not been built. Call build_down_block, build_middle_block, and build_up_block first.")
         
+
+        self._verify_input(x)   
+
         # Downsampling path - returns features and skip connections
         x, skip_connections = self._down_block(x, condition)
         
+        # make sure to interpolate the condition to the 'input' shape
+        # TODO: determine whether it is better to use 'trilinear' or 'nearest-exact'
+        condition_resized = torch.nn.functional.interpolate(condition, size=x.shape[2:], mode="nearest-exact")
+
         # Middle block - processes features at the bottleneck
-        x = self._middle_block(x, condition)
+        x = self._middle_block(x, condition_resized)
         
+        # since the middle_block does not change the shape of the input, the condition does not need to be resized again
         # Upsampling path - uses skip connections
-        x = self._up_block(x, skip_connections, condition)
+        x = self._up_block(x, skip_connections, condition_resized)
         
         return x
 
+    def __call__(self, x: torch.Tensor, condition: torch.Tensor) -> torch.Tensor:
+        return self.forward(x, condition) 
     
+
+    # the NonSequentialModuleMixin proceeds the torch.nn.Module in the class definition order
+    # hence the methods to(), train(), eval(), children(), modules(), parameters(), named_parameters() 
+    # will use the NonSequentialModuleMixin's implementation, not the torch.nn.Module's 

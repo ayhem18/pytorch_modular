@@ -226,11 +226,6 @@ class NonSequentialModuleMixin:
             for m in field_as_module.modules():
                 yield m
 
-    # def named_modules(self) -> Iterator[Tuple[str, nn.Module]]:
-    #     for field in self._inner_components_fields:
-    #         for name, m in getattr(self, field).named_modules():
-    #             yield f"{field}.{name}", m
-
     def parameters(self, recurse: bool = True) -> Iterator[torch.Tensor]:
         for field in self._inner_components_fields:
             field_as_module = getattr(self, field)
