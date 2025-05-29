@@ -3,8 +3,9 @@ import torch.nn as nn
 
 from typing import List, Union, Optional, Callable, Tuple
 
-from mypt.nets.conv_nets.diffusion_unet.unet.three_dim.unet_layer3d import UnetDownLayer3D, UnetUpLayer3D
-from mypt.nets.conv_nets.diffusion_unet.unet.abstract_unet_blocks import AbstractUnetDownBlock, AbstractUnetUpBlock
+from mypt.building_blocks.conv_blocks.conditioned.three_dim.resnet_con3d import CondThreeDimWResBlock
+from mypt.nets.conv_nets.diffusion_unet.unet.three_dim.unet_layers3d import UnetDownLayer3D, UnetUpLayer3D
+from mypt.nets.conv_nets.diffusion_unet.unet.abstract_unet_blocks import AbstractUnetDownBlock, AbstractUnetUpBlock, AbstractUnetMidBlock
 
 
 class UnetDownBlock3D(AbstractUnetDownBlock):
@@ -167,3 +168,59 @@ class UnetUpBlock3D(AbstractUnetUpBlock):
             condition = nn.functional.interpolate(condition, size=x.shape[2:], mode="nearest-exact")
 
         return x
+
+
+
+class UNetMidBlock3D(AbstractUnetMidBlock):
+    """
+    Middle block for UNet architecture using CondResnet components.
+    """
+    def __init__(self, 
+            num_resnet_blocks: int,
+            in_channels: int,
+            cond_dimension: int,
+            out_channels: Optional[int] = None,
+            inner_dim: int = 256,
+            dropout_rate: float = 0.0,
+            norm1: Optional[nn.Module] = None,
+            norm1_params: Optional[dict] = None,
+            norm2: Optional[nn.Module] = None,
+            norm2_params: Optional[dict] = None,
+            activation: Optional[Union[str, Callable]] = None,
+            activation_params: Optional[dict] = None,
+            film_activation: Union[str, Callable] = "relu",
+            film_activation_params: dict = {},
+            force_residual: bool = False,
+                 *args, **kwargs):
+        super().__init__(
+            num_resnet_blocks,
+            in_channels,
+            cond_dimension,
+            out_channels,
+            inner_dim,
+            dropout_rate,
+            norm1,
+            norm1_params,
+            norm2,
+            norm2_params,
+            activation,
+            activation_params,
+            film_activation,
+            film_activation_params,
+            force_residual,
+            *args, **kwargs
+        )
+
+        # Create the mid blocks directly as a sequence of ConditionalWResBlock
+        mid_blocks = [None for _ in range(num_resnet_blocks)]
+
+        for i in range(num_resnet_blocks):
+            mid_blocks[i] = CondThreeDimWResBlock(
+                in_channels=self.in_channels if i == 0 else self.out_channels,
+                out_channels=self.out_channels,
+                cond_dimension=self.cond_dimension,
+                **self._block_params
+            )
+        
+        self._mid_blocks = nn.ModuleList(mid_blocks)
+

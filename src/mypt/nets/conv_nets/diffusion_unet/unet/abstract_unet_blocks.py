@@ -7,6 +7,7 @@ from abc import ABC, abstractmethod
 from typing import Callable, Iterator, List, Optional, Tuple, Union
 
 from mypt.building_blocks.mixins.general import ModuleListMixin, SequentialModuleListMixin
+from mypt.building_blocks.conv_blocks.conditioned.abstract_cond_resnet import AbstractCondResnetBlock 
 from mypt.nets.conv_nets.diffusion_unet.unet.abstract_unet_layers import AbstractDownLayer, AbstractUpLayer
 
 
@@ -300,7 +301,7 @@ class AbstractUnetUpBlock(ModuleListMixin, torch.nn.Module, ABC):
 
 
 
-class AbstractUnetMidBlock(ModuleListMixin, torch.nn.Module, ABC):
+class AbstractUnetMidBlock(SequentialModuleListMixin, torch.nn.Module, ABC):
     """
     Middle block for UNet architecture.
     
@@ -309,9 +310,8 @@ class AbstractUnetMidBlock(ModuleListMixin, torch.nn.Module, ABC):
     Args:
         num_resnet_blocks: Number of residual blocks
         in_channels: Input channels
-        film_dimension: Dimension for FiLM conditioning
         out_channels: Output channels (default: same as input)
-        cond_channels: Conditioning channels
+        cond_dimension: Conditioning dimension
         inner_dim: Inner dimension for FiLM layer
         dropout_rate: Dropout rate
         norm1: Normalization for the first residual block
@@ -328,8 +328,8 @@ class AbstractUnetMidBlock(ModuleListMixin, torch.nn.Module, ABC):
         self,
         num_resnet_blocks: int,
         in_channels: int,
+        cond_dimension: int,
         out_channels: Optional[int] = None,
-        cond_channels: int = 512,
         inner_dim: int = 256,
         dropout_rate: float = 0.0,
         norm1: Optional[nn.Module] = None,
@@ -343,38 +343,33 @@ class AbstractUnetMidBlock(ModuleListMixin, torch.nn.Module, ABC):
         force_residual: bool = False,
     ):
         torch.nn.Module.__init__(self)
-        SequentialModuleListMixin.__init__(self, "mid_blocks")
+        SequentialModuleListMixin.__init__(self, "_mid_blocks")
         
         out_channels = out_channels or in_channels
         
         # Store parameters
         self.num_resnet_blocks = num_resnet_blocks
         self.in_channels = in_channels
-        self.out_channels = out_channels
-        self.cond_channels = cond_channels
+        self.out_channels = out_channels or in_channels # if out_channels is not provided, use in_channels as a default value
+        self.cond_dimension = cond_dimension
         
-        # Create the mid blocks directly as a sequence of ConditionalWResBlock
-        mid_blocks = [None for _ in range(num_resnet_blocks)]
+    
+        self._block_params = {
+            "inner_dim": inner_dim,
+            "dropout_rate": dropout_rate,
+            "norm1": norm1,
+            "norm1_params": norm1_params,
+            "norm2": norm2,
+            "norm2_params": norm2_params,
+            "activation": activation,
+            "activation_params": activation_params,
+            "film_activation": film_activation,
+            "film_activation_params": film_activation_params,
+            "force_residual": force_residual, 
+        }
 
-        for i in range(num_resnet_blocks):
-            mid_blocks[i] = CondOneDimWResBlock(
-                in_channels=in_channels if i == 0 else out_channels,
-                out_channels=out_channels,
-                cond_channels=cond_channels,
-                inner_dim=inner_dim,
-                dropout_rate=dropout_rate,
-                norm1=norm1,
-                norm1_params=norm1_params,
-                norm2=norm2,
-                norm2_params=norm2_params,
-                activation=activation,
-                activation_params=activation_params,
-                film_activation=film_activation,
-                film_activation_params=film_activation_params,
-                force_residual=force_residual,
-            )
+        self._mid_blocks: nn.ModuleList[AbstractCondResnetBlock] = None
 
-        self.mid_blocks = nn.ModuleList(mid_blocks)
     
 
     def forward(self, x: torch.Tensor, condition: torch.Tensor) -> torch.Tensor:

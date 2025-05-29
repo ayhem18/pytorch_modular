@@ -6,7 +6,7 @@ from typing import List, Optional, Tuple, Union
 
 from tests.custom_base_test import CustomModuleBaseTest
 from mypt.dimensions_analysis.dimension_analyser import DimensionsAnalyser
-from mypt.nets.conv_nets.diffusion_unet.unet.three_dim.unet_layer3d import UnetDownLayer3D, UnetUpLayer3D
+from mypt.nets.conv_nets.diffusion_unet.unet.three_dim.unet_layers3d import UnetDownLayer3D, UnetUpLayer3D
 
 class TestUnetDownLayer3D(CustomModuleBaseTest):
     """Test class for UnetDownLayer3D that verifies downsampling behavior"""

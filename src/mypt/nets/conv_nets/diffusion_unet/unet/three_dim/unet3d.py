@@ -1,15 +1,16 @@
 import torch
 import torch.nn as nn
-from typing import List, Union, Optional, Callable, Tuple, Dict, Any
 
-from mypt.nets.conv_nets.diffusersUnet.one_dim.unet_blocks import (
-    UnetDownBlock,
-    UnetUpBlock,
-    UNetMidBlock
+from typing import List, Union, Optional, Callable
+
+from mypt.nets.conv_nets.diffusion_unet.unet.three_dim.unet_blocks3d import (
+    UnetDownBlock3D,
+    UnetUpBlock3D,
+    UNetMidBlock3D
 )
 
 
-class UNet(nn.Module):
+class UNet3DCond(nn.Module):
     """
     UNet architecture implementation using the builder design pattern.
     
@@ -21,26 +22,25 @@ class UNet(nn.Module):
     Each component can be configured separately using the build_* methods.
     
     Args:
-        cond_channels: Number of channels in the conditioning input
-        film_dimension: Dimension for FiLM conditioning (2 or 3)
+        cond_dimension: Dimension of the conditioning input
     """
-    def __init__(self, cond_channels: int, film_dimension: int):
+    def __init__(self, cond_dimension: int, film_dimension: int):
         super().__init__()
         
-        self.cond_channels = cond_channels
+        self.cond_dimension = cond_dimension
         self.film_dimension = film_dimension
         
-        self.num_down_blocks: int = None
-        self.out_channels: List[int] = None
+        self.num_down_layers: int = None
+        self.out_channels: Union[List[int], List[List[int]]] = None
         
         # Initialize components as None
-        self._down_block: UnetDownBlock = None
-        self._middle_block: UNetMidBlock = None
-        self._up_block: UnetUpBlock = None
+        self._down_block: UnetDownBlock1D = None
+        self._middle_block: UNetMidBlock1D = None
+        self._up_block: UnetUpBlock1D = None
     
     def build_down_block(
         self,
-        num_down_blocks: int,
+        num_down_layers: int,
         num_resnet_blocks: int,
         in_channels: int,
         out_channels: List[int],
@@ -78,16 +78,15 @@ class UNet(nn.Module):
             self (for method chaining)
         """
         # save the important parameters
-        self.num_down_blocks = num_down_blocks
+        self.num_down_layers = num_down_layers
         self.out_channels = out_channels
 
-        self._down_block = UnetDownBlock(
-            num_down_blocks=num_down_blocks,
+        self._down_block = UnetDownBlock1D(
+            num_down_layers=num_down_layers,
             num_resnet_blocks=num_resnet_blocks,
             in_channels=in_channels,
-            cond_channels=self.cond_channels,
+            cond_dimension=self.cond_dimension,
             out_channels=out_channels,
-            film_dimension=self.film_dimension,
             downsample_types=downsample_types,
             inner_dim=inner_dim,
             dropout_rate=dropout_rate,

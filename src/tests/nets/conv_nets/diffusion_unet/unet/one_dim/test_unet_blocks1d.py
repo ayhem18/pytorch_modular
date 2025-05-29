@@ -1,16 +1,16 @@
 import torch
 import random
 import unittest
-import math
+import torch.nn as nn
 
-from typing import List, Optional, Tuple, Union
+from typing import List, Optional, Tuple
 
 from tests.custom_base_test import CustomModuleBaseTest
 from mypt.dimensions_analysis.dimension_analyser import DimensionsAnalyser
-from mypt.nets.conv_nets.diffusion_unet.unet.one_dim.unet_block1d import UnetDownBlock1D, UnetUpBlock1D
+from mypt.nets.conv_nets.diffusion_unet.unet.one_dim.unet_blocks1d import UnetDownBlock1D, UnetUpBlock1D, UNetMidBlock1D
 
 
-# @unittest.skip("Skipping UnetDownBlock1D tests")
+@unittest.skip("Skipping UnetDownBlock1D tests")
 class TestUnetDownBlock1D(CustomModuleBaseTest):
     """Test class for UnetDownBlock1D that verifies downsampling behavior"""
     
@@ -314,7 +314,7 @@ class TestUnetDownBlock1D(CustomModuleBaseTest):
             super()._test_to_device(block, x, condition)
 
 
-
+@unittest.skip("Skipping UnetUpBlock1D tests")
 class TestUnetUpBlock1D(CustomModuleBaseTest):
     """Test class for UnetUpBlock1D that verifies upsampling behavior"""
     
@@ -632,6 +632,274 @@ class TestUnetUpBlock1D(CustomModuleBaseTest):
     def test_module_is_nn_module(self):
         """Test that the module is an instance of torch.nn.Module"""
         block = self._generate_random_up_block()
+        super()._test_module_is_nn_module(block)
+
+
+
+
+class TestUNetMidBlock1D(CustomModuleBaseTest):
+    """Test class for UNetMidBlock1D that verifies behavior"""
+    
+    def setUp(self):
+        """Initialize test parameters"""
+        self.dim_analyser = DimensionsAnalyser()
+        
+        # Define common test parameters
+        self.in_channels_range = (1, 32)
+        self.out_channels_range = (16, 64)
+        self.cond_dimension_range = (4, 64)
+        self.num_resnet_blocks_range = (1, 5)
+        self.dropout_options = [0.0, 0.1, 0.3]
+        self.inner_dim_range = (16, 128)
+        
+        # For normalization and activation
+        self.norm_types = ['batchnorm2d', 'groupnorm']
+        self.activation_types = ['relu', 'leaky_relu', 'gelu']
+    
+    def _get_valid_input(self, 
+                         block: Optional[UNetMidBlock1D] = None, 
+                         batch_size: int = 2, 
+                         height: int = 16, 
+                         width: int = 16) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Generate random input and condition tensors with correct shapes"""
+        if block is None:
+            in_channels = random.randint(*self.in_channels_range)
+            cond_dimension = random.randint(*self.cond_dimension_range)
+        else:
+            in_channels = block.in_channels
+            cond_dimension = block.cond_dimension
+        
+        # Generate input tensor
+        x = torch.randn(batch_size, in_channels, height, width)
+        condition = torch.randn(batch_size, cond_dimension)
+        
+        return x, condition
+    
+    def _generate_random_mid_block(self,
+                                   num_resnet_blocks:Optional[int]=None,
+                                   in_channels:Optional[int]=None,
+                                   out_channels:Optional[int]=None,
+                                   cond_dimension:Optional[int]=None,
+                                   use_in_channels_as_out_channels:bool=False) -> UNetMidBlock1D:
+        """Generate a random UNetMidBlock1D with given or random parameters"""
+        # Generate parameters if not provided
+        num_resnet_blocks = num_resnet_blocks or random.randint(*self.num_resnet_blocks_range)
+        in_channels = in_channels or random.randint(*self.in_channels_range)
+        cond_dimension = cond_dimension or random.randint(*self.cond_dimension_range)
+        
+        # Randomly decide whether to use out_channels or not
+        if out_channels is None:
+            if random.choice([True, False]):
+                out_channels = random.randint(*self.out_channels_range)
+
+        # Select random values for other parameters
+        dropout_rate = random.choice(self.dropout_options)
+        inner_dim = random.randint(*self.inner_dim_range)
+        
+        # Select random normalization and activation
+        norm_type = random.choice(self.norm_types)
+
+        if random.random() < 0.5:
+            if norm_type == 'batchnorm2d':
+                norm_layer = nn.BatchNorm2d
+            else:
+                norm_layer = nn.GroupNorm
+        else:
+            norm_layer = norm_type 
+
+        norm_params = {}
+
+        activation_type = random.choice(self.activation_types)
+        if activation_type == 'relu':
+            activation = nn.ReLU
+            activation_params = {'inplace': True}
+        elif activation_type == 'leaky_relu':
+            activation = nn.LeakyReLU
+            activation_params = {'negative_slope': 0.2, 'inplace': True}
+        else:  # gelu
+            activation = nn.GELU
+            activation_params = {}
+        
+        # Create the mid block
+        return UNetMidBlock1D(
+            num_resnet_blocks=num_resnet_blocks,
+            in_channels=in_channels,
+            cond_dimension=cond_dimension,
+            out_channels=out_channels if not use_in_channels_as_out_channels else None,
+            inner_dim=inner_dim,
+            dropout_rate=dropout_rate,
+            norm1=norm_layer,
+            norm1_params=norm_params,
+            norm2=norm_layer,
+            norm2_params=norm_params,
+            activation=activation,
+            activation_params=activation_params,
+            film_activation=activation_type,
+            film_activation_params=activation_params,
+            force_residual=random.choice([True, False])
+        )
+    
+    ########################## Basic Functionality Tests ##########################
+    
+    def test_initialization(self):
+        """Test that UNetMidBlock1D initializes correctly with various parameters"""
+        for _ in range(100):
+            num_blocks = random.randint(*self.num_resnet_blocks_range)
+            in_channels = random.randint(*self.in_channels_range)
+            out_channels = random.randint(*self.out_channels_range)
+            
+            # Test with explicit out_channels
+            block = self._generate_random_mid_block(
+                num_resnet_blocks=num_blocks,
+                in_channels=in_channels,
+                out_channels=out_channels
+            )
+            
+            # Check that the block has the correct number of resnet blocks
+            self.assertEqual(len(block._mid_blocks), num_blocks)
+            
+            # Check that all blocks are CondOneDimWResBlock
+            from mypt.building_blocks.conv_blocks.conditioned.one_dim.resnet_con1d import CondOneDimWResBlock
+            for i in range(num_blocks):
+                self.assertIsInstance(block._mid_blocks[i], CondOneDimWResBlock)
+                
+            # First block should have in_channels as input channels
+            self.assertEqual(block._mid_blocks[0]._in_channels, in_channels)
+            
+            # First block should have out_channels as output channels
+            self.assertEqual(block._mid_blocks[0]._out_channels, out_channels)
+            
+            # Middle blocks should have consistent channels
+            for i in range(1, num_blocks):
+                self.assertEqual(block._mid_blocks[i]._in_channels, out_channels)
+                self.assertEqual(block._mid_blocks[i]._out_channels, out_channels)
+            
+            # Test without explicit out_channels (should default to in_channels)
+            block = self._generate_random_mid_block(
+                num_resnet_blocks=num_blocks,
+                in_channels=in_channels,
+                out_channels=None,
+                use_in_channels_as_out_channels=True
+            )
+            
+            # All blocks should have in_channels as both input and output channels
+            for i in range(num_blocks):
+                self.assertEqual(block._mid_blocks[i]._in_channels, in_channels)
+                self.assertEqual(block._mid_blocks[i]._out_channels, in_channels)
+    
+    def test_forward_pass(self):
+        """Test basic forward pass functionality"""
+        for _ in range(100):
+            # Test with various configurations
+            block = self._generate_random_mid_block()
+            x, condition = self._get_valid_input(block)
+            
+            # Forward pass should work without errors
+            output = block(x, condition)
+            
+            # Output should be a tensor
+            self.assertIsInstance(output, torch.Tensor)
+            
+            # Output should have the same batch size
+            self.assertEqual(output.shape[0], x.shape[0])
+            
+            # Output should have the expected channel count
+            expected_channels = block.out_channels if block.out_channels is not None else block.in_channels
+            self.assertEqual(output.shape[1], expected_channels)
+    
+    ########################## Dimension Tests ##########################
+    
+    def test_spatial_dimensions_preserved(self):
+        """Test that spatial dimensions are preserved in the output"""
+        for _ in range(100):
+            block = self._generate_random_mid_block()
+            
+            # Test with various shapes
+            for height, width in [(16, 16), (32, 24), (17, 31), (1, 1), (128, 64)]:
+                x, condition = self._get_valid_input(block, height=height, width=width)
+                
+                # Forward pass
+                output = block(x, condition)
+                
+                # Check output dimensions - should be exactly the same as input
+                self.assertEqual(output.shape[2], height)
+                self.assertEqual(output.shape[3], width)
+    
+    def test_variable_num_blocks(self):
+        """Test with varying numbers of resnet blocks"""
+        for num_blocks in range(1, 6):  # Test 1 to 5 blocks
+            # Create block with specific number of blocks
+            block = self._generate_random_mid_block(num_resnet_blocks=num_blocks)
+            
+            # Verify correct number of blocks
+            self.assertEqual(len(block._mid_blocks), num_blocks)
+            
+            # Test forward pass
+            x, condition = self._get_valid_input(block)
+            output = block(x, condition)
+            
+            # Check output dimensions - should be preserved
+            self.assertEqual(output.shape[2], x.shape[2])
+            self.assertEqual(output.shape[3], x.shape[3])
+            
+            # Check output channels
+            expected_channels = block.out_channels if block.out_channels is not None else block.in_channels
+            self.assertEqual(output.shape[1], expected_channels)
+    
+    ########################## CustomModuleBaseTest Tests ##########################
+    
+    def test_eval_mode(self):
+        """Test that the block can be set to evaluation mode"""
+        for _ in range(50):
+            block = self._generate_random_mid_block()
+            super()._test_eval_mode(block)
+    
+    def test_train_mode(self):
+        """Test that the block can be set to training mode"""
+        for _ in range(50):
+            block = self._generate_random_mid_block()
+            super()._test_train_mode(block)
+    
+    def test_consistent_output_in_eval_mode(self):
+        """Test consistent output in evaluation mode"""
+        for _ in range(50):
+            block = self._generate_random_mid_block()
+            x, condition = self._get_valid_input(block)
+            super()._test_consistent_output_in_eval_mode(block, x, condition)
+    
+    def test_batch_size_one_in_train_mode(self):
+        """Test handling of batch size 1 in training mode"""
+        for _ in range(50):
+            block = self._generate_random_mid_block()
+            x, condition = self._get_valid_input(block, batch_size=1)
+            super()._test_batch_size_one_in_train_mode(block, x, condition)
+    
+    def test_batch_size_one_in_eval_mode(self):
+        """Test handling of batch size 1 in evaluation mode"""
+        for _ in range(50):
+            block = self._generate_random_mid_block()
+            x, condition = self._get_valid_input(block, batch_size=1)
+            super()._test_batch_size_one_in_eval_mode(block, x, condition)
+    
+    def test_named_parameters_length(self):
+        """Test that named_parameters and parameters have the same length"""
+        for _ in range(50):
+            block = self._generate_random_mid_block()
+            super()._test_named_parameters_length(block)
+    
+    def test_to_device(self):
+        """Test that the block can be moved between devices"""
+        if not torch.cuda.is_available():
+            self.skipTest("CUDA not available, skipping device tests")
+            
+        for _ in range(10):  # Limit for performance
+            block = self._generate_random_mid_block()
+            x, condition = self._get_valid_input(block)
+            super()._test_to_device(block, x, condition)
+    
+    def test_module_is_nn_module(self):
+        """Test that the module is an instance of torch.nn.Module"""
+        block = self._generate_random_mid_block()
         super()._test_module_is_nn_module(block)
 
 

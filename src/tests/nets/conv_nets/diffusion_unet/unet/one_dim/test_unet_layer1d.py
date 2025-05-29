@@ -6,7 +6,7 @@ from typing import List, Optional, Tuple
 
 from tests.custom_base_test import CustomModuleBaseTest
 from mypt.dimensions_analysis.dimension_analyser import DimensionsAnalyser
-from mypt.nets.conv_nets.diffusion_unet.unet.one_dim.unet_layer1d import UnetDownLayer1D, UnetUpLayer1D
+from mypt.nets.conv_nets.diffusion_unet.unet.one_dim.unet_layers1d import UnetDownLayer1D, UnetUpLayer1D
 
 
 class TestUnetDownLayer1D(CustomModuleBaseTest):

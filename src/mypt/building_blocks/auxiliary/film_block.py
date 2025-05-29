@@ -4,7 +4,6 @@ from torch import nn
 from typing import Callable, Union
 
 from mypt.building_blocks.auxiliary.norm_act import ConditionedNormActBlock
-from mypt.building_blocks.auxiliary.normalization.utils import get_normalization
 from mypt.building_blocks.auxiliary.activations.activations import get_activation
 
 
@@ -12,11 +11,13 @@ class OneDimFiLMBlock(ConditionedNormActBlock):
     """
     A film block that learns both from the input and a condition tensor using the FiLM transformation as described in the paper:
     https://arxiv.org/abs/1709.07871
-    """
+
+    This simple block expects a 4 dimensionsal (main) input tensor (Batch_size, Channels, Height, Width) and a 2 dimensional condition tensor (Batch_size, Cond_Dimension)
+    """ 
 
     def __init__(self, 
                 out_channels: int, # the number of channels in the output tensor
-                cond_dimension: int, # the dimension of the condition tensor
+                cond_dimension: int, # the dimension of the condition tensor:
 
                 normalization: Union[str, Callable],
                 normalization_params: dict,
@@ -118,13 +119,15 @@ class ThreeDimFiLMBlock(ConditionedNormActBlock):
     def forward(self, 
                 x: torch.Tensor, 
                 condition: torch.Tensor) -> torch.Tensor:
-        
-        # make sure the condition tensor is 3 dimensional 
+        # a few sanity checks !!!
         if condition.dim() != 4:
             raise ValueError(f"The condition tensor should be of 4 dimensional. Found: {condition.shape}") 
 
         if condition.shape[1] != self._cond_dimension:
             raise ValueError(f"The condition tensor should be of shape (batch_size, {self._cond_dimension}, height, width). Found: {condition.shape}")
+
+        if x.shape[2:] != condition.shape[2:]:
+            raise ValueError(f"The input tensor and the condition tensor should have the same height and width dimensions. Found: {x.shape} and {condition.shape}")
 
         film_params = self._film_layer(condition) # film_params of the shape (batch_size, 2 * out_channels, height, width)
         gamma, beta = torch.chunk(film_params, 2, dim=1) # this function call returns two tensors of the shape (batch_size, out_channels, height, width)
