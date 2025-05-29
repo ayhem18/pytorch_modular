@@ -7,8 +7,8 @@ from torch import nn
 from typing import Dict, List, Tuple
 
 from mypt.building_blocks.conv_blocks.basic.transpose_conv_block import TransposeConvBlock
-from mypt.building_blocks.conv_blocks.conv_block_design.expanding_helper import best_transpose_conv_block
-from mypt.building_blocks.conv_blocks.conv_block_design.conv_design_utils import compute_log_linear_sequence
+from mypt.building_blocks.conv_blocks.adaptive.conv_block_design.expanding_helper import best_transpose_conv_block
+from mypt.building_blocks.conv_blocks.adaptive.conv_block_design.conv_design_utils import compute_log_linear_sequence
 
 
 class ExpandingCbDesigner:

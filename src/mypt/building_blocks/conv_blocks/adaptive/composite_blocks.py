@@ -5,8 +5,8 @@ from typing import Iterator, List, Tuple, Union
 
 from mypt.building_blocks.mixins.general import SequentialModuleListMixin
 from mypt.building_blocks.mixins.custom_module_mixins import WrapperLikeModuleMixin
-from mypt.building_blocks.conv_blocks.conv_block_design.expanding_designer import ExpandingCbDesigner
-from mypt.building_blocks.conv_blocks.conv_block_design.contracting_designer import ContractingCbDesigner
+from mypt.building_blocks.conv_blocks.adaptive.conv_block_design.expanding_designer import ExpandingCbDesigner
+from mypt.building_blocks.conv_blocks.adaptive.conv_block_design.contracting_designer import ContractingCbDesigner
 
 
 class ContractingBlock(WrapperLikeModuleMixin, SequentialModuleListMixin):

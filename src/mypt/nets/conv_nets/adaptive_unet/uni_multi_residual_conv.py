@@ -8,7 +8,7 @@ from typing import List, Tuple, Union, Optional
 from mypt.dimensions_analysis.dimension_analyser import DimensionsAnalyser
 from mypt.building_blocks.conv_blocks.residual.residual_conv_block import ResidualConvBlock
 from mypt.building_blocks.mixins.custom_module_mixins import WrapperLikeModuleMixin
-from mypt.building_blocks.conv_blocks.conv_block_design.conv_design_utils import compute_log_linear_sequence
+from mypt.building_blocks.conv_blocks.adaptive.conv_block_design.conv_design_utils import compute_log_linear_sequence
 
 
 class UniformMultiResidualNet(WrapperLikeModuleMixin):

@@ -6,7 +6,7 @@ import numpy as np
 
 from typing import Dict, List, Optional, Tuple, Set
 
-from mypt.building_blocks.conv_blocks.conv_block_design.conv_design_utils import (
+from mypt.building_blocks.conv_blocks.adaptive.conv_block_design.conv_design_utils import (
     get_possible_kernel_combs,
 )
 

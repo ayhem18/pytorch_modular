@@ -144,6 +144,15 @@ class TestDownCondThreeDimWResBlock(CustomModuleBaseTest):
     
     ########################## Forward Pass Tests ##########################
 
+    def _verify_correct_output_shape(self, block: DownCondThreeDimWResBlock, x: torch.Tensor, output: torch.Tensor ):
+        """Verify that the output shape is correct"""
+        if block._downsample_type == "conv":
+            self.assertEqual(output.shape[2], (x.shape[2] + 1) // 2)
+            self.assertEqual(output.shape[3], (x.shape[3] + 1) // 2)
+        else:
+            self.assertEqual(output.shape[2], x.shape[2] // 2)
+            self.assertEqual(output.shape[3], x.shape[3] // 2)
+
     def test_spatial_downsampling(self):
         """Test that spatial dimensions are halved after forward pass"""
         for _ in range(10):
@@ -161,14 +170,8 @@ class TestDownCondThreeDimWResBlock(CustomModuleBaseTest):
                         # Get output
                         output = block(x, condition)
                         
-                        # Check output shape - dimensions should be halved
-                        expected_height = height // 2
-                        expected_width = width // 2
-                        
-                        self.assertEqual(output.shape[2], expected_height, 
-                                        f"Output height should be {expected_height} for input height {height}")
-                        self.assertEqual(output.shape[3], expected_width, 
-                                        f"Output width should be {expected_width} for input width {width}")
+                        self._verify_correct_output_shape(block, x, output)
+
     
     def test_channel_dimensions(self):
         """Test that channel dimensions are set correctly in output"""
@@ -227,9 +230,7 @@ class TestDownCondThreeDimWResBlock(CustomModuleBaseTest):
             x, condition = self._get_valid_input(block)
             output = block(x, condition)
             
-            # Check output shape
-            self.assertEqual(output.shape[2], x.shape[2] // 2)
-            self.assertEqual(output.shape[3], x.shape[3] // 2)
+            self._verify_correct_output_shape(block, x, output)
     
     def test_avg_pool_downsample(self):
         """Test the average pooling downsampling method"""
@@ -254,9 +255,7 @@ class TestDownCondThreeDimWResBlock(CustomModuleBaseTest):
             x, condition = self._get_valid_input(block)
             output = block(x, condition)
             
-            # Check output shape
-            self.assertEqual(output.shape[2], x.shape[2] // 2)
-            self.assertEqual(output.shape[3], x.shape[3] // 2)
+            self._verify_correct_output_shape(block, x, output)
     
     def test_max_pool_downsample(self):
         """Test the max pooling downsampling method"""
@@ -281,9 +280,7 @@ class TestDownCondThreeDimWResBlock(CustomModuleBaseTest):
             x, condition = self._get_valid_input(block)
             output = block(x, condition)
             
-            # Check output shape
-            self.assertEqual(output.shape[2], x.shape[2] // 2)
-            self.assertEqual(output.shape[3], x.shape[3] // 2)
+            self._verify_correct_output_shape(block, x, output)
     
     ########################## Edge Case Tests ##########################
     
@@ -305,8 +302,7 @@ class TestDownCondThreeDimWResBlock(CustomModuleBaseTest):
                 output = block(x, condition)
                 
                 # Check output dimensions
-                self.assertEqual(output.shape[2], height // 2)
-                self.assertEqual(output.shape[3], width // 2)
+                self._verify_correct_output_shape(block, x, output)
     
     ########################## CustomModuleBaseTest Tests ##########################
 
