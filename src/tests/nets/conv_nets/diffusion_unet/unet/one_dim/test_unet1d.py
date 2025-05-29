@@ -263,7 +263,7 @@ class TestUNet1DCond(CustomModuleBaseTest):
         
         # Create input with dimensions not divisible by 2^num_down_layers
         batch_size = 2
-        invalid_size = 2**model.num_down_layers - 1  # One less than a valid size
+        invalid_size = 2**(model.num_down_layers - 1)  # One less than a valid size
         
         x = torch.randn(batch_size, model.input_channels, invalid_size, invalid_size)
         condition = torch.randn(batch_size, model.cond_dimension)
