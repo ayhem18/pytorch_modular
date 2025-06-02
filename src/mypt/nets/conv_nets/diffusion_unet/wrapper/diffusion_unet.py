@@ -14,28 +14,7 @@ from mypt.nets.conv_nets.diffusion_unet.unet.abstract_unet import AbstractUNetCo
 from mypt.building_blocks.auxiliary.embeddings.scalar.encoding import PositionalEncoding, GaussianFourierEncoding
 
 
-class EmbeddingProjection(nn.Module):
-    """
-    This is a simple embedding projection module that projects a scalar embedding to a higher dimension.
-
-    Args:
-        in_embed_dim (int): The dimension of the input embedding.
-        out_embed_dim (int): The dimension of the output embedding.
-    """
-    def __init__(self, 
-                 in_embed_dim: int, 
-                 out_embed_dim: int,
-                *args,
-                **kwargs):
-
-        super().__init__(*args, **kwargs)
-        self.embedding_projection = nn.Linear(in_embed_dim, out_embed_dim)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.embedding_projection(x)
-
-
-class ConditionsProcessor(nn.Module):
+class ConditionsProcessor(NonSequentialModuleMixin):
     """
     This is a simple conditions processor module that processes the conditions for the diffusion unet.
     """
@@ -59,7 +38,7 @@ class ConditionsProcessor(nn.Module):
             raise ValueError("if the model is conditioned on a label map, class_embedding must be provided") 
 
 
-        super().__init__(*args, **kwargs)
+        NonSequentialModuleMixin.__init__(self, ["embedding_encoding", "embedding_2d_projection", "embedding_3d_projection", "class_embedding"])
 
         self.cond_dimension = cond_dimension 
 

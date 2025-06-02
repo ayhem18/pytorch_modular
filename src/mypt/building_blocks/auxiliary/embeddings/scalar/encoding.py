@@ -48,11 +48,11 @@ class PositionalEncoding(nn.Module):
             x = x[:, None] # this converts the input from shape (batch_size,) to shape (batch_size, 1)
         
         # create a pe_table of shape (batch_size, dim_embedding)
-        pe_table = torch.zeros(x.shape[0], self.dim_embedding)
+        pe_table = torch.zeros(x.shape[0], self.dim_embedding, device=x.device)
 
         # set the values of the table
-        pe_table[:, 0::2] = torch.sin(self.sin_positions * x)
-        pe_table[:, 1::2] = torch.cos(self.cos_positions * x)
+        pe_table[:, 0::2] = torch.sin(self.sin_positions.to(x.device) * x)
+        pe_table[:, 1::2] = torch.cos(self.cos_positions.to(x.device) * x)
 
         return pe_table
 
