@@ -1,14 +1,16 @@
-from mypt.building_blocks.linear_blocks.components import FullyConnectedBlock
-from mypt.building_blocks.linear_blocks.fc_blocks import GenericFCBlock
+from mypt.building_blocks.conv_blocks.basic.conv_block import BasicConvBlock
+from mypt.building_blocks.conv_blocks.residual.resnet_block import WideResnetBlock
 import torch
 
 from torch import nn
 from typing import Optional, Tuple
 
 
+from mypt.building_blocks.linear_blocks.fc_blocks import GenericFCBlock
 from mypt.building_blocks.mixins.general import NonSequentialModuleMixin
 from mypt.nets.conv_nets.diffusion_unet.unet.one_dim.unet1d import UNet1DCond
 from mypt.nets.conv_nets.diffusion_unet.unet.three_dim.unet3d import UNet3DCond
+from mypt.nets.conv_nets.diffusion_unet.unet.abstract_unet import AbstractUNetCond
 from mypt.building_blocks.auxiliary.embeddings.scalar.encoding import PositionalEncoding, GaussianFourierEncoding
 
 
@@ -40,49 +42,53 @@ class ConditionsProcessor(nn.Module):
     def __init__(self,
                  cond_dimension: int,
                  embedding_encoding: nn.Module,
-                 embedding_projection: nn.Module,
-                 class_embedding: Optional[nn.Embedding],
-                 num_classes: Optional[int] = None,
+                 embedding_2d_projection: nn.Module,
+                 embedding_3d_projection: Optional[nn.Module] = None,
+                 class_embedding: Optional[nn.Embedding] = None,
                  condition_3d_shape: Optional[Tuple[int, ...]] = None,
                  condition_3d_label_map: bool = True,
-                 
-
                  *args,
                  **kwargs):
-        
+
+        if class_embedding is None and condition_3d_label_map:  
+            raise ValueError("if the model is conditioned on a label map, class_embedding must be provided") 
+
+        if (embedding_3d_projection is None) != (condition_3d_shape is None):
+            raise ValueError("if embedding_3d_projection is provided, condition_3d_shape must also be provided and vice versa")
+
         super().__init__(*args, **kwargs)
 
         self.cond_dimension = cond_dimension 
 
         self.embedding_encoding = embedding_encoding
-        self.embedding_projection = embedding_projection
+        self.embedding_2d_projection = embedding_2d_projection
+        self.embedding_3d_projection = embedding_3d_projection
 
         self.class_embedding = class_embedding 
 
-        self.num_classes = num_classes
         self.condition_3d_shape = condition_3d_shape
         self.condition_3d_label_map = condition_3d_label_map
 
 
-        if num_classes is None and condition_3d_shape is None: 
+        if class_embedding is None and condition_3d_shape is None: 
             self.process_method = self.process_only_time_step
-        elif num_classes is not None and condition_3d_shape is None: 
+        elif class_embedding is not None and condition_3d_shape is None: 
             self.process_method = self.process_time_step_and_class_label
-        elif num_classes is None and condition_3d_shape is not None: 
-            self.process_method = self.process_time_step_and_label_map
+        elif class_embedding is None and condition_3d_shape is not None: 
+            self.process_method = self.process_time_step_and_3d_condition
         else:
-            self.process_method = self.process_time_step_and_class_label_map
+            self.process_method = self.process_all
 
 
     
     def process_only_time_step(self, time_step: torch.Tensor, *args) -> torch.Tensor:
         # pass the time step through the embedding encoding and the embedding projection 
-        return self.embedding_projection(self.embedding_encoding(time_step))
+        return self.embedding_2d_projection(self.embedding_encoding(time_step))
 
     def process_time_step_and_class_label(self, time_step: torch.Tensor, class_label: torch.Tensor) -> torch.Tensor:
         # pass the time step and the class label through the embedding encoding and the embedding projection 
         # pass each of them through the embedding encoding, sum them up and then pass the result through the embedding projection 
-        return self.embedding_projection(self.embedding_encoding(time_step) + self.embedding_encoding(class_label))
+        return self.embedding_2d_projection(self.embedding_encoding(time_step)) + self.class_embedding(class_label)
 
     def _process_label_map(self, label_map: torch.Tensor) -> torch.Tensor:
 
@@ -95,33 +101,33 @@ class ConditionsProcessor(nn.Module):
                 raise ValueError(f"if the label map is 4D, it must have 1 channel, got {c} channels")
 
         else:
-            raise ValueError(f"label_map must be 3D or 4D, got {label_map.ndim}D")
+            raise ValueError(f"label_map must be 3D or 4D, got {label_map.ndim} dimensions")
 
         label_map_emb = self.class_embedding.forward(label_map.reshape(label_map.shape[0], -1)).reshape(bs, self.cond_dimension, h, w)
 
         return label_map_emb    
 
-    def process_time_step_and_label_map(self, time_step: torch.Tensor, cond_3d: torch.Tensor) -> torch.Tensor:
+    def process_time_step_and_3d_condition(self, time_step: torch.Tensor, cond_3d: torch.Tensor) -> torch.Tensor:
         time_step_emb = self.embedding_projection(self.embedding_encoding(time_step))
 
         if self.condition_3d_label_map: 
             cond_3d_emb = self._process_label_map(cond_3d)
         else:
-            cond_3d_emb = cond_3d
+            cond_3d_emb = self.embedding_3d_projection(cond_3d)
 
-        time_step_emb = time_step_emb[:, None, None, :].repeat(1, cond_3d_emb.shape[1], cond_3d_emb.shape[2], 1)
+        time_step_emb = time_step_emb[:, :, None, None].repeat(1, 1, cond_3d_emb.shape[2], cond_3d_emb.shape[3])
 
         return time_step_emb + cond_3d_emb
 
-    def process_time_step_class_label_map(self, time_step: torch.Tensor, class_label: torch.Tensor, cond_3d: torch.Tensor) -> torch.Tensor:
+    def process_all(self, time_step: torch.Tensor, class_label: torch.Tensor, cond_3d: torch.Tensor) -> torch.Tensor:
         cond_2d_emb = self.process_time_step_and_class_label(time_step, class_label)
 
         if self.condition_3d_label_map: 
             cond_3d_emb = self._process_label_map(cond_3d)
         else:
-            cond_3d_emb = cond_3d
+            cond_3d_emb = self.embedding_3d_projection(cond_3d)
 
-        cond_2d_emb = cond_2d_emb[:, None, None, :].repeat(1, cond_3d_emb.shape[1], cond_3d_emb.shape[2], 1)
+        cond_2d_emb = cond_2d_emb[:, :, None, None].repeat(1, 1, cond_3d_emb.shape[1], cond_3d_emb.shape[2])
 
         return cond_2d_emb + cond_3d_emb
 
@@ -129,13 +135,16 @@ class ConditionsProcessor(nn.Module):
     def forward(self, time_step: torch.Tensor, *args) -> torch.Tensor:
         return self.process_method(time_step, *args)
 
-
-
+    def __call__(self, time_step: torch.Tensor, *args) -> torch.Tensor:
+        return self.forward(time_step, *args)
 
 
 
 class DiffusionUNet(NonSequentialModuleMixin, nn.Module):
-    def _set_encoding(self, embedding_encoding_method: str, cond_dimension: int):
+    def _set_encoding(self, embedding_encoding_method: str, 
+                      cond_dimension: int, 
+                      condition_3d_shape: Optional[Tuple[int, ...]] = None):
+        
         if embedding_encoding_method not in ['positional', 'gaussian_fourier']:
             raise NotImplementedError(f"embedding_encoding_method {embedding_encoding_method} is not implemented. The only supported methods are 'positional' and 'gaussian_fourier'")
         
@@ -149,14 +158,24 @@ class DiffusionUNet(NonSequentialModuleMixin, nn.Module):
             self.embedding_encoding = PositionalEncoding(dim_embedding=2 * cond_dimension) 
 
 
-        # the GenericFCBlock is implemented such that it does not use a final activation function
-        self.embedding_projection = GenericFCBlock(output=cond_dimension, 
+        # the GenericFCBlock is implemented such that it does not use an activation function at the final layer
+        self.embedding_2d_projection = GenericFCBlock(output=cond_dimension, 
                                                    in_features=2 * cond_dimension, 
                                                    num_layers=2, 
                                                    units=[2 * cond_dimension, 2 * cond_dimension, cond_dimension],
                                                    activation='relu',
                                                    )
 
+        if condition_3d_shape is not None:
+            self.embedding_3d_projection = WideResnetBlock(
+                in_channels=condition_3d_shape[0],
+                out_channels=cond_dimension,
+                stride=1,
+                dropout_rate=0.0, # no need for a dropout layer
+            )
+        else:
+            self.embedding_3d_projection = None
+        
 
     def _set_conditions_processor(self,
                                   num_classes: Optional[int] = None,
@@ -190,29 +209,33 @@ class DiffusionUNet(NonSequentialModuleMixin, nn.Module):
                 *args,
                 **kwargs):
         
-        nn.Module.__init__(*args, **kwargs)
-        NonSequentialModuleMixin.__init__(self, ["_unet"])
+        nn.Module.__init__(self, *args, **kwargs)
+
+        # no need to set the embedding_2d_projection and embedding_3d_projection as they are part of the conditions_processor.
+        NonSequentialModuleMixin.__init__(self, ["unet", "embedding_encoding", "conditions_processor"])
 
         self.input_channels = input_channels
         self.output_channels = output_channels
         self.cond_dimension = cond_dimension
 
         self.embedding_encoding: nn.Module = None 
-        self.embedding_projection: GenericFCBlock = None 
+        self.embedding_2d_projection: GenericFCBlock = None 
+        
         self.class_embedding: nn.Embedding = None
+        self.embedding_3d_projection: WideResnetBlock = None 
+        
 
-        self.conditions_processor: nn.Module = None 
-        self.unet: nn.Module = None 
+
+        self.conditions_processor: ConditionsProcessor = None 
+        self.unet: AbstractUNetCond = None 
 
 
-        self._set_encoding(embedding_encoding_method, cond_dimension)
+        self._set_encoding(embedding_encoding_method, cond_dimension, condition_3d_shape)
         self._set_conditions_processor(num_classes=num_classes, condition_3d_shape=condition_3d_shape, condition_3d_label_map=condition_3d_label_map)
 
 
         # if label_map_shape is not None, the model will be conditioned on a label map
         if condition_3d_shape is not None:
-            if condition_3d_shape[-1] != cond_dimension:
-                raise ValueError(f"if the model is conditioned on a label map, the conditioning dimension must be equal to the last dimension of the label map shape, got {condition_3d_shape[-1]} and {cond_dimension}")
             
             self.unet = UNet3DCond(
                 in_channels=input_channels,
@@ -227,4 +250,18 @@ class DiffusionUNet(NonSequentialModuleMixin, nn.Module):
                 cond_dimension=cond_dimension,
             )
 
-        
+
+    def build_down_block(self, *args, **kwargs):
+        self.unet.build_down_block(*args, **kwargs)
+
+    def build_middle_block(self, *args, **kwargs):
+        self.unet.build_middle_block(*args, **kwargs)
+
+    def build_up_block(self, *args, **kwargs):
+        self.unet.build_up_block(*args, **kwargs)
+
+    def forward(self, x: torch.Tensor, time_step: torch.Tensor, *args) -> torch.Tensor:
+        return self.unet.forward(x, self.conditions_processor(time_step, *args))
+
+    def __call__(self, x: torch.Tensor, time_step: torch.Tensor, *args) -> torch.Tensor:
+        return self.forward(x, time_step, *args)

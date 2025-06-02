@@ -136,7 +136,7 @@ class TestUNet3DCond(CustomModuleBaseTest):
             
             # Check attributes are set correctly
             self.assertEqual(model.num_down_layers, num_down_layers)
-            self.assertEqual(model.num_down_block_resnet_blocks, num_resnet_blocks)
+            self.assertEqual(model.down_block_num_resnet_blocks, num_resnet_blocks)
             self.assertEqual(model.down_block_out_channels, out_channels)
             
             # Check down block structure

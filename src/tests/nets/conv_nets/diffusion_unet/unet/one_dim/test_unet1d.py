@@ -135,7 +135,7 @@ class TestUNet1DCond(CustomModuleBaseTest):
             # Verify structure
             self.assertIsNotNone(model._down_block)
             self.assertEqual(model.num_down_layers, num_down_layers)
-            self.assertEqual(model.num_down_block_resnet_blocks, num_resnet_blocks)
+            self.assertEqual(model.down_block_num_resnet_blocks, num_resnet_blocks)
             self.assertEqual(model.down_block_out_channels, out_channels)
             self.assertEqual(len(model._down_block.down_layers), num_down_layers)
             
