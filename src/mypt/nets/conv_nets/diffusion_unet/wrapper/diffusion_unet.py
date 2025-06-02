@@ -3,7 +3,7 @@ from mypt.building_blocks.conv_blocks.residual.resnet_block import WideResnetBlo
 import torch
 
 from torch import nn
-from typing import Optional, Tuple
+from typing import List, Optional, Tuple, Union, Callable
 
 
 from mypt.building_blocks.linear_blocks.fc_blocks import GenericFCBlock
@@ -50,17 +50,21 @@ class ConditionsProcessor(nn.Module):
                  *args,
                  **kwargs):
 
-        if class_embedding is None and condition_3d_label_map:  
-            raise ValueError("if the model is conditioned on a label map, class_embedding must be provided") 
 
         if (embedding_3d_projection is None) != (condition_3d_shape is None):
             raise ValueError("if embedding_3d_projection is provided, condition_3d_shape must also be provided and vice versa")
+
+
+        if (condition_3d_shape is not None and condition_3d_label_map) and class_embedding is None:  
+            raise ValueError("if the model is conditioned on a label map, class_embedding must be provided") 
+
 
         super().__init__(*args, **kwargs)
 
         self.cond_dimension = cond_dimension 
 
         self.embedding_encoding = embedding_encoding
+
         self.embedding_2d_projection = embedding_2d_projection
         self.embedding_3d_projection = embedding_3d_projection
 
@@ -108,7 +112,7 @@ class ConditionsProcessor(nn.Module):
         return label_map_emb    
 
     def process_time_step_and_3d_condition(self, time_step: torch.Tensor, cond_3d: torch.Tensor) -> torch.Tensor:
-        time_step_emb = self.embedding_projection(self.embedding_encoding(time_step))
+        time_step_emb = self.embedding_2d_projection(self.embedding_encoding(time_step))
 
         if self.condition_3d_label_map: 
             cond_3d_emb = self._process_label_map(cond_3d)
@@ -127,7 +131,7 @@ class ConditionsProcessor(nn.Module):
         else:
             cond_3d_emb = self.embedding_3d_projection(cond_3d)
 
-        cond_2d_emb = cond_2d_emb[:, :, None, None].repeat(1, 1, cond_3d_emb.shape[1], cond_3d_emb.shape[2])
+        cond_2d_emb = cond_2d_emb[:, :, None, None].repeat(1, 1, cond_3d_emb.shape[2], cond_3d_emb.shape[3])
 
         return cond_2d_emb + cond_3d_emb
 
@@ -183,15 +187,18 @@ class DiffusionUNet(NonSequentialModuleMixin, nn.Module):
                                   condition_3d_label_map: bool = True):
 
         # if the unet will be conditioned on a label map, the number of classes must be passed
-        if condition_3d_label_map and num_classes is None:
+        if (condition_3d_shape is not None and condition_3d_label_map) and num_classes is None:
             raise ValueError("if the model is conditioned on a label map, the number of classes must be provided")
 
         if num_classes is not None:
             self.class_embedding = nn.Embedding(num_classes, self.cond_dimension)
 
-        self.condition_processor = ConditionsProcessor(
+        self.conditions_processor = ConditionsProcessor(
             cond_dimension=self.cond_dimension,
-            num_classes=num_classes,
+            embedding_encoding=self.embedding_encoding,
+            embedding_2d_projection=self.embedding_2d_projection,
+            embedding_3d_projection=self.embedding_3d_projection,
+            class_embedding=self.class_embedding,
             condition_3d_shape=condition_3d_shape,
             condition_3d_label_map=condition_3d_label_map,
         )
@@ -223,8 +230,7 @@ class DiffusionUNet(NonSequentialModuleMixin, nn.Module):
         
         self.class_embedding: nn.Embedding = None
         self.embedding_3d_projection: WideResnetBlock = None 
-        
-
+    
 
         self.conditions_processor: ConditionsProcessor = None 
         self.unet: AbstractUNetCond = None 
@@ -236,7 +242,9 @@ class DiffusionUNet(NonSequentialModuleMixin, nn.Module):
 
         # if label_map_shape is not None, the model will be conditioned on a label map
         if condition_3d_shape is not None:
-            
+            if condition_3d_label_map and condition_3d_shape[0] != 1:
+                    raise ValueError(f"if the model is conditional on a label map, the first dimension of the label map shape must be 1, got {condition_3d_shape[0]}")
+
             self.unet = UNet3DCond(
                 in_channels=input_channels,
                 out_channels=output_channels,
@@ -251,14 +259,109 @@ class DiffusionUNet(NonSequentialModuleMixin, nn.Module):
             )
 
 
-    def build_down_block(self, *args, **kwargs):
-        self.unet.build_down_block(*args, **kwargs)
+    def build_down_block(
+        self,
+        num_down_layers: int,
+        num_res_blocks: int,
+        out_channels: List[int],
+        downsample_types: Union[str, List[str]] = "conv",
+        inner_dim: int = 256,
+        dropout_rate: float = 0.0,
+        norm1: Optional[nn.Module] = None,
+        norm1_params: Optional[dict] = None,
+        norm2: Optional[nn.Module] = None,
+        norm2_params: Optional[dict] = None,
+        activation: Optional[Union[str, Callable]] = None,
+        activation_params: Optional[dict] = None,
+        film_activation: Union[str, Callable] = "relu",
+        film_activation_params: dict = {},
+        force_residual: bool = False,
+    ):
+        """Build the downsampling block in the UNet architecture."""
+        
+        # Call the underlying UNet implementation
+        self.unet.build_down_block(
+            num_down_layers=num_down_layers,
+            num_resnet_blocks=num_res_blocks,
+            out_channels=out_channels,
+            downsample_types=downsample_types,
+            inner_dim=inner_dim,
+            dropout_rate=dropout_rate,
+            norm1=norm1,
+            norm1_params=norm1_params,
+            norm2=norm2,
+            norm2_params=norm2_params,
+            activation=activation,
+            activation_params=activation_params,
+            film_activation=film_activation,
+            film_activation_params=film_activation_params,
+            force_residual=force_residual,
+        )
 
-    def build_middle_block(self, *args, **kwargs):
-        self.unet.build_middle_block(*args, **kwargs)
+    def build_middle_block(
+        self,
+        num_res_blocks: int,
+        inner_dim: int = 256,
+        dropout_rate: float = 0.0,
+        norm1: Optional[nn.Module] = None,
+        norm1_params: Optional[dict] = None,
+        norm2: Optional[nn.Module] = None,
+        norm2_params: Optional[dict] = None,
+        activation: Optional[Union[str, Callable]] = None,
+        activation_params: Optional[dict] = None,
+        film_activation: Union[str, Callable] = "relu",
+        film_activation_params: dict = {},
+        force_residual: bool = False,
+    ):
+        """Build the middle block in the UNet architecture."""
+        self.unet.build_middle_block(
+            num_resnet_blocks=num_res_blocks,
+            inner_dim=inner_dim,
+            dropout_rate=dropout_rate,
+            norm1=norm1,
+            norm1_params=norm1_params,
+            norm2=norm2,
+            norm2_params=norm2_params,
+            activation=activation,
+            activation_params=activation_params,
+            film_activation=film_activation,
+            film_activation_params=film_activation_params,
+            force_residual=force_residual,
+        )
 
-    def build_up_block(self, *args, **kwargs):
-        self.unet.build_up_block(*args, **kwargs)
+    def build_up_block(
+        self,
+        num_res_blocks: int,
+        upsample_types: Union[str, List[str]] = "transpose_conv",
+        inner_dim: int = 256,
+        dropout_rate: float = 0.0,
+        norm1: Optional[nn.Module] = None,
+        norm1_params: Optional[dict] = None,
+        norm2: Optional[nn.Module] = None,
+        norm2_params: Optional[dict] = None,
+        activation: Optional[Union[str, Callable]] = None,
+        activation_params: Optional[dict] = None,
+        film_activation: Union[str, Callable] = "relu",
+        film_activation_params: dict = {},
+        force_residual: bool = False,
+    ):
+        """Build the upsampling block in the UNet architecture."""
+        
+        self.unet.build_up_block(
+            num_resnet_blocks=num_res_blocks,
+            upsample_types=upsample_types,
+            inner_dim=inner_dim,
+            dropout_rate=dropout_rate,
+            norm1=norm1,
+            norm1_params=norm1_params,
+            norm2=norm2,
+            norm2_params=norm2_params,
+            activation=activation,
+            activation_params=activation_params,
+            film_activation=film_activation,
+            film_activation_params=film_activation_params,
+            force_residual=force_residual,
+        )
 
     def forward(self, x: torch.Tensor, time_step: torch.Tensor, *args) -> torch.Tensor:
         return self.unet.forward(x, self.conditions_processor(time_step, *args))

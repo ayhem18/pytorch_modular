@@ -19,8 +19,8 @@ class WideResnetBlock(GeneralResidualMixin):
     1. The block uses the pre-activation design (BN+ReLU before convolution) 
     
     2. The output shape of the block is very uniform depending on the value of the stride: 
-        * if the stride is 1, then given an input shape of (w, h, ic), the output shape will be (w, h, oc) 
-        * if the stride is 2, then given an input shape of (w, h, ic), the output shape will be ((w+1)//2, (h+1)/2, oc)
+        * if the stride is 1, then given an input shape of (ic, w, h), the output shape will be (oc, w, h) 
+        * if the stride is 2, then given an input shape of (ic, w, h), the output shape will be (oc, (w+1)//2, (h+1)/2)
             if the height and width are both even, then floor((w+1)/2) and floor((h+1)/2) are equal to w / 2 and h / 2 respectively. 
 
     This seems to be an assumption of the paper, but not really explicitly stated. As of the time of the implementation, these assumptions will be forced
@@ -33,6 +33,31 @@ class WideResnetBlock(GeneralResidualMixin):
     also note that in the paper, the output size is divided by 2 after each block 
     (and since there is no pooling layer, the convolutional block must be strided exactly once in each block)
     """
+    def __set_norm_act_block(self, 
+                            channels:int,
+                            norm: Optional[nn.Module] = None, 
+                            norm_params: Optional[dict] = None, 
+                            activation: Optional[Union[str, Callable]] = None, 
+                            activation_params: Optional[dict] = None):
+        
+        if norm is None:
+            norm = nn.BatchNorm2d
+        
+        if norm_params is None:
+            norm_params = {}
+        
+        if len(norm_params) == 0:
+            norm_params["num_features"] = channels
+
+        if activation is None:
+            activation = 'relu'
+
+        if activation_params is None:
+            activation_params = {}
+
+        return NormActBlock(norm, norm_params, activation, activation_params)
+
+
     def __init__(
         self, 
         in_channels: int, 
@@ -85,15 +110,8 @@ class WideResnetBlock(GeneralResidualMixin):
         # let's build the dictionary to be passed to the nn.Sequential as the main stream
         main_stream_ordered_dict = OrderedDict()
 
-        # the default parameters are
-        norm1 = nn.BatchNorm2d if norm1 is None else norm1
-        norm1_params = norm1_params or {}
-
-        if len(norm1_params) == 0:
-            norm1_params["num_features"] = in_channels
-
         # first normalization layer
-        main_stream_ordered_dict['norm_act_1'] = NormActBlock(norm1, norm1_params, activation, activation_params)   
+        main_stream_ordered_dict['norm_act_1'] = self.__set_norm_act_block(self.in_channels, norm1, norm1_params, activation, activation_params)   
         # first convolution layer 
         main_stream_ordered_dict["conv1"] = nn.Conv2d(
             in_channels, 
@@ -106,14 +124,8 @@ class WideResnetBlock(GeneralResidualMixin):
         # dropout layer in between 
         main_stream_ordered_dict["dropout"] = nn.Dropout(dropout_rate) # with a dropout rate of 0.0, the layer works as an identity layer 
 
-        # second normalization layer
-        norm2 = nn.BatchNorm2d if norm2 is None else norm2
-        norm2_params = norm2_params or {}
 
-        if len(norm2_params) == 0:
-            norm2_params["num_features"] = out_channels
-
-        main_stream_ordered_dict["norm_act_2"] = NormActBlock(norm2, norm2_params, activation, activation_params)
+        main_stream_ordered_dict["norm_act_2"] = self.__set_norm_act_block(self.out_channels, norm2, norm2_params, activation, activation_params)
         # second convolution layer
         main_stream_ordered_dict["conv2"] = nn.Conv2d(
             out_channels, 
