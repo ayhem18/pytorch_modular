@@ -7,7 +7,7 @@ from typing import Dict, Tuple
 from tqdm import tqdm
 from bisect import bisect
 
-class ClassificationDsWrapper:
+class ClassificationDsWrapperMixin:
     # a class attribute saving the attributes that child classes are expected to have
     __cls_attrs = ['_ds', 'samples_per_cls_map']
 

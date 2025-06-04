@@ -7,13 +7,13 @@ import torchvision.transforms as tr
 
 from PIL import Image
 from torch.utils.data import Dataset
-from torchvision.datasets import Food101, Imagenette
 from typing import Union, List, Tuple, Dict, Optional
+from torchvision.datasets import Food101, Imagenette, MNIST
 
 
 from mypt.shortcuts import P
 from mypt.code_utils import directories_and_files as dirf
-from mypt.data.datasets.mixins.cls_ds_wrapper import ClassificationDsWrapper
+from mypt.data.datasets.mixins.cls_ds_wrapper import ClassificationDsWrapperMixin
 
 
 class GenericFolderDS(Dataset):
@@ -92,7 +92,7 @@ class GenericFolderDS(Dataset):
 
 
 
-class GenericDsWrapper(ClassificationDsWrapper, Dataset):
+class GenericDsWrapper(ClassificationDsWrapperMixin, Dataset):
     def __init__(self, 
                  root_dir: P,
                  train:bool, 
@@ -122,7 +122,7 @@ class GenericDsWrapper(ClassificationDsWrapper, Dataset):
         else:
             sample_image:torch.Tensor = self._ds[index][0]   
 
-        return sample_image
+        return self.ds_transform(sample_image)
 
 
     def __len__(self) -> int:
@@ -130,6 +130,7 @@ class GenericDsWrapper(ClassificationDsWrapper, Dataset):
             raise ValueError(f"Make sure to set the 'self._len' attribute. The exact number has to be overriden by the child class")
 
         return self._len
+
 
 
 class Food101GenericWrapper(GenericDsWrapper):
@@ -146,7 +147,7 @@ class Food101GenericWrapper(GenericDsWrapper):
 
         self._ds = Food101(root=root_dir,     
                          split='train' if train else 'test',
-                         transform=tr.Compose(self.augmentations),
+                         transform=None,
                          download=True)
 
         # call the self._set_samples_per_cls method after setting the self._ds field
@@ -215,3 +216,38 @@ class ImagenetteGenericWrapper(GenericDsWrapper):
     def __getitem__(self, index) -> torch.Tensor:
         # apply the augmentations on the original image by calling the parent __getitem__ method 
         return self.ds_transform(super().__getitem__(index))
+
+
+
+class MnistGenericWrapper(GenericDsWrapper):
+    def __init__(self, 
+                 root_dir: P, 
+                 augmentations: List,
+                 train,
+                 samples_per_cls: Optional[int] = None):
+        
+        super().__init__(root_dir=root_dir, augmentations=augmentations, train=train)
+        
+        self._ds = MNIST(root=root_dir, 
+                        train=train, 
+                        download=not os.path.exists(root_dir),
+                        transform=None
+                        )
+
+        if samples_per_cls is not None:
+            self._samples_per_cls_map = self._set_samples_per_cls(samples_per_cls)
+            self._len = 10 * samples_per_cls
+        else:
+            self._len = len(self._ds)
+
+
+    def _set_samples_per_cls(self, samples_per_cls: int):
+        # the number of samples per class is 6000 in the training set and 1000 in the test set
+        if self.train:
+            mapping = {samples_per_cls * i: 6000 * i for i in range(10)}
+        else:
+            mapping = {samples_per_cls * i: 1000 * i for i in range(10)}         
+
+        return mapping
+
+    
