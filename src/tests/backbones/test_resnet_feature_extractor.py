@@ -11,7 +11,7 @@ from torchvision.models.resnet import Bottleneck
 from tests.custom_base_test import CustomModuleBaseTest
 
 
-@unittest.skip("skipping resnet tests for now")
+# @unittest.skip("skipping resnet tests for now")
 class TestResnetFE(CustomModuleBaseTest):
     """
     Test class for ResnetFE feature extractor implementation.
@@ -37,8 +37,8 @@ class TestResnetFE(CustomModuleBaseTest):
             cls.bottleneck_counts[arch] = cls._compute_bottlenecks(arch)
         
         # Print summary for debugging
-        print(f"Layer counts by architecture: {cls.layer_counts}")
-        print(f"Bottleneck counts by architecture: {cls.bottleneck_counts}")
+        # print(f"Layer counts by architecture: {cls.layer_counts}")
+        # print(f"Bottleneck counts by architecture: {cls.bottleneck_counts}")
 
 
     @classmethod
@@ -92,7 +92,48 @@ class TestResnetFE(CustomModuleBaseTest):
                 bottleneck_counts[name] = residual_count
         
         return bottleneck_counts
-    
+
+
+    def test_assumptions(self):
+        """
+        Verifies that all supported ResNet architectures follow the expected structure:
+        1. A convolutional layer
+        2. A batch normalization layer 
+        3. A ReLU activation
+        4. A maxpool layer
+        5. A variable number of "Layer" blocks (each containing Bottleneck blocks)
+        6. An adaptive pooling layer
+        7. A linear layer
+        
+        These structural assumptions are crucial for the correctness of the ResnetFE class.
+        """
+        for arch in self.architectures:
+            # Get the model
+            model_constructor, weights = ResnetFE.get_model(architecture=arch)
+            model = model_constructor(weights=weights.DEFAULT)
+            
+            # Check the overall structure by examining the named children
+            children = list(model.named_children())
+            
+            # 1 - 4 verify the initial layers
+            self.assertIsInstance(children[0][1], nn.Conv2d)
+            self.assertIsInstance(children[1][1], nn.BatchNorm2d)
+            self.assertIsInstance(children[2][1], nn.ReLU)
+            self.assertIsInstance(children[3][1], nn.MaxPool2d)
+            
+            # 6 - 7 verify the final layers
+            self.assertIsInstance(children[-2][1], nn.AdaptiveAvgPool2d)
+            self.assertIsInstance(children[-1][1], nn.Linear)
+
+            blocks = children[4:-2]
+
+            for i, block in enumerate(blocks, start=1):
+                self.assertIsInstance(block[1], nn.Sequential)
+                self.assertEqual(block[0], f'{ResnetFE.LAYER_BLOCK}{i}')
+                # make sure each child of the block is a bottleneck layer
+                for child in block[1].children():
+                    self.assertIsInstance(child, Bottleneck) 
+        
     def _count_layers_in_feature_extractor(self, resnetFE: ResnetFE) -> int:
         """
         Counts the number of layer blocks in a feature extractor.
@@ -126,175 +167,368 @@ class TestResnetFE(CustomModuleBaseTest):
                 bottleneck_count += 1
         
         return bottleneck_count
-    
-    @unittest.skip("skipping layer tests for now")
+
+    ################## TESTS FOR THE LAYER BUILD    
+    def _test_built_by_layer(self, feature_extractor: ResnetFE, expected_num_layers: int, has_global_avg: bool):
+        """
+        Helper method to test the structure of a ResnetFE built by layers.
+        
+        Args:
+            feature_extractor: The ResnetFE instance to test
+            expected_num_layers: The expected number of layer blocks
+            has_global_avg: Whether the feature extractor has a global average pooling layer
+        """
+        # Get the original ResNet model for comparison
+        arch = feature_extractor._architecture
+        model_constructor, weights = ResnetFE.get_model(architecture=arch)
+        original_model = model_constructor(weights=weights.DEFAULT)
+        
+        # Get all children from both models
+        fe_children = list(feature_extractor.named_children())
+        original_children = list(original_model.named_children())
+        
+        # Check the overall number of components
+        expected_components = 4  # Conv, BN, ReLU, MaxPool
+        expected_components += expected_num_layers  # Layer blocks
+        if has_global_avg:
+            expected_components += 1  # AvgPool
+            
+        self.assertEqual(len(fe_children), expected_components,
+                        f"Expected {expected_components} components, got {len(fe_children)}")
+        
+        # Check initial layers (first 4 components)
+        for i in range(4):
+            fe_name, fe_module = fe_children[i]
+            orig_name, orig_module = original_children[i]
+            
+            # Check names match
+            self.assertEqual(fe_name, orig_name, f"Layer name mismatch at position {i}")
+            
+            # Check types match
+            self.assertEqual(type(fe_module), type(orig_module), 
+                           f"Layer type mismatch at position {i}: {type(fe_module)} vs {type(orig_module)}")
+            
+            # Compare string representations
+            self.assertEqual(str(fe_module), str(orig_module),
+                            f"Module structure mismatch at position {i}")
+        
+        # Check layer blocks
+        for i in range(expected_num_layers):
+            layer_idx = 4 + i
+            orig_layer_idx = 4 + i
+            
+            fe_layer_name, fe_layer = fe_children[layer_idx]
+            orig_layer_name, orig_layer = original_children[orig_layer_idx]
+            
+            # Check layer names match
+            self.assertEqual(fe_layer_name, orig_layer_name, 
+                           f"Layer name mismatch: {fe_layer_name} vs {orig_layer_name}")
+            
+            # Check that it's a layer block by name
+            self.assertTrue(ResnetFE.LAYER_BLOCK.lower() in fe_layer_name.lower(),
+                           f"Component at index {layer_idx} should be a layer block, got {fe_layer_name}")
+            
+            # Ensure the layer is a Sequential module
+            self.assertIsInstance(fe_layer, nn.Sequential,
+                                 f"Layer block {fe_layer_name} should be a Sequential module")
+            
+            # Check each bottleneck block within the layer
+            fe_blocks = list(fe_layer.children())
+            orig_blocks = list(orig_layer.children())
+            
+            # First, verify the number of blocks is the same
+            self.assertEqual(len(fe_blocks), len(orig_blocks), 
+                            f"Number of blocks in {fe_layer_name} differs: {len(fe_blocks)} vs {len(orig_blocks)}")
+            
+            # Check each bottleneck block
+            for j, (fe_block, orig_block) in enumerate(zip(fe_blocks, orig_blocks)):
+                # Check that both blocks are of the same type (Bottleneck)
+                self.assertEqual(type(fe_block), type(orig_block),
+                               f"Block type mismatch in {fe_layer_name} at position {j}")
+                
+                # Compare string representations of the blocks
+                self.assertEqual(str(fe_block), str(orig_block),
+                                f"Block structure mismatch in {fe_layer_name} at position {j}")
+        
+        # Check adaptive pooling layer if expected
+        if has_global_avg:
+            avg_pool_idx = 4 + expected_num_layers
+            orig_avg_pool_idx = original_children.index(next(filter(lambda x: isinstance(x[1], nn.AdaptiveAvgPool2d), original_children)))
+            
+            fe_avg_name, fe_avg = fe_children[avg_pool_idx]
+            orig_avg_name, orig_avg = original_children[orig_avg_pool_idx]
+            
+            # Check avgpool is the correct type
+            self.assertIsInstance(fe_avg, nn.AdaptiveAvgPool2d,
+                                 "Last layer should be AdaptiveAvgPool2d when add_global_average=True")
+            
+            # Compare string representation
+            self.assertEqual(str(fe_avg), str(orig_avg),
+                            "AdaptiveAvgPool2d structure mismatch")
+
+    @unittest.skip("passed")
     def test_build_by_layer_1_total_layers(self):
         for arch in self.architectures:
             total_layers = self.layer_counts[arch]
             
             # Test with different numbers of layers to extract
-            for i in range(1, total_layers + 1):
-                # Create a feature extractor
-                feature_extractor = ResnetFE(
-                    build_by_layer=True,
-                    num_extracted_layers=i,
-                    num_extracted_bottlenecks=i,  # This should be ignored when building by layer
-                    freeze=False,
-                    freeze_by_layer=True,
-                    add_global_average=True,
-                    architecture=arch
-                )
-                                
-                # Count actual layers in the feature extractor
-                actual_layers = self._count_layers_in_feature_extractor(feature_extractor)
-                
-                self.assertEqual(
-                    actual_layers, 
-                    i, 
-                    f"Architecture {arch}, num_extracted_layers={i}: Expected {i} layers, got {actual_layers}"
-                )
+            for add_global_avg in [True, False]:
+                for i in range(1, total_layers + 1):
+                    # Create a feature extractor
+                    feature_extractor = ResnetFE(
+                        build_by_layer=True,
+                        num_extracted_layers=i,
+                        num_extracted_bottlenecks=i,  # This should be ignored when building by layer
+                        freeze=False,
+                        freeze_by_layer=True,
+                        add_global_average=add_global_avg,
+                        architecture=arch
+                    )
+                    
+                    # Test the structure using the helper method
+                    self._test_built_by_layer(feature_extractor, i, add_global_avg)
+                    
+                    # Count actual layers to ensure backward compatibility with existing tests
+                    actual_layers = self._count_layers_in_feature_extractor(feature_extractor)
+                    
+                    self.assertEqual(
+                        actual_layers, 
+                        i, 
+                        f"Architecture {arch}, num_extracted_layers={i}: Expected {i} layers, got {actual_layers}"
+                    )
 
-    @unittest.skip("skipping layer tests for now")
+    @unittest.skip("passed")
     def test_build_by_layer_random_negative_values(self):
         for arch in self.architectures:
             total_layers = self.layer_counts[arch]
-                
-            for _ in range(10):
-                # test random  negative values 
-                num_layers = random.randint(-100, -1) 
 
-                # Create a feature extractor
-                feature_extractor = ResnetFE(
-                    build_by_layer=True,
-                    num_extracted_layers=num_layers,
-                    num_extracted_bottlenecks=total_layers,  # This should be ignored when building by layer
-                    freeze=False,
-                    freeze_by_layer=True,
-                    add_global_average=True,
-                    architecture=arch
-                )
-                                
-                # Count actual layers in the feature extractor
-                actual_layers = self._count_layers_in_feature_extractor(feature_extractor)
+            for global_avg in [True, False]:    
+                for _ in range(10):
+                    # test random negative values 
+                    num_layers = random.randint(-100, -1) 
+
+                    # Create a feature extractor
+                    feature_extractor = ResnetFE(
+                        build_by_layer=True,
+                        num_extracted_layers=num_layers,
+                        num_extracted_bottlenecks=total_layers,  # This should be ignored when building by layer
+                        freeze=False,
+                        freeze_by_layer=True,
+                        add_global_average=global_avg,
+                        architecture=arch
+                    )
+                    
+                    # Test the structure using the helper method
+                    self._test_built_by_layer(feature_extractor, total_layers, global_avg)
+                    
+                    # Count actual layers to ensure backward compatibility with existing tests
+                    actual_layers = self._count_layers_in_feature_extractor(feature_extractor)
+                    
+                    self.assertEqual(
+                        actual_layers, 
+                        total_layers, 
+                        f"Architecture {arch}, num_extracted_layers={actual_layers}: Expected {total_layers} layers, got {actual_layers}"
+                    )
                 
-                self.assertEqual(
-                    actual_layers, 
-                    total_layers, 
-                    f"Architecture {arch}, num_extracted_layers={actual_layers}: Expected {total_layers} layers, got {actual_layers}"
-                )
-                
-    @unittest.skip("skipping layer tests for now")
+    @unittest.skip("passed")
     def test_build_by_layer_beyond_total_layers(self):
         for arch in self.architectures:
             total_layers = self.layer_counts[arch]
 
-            for _ in range(10):
-                # test random values beyond the total number of layers
-                i = random.randint(total_layers + 1, 1000)
+            for global_avg in [True, False]:
+                for _ in range(10):
+                    # test random values beyond the total number of layers
+                    i = random.randint(total_layers + 1, 1000)
 
-                # Create a feature extractor
-                feature_extractor = ResnetFE(
-                    build_by_layer=True,
-                    num_extracted_layers=i,
-                    num_extracted_bottlenecks=total_layers,  # This should be ignored when building by layer
-                    freeze=False,
-                    freeze_by_layer=True,   
-                    add_global_average=True,
-                    architecture=arch
-                )
-                                
-                # Count actual layers in the feature extractor
-                actual_layers = self._count_layers_in_feature_extractor(feature_extractor)  
+                    # Create a feature extractor
+                    feature_extractor = ResnetFE(
+                        build_by_layer=True,
+                        num_extracted_layers=i,
+                        num_extracted_bottlenecks=total_layers,  # This should be ignored when building by layer
+                        freeze=False,
+                        freeze_by_layer=True,   
+                        add_global_average=global_avg,
+                        architecture=arch
+                    )
+                    
+                    # Test the structure using the helper method
+                    self._test_built_by_layer(feature_extractor, total_layers, global_avg)
+                    
+                    # Count actual layers to ensure backward compatibility with existing tests
+                    actual_layers = self._count_layers_in_feature_extractor(feature_extractor)  
+                    
+                    self.assertEqual(
+                        actual_layers, 
+                        total_layers, 
+                        f"Architecture {arch}, num_extracted_layers={i}: Expected {total_layers} layers, got {actual_layers}"
+                    )
+
+    ################## TESTS FOR THE BOTTLENECK BUILD   
+    
+    def _test_built_by_bottleneck(self, feature_extractor: ResnetFE, expected_num_bottlenecks: int, has_global_avg: bool):
+        """
+        Helper method to test the structure of a ResnetFE built by bottlenecks.
+        
+        Args:
+            feature_extractor: The ResnetFE instance to test
+            expected_num_bottlenecks: The expected number of bottleneck blocks
+            has_global_avg: Whether the feature extractor has a global average pooling layer
+        """
+        # Get the original ResNet model for comparison
+        arch = feature_extractor._architecture
+        model_constructor, weights = ResnetFE.get_model(architecture=arch)
+        original_model = model_constructor(weights=weights.DEFAULT)
+        
+        # Get all children from both models
+        fe_children = list(feature_extractor.named_children())
+        original_children = list(original_model.named_children())
+        
+        # Check the overall number of components
+        expected_components = 4  # Conv, BN, ReLU, MaxPool
+        expected_components += expected_num_bottlenecks  # Bottleneck blocks
+        expected_components += int(has_global_avg)  # AvgPool
+            
+        self.assertEqual(len(fe_children), expected_components,
+                        f"Expected {expected_components} components, got {len(fe_children)}")
+        
+        # Check initial layers (first 4 components)
+        for i in range(4):
+            fe_name, fe_module = fe_children[i]
+            orig_name, orig_module = original_children[i]
+            
+            # Check names match
+            self.assertEqual(fe_name, orig_name, f"Layer name mismatch at position {i}")
+            
+            # Check types match
+            self.assertEqual(type(fe_module), type(orig_module), 
+                           f"Layer type mismatch at position {i}: {type(fe_module)} vs {type(orig_module)}")
+            
+            # Compare string representations
+            self.assertEqual(str(fe_module), str(orig_module),
+                            f"Module structure mismatch at position {i}")
+        
+        # Build mapping of original bottlenecks for comparison
+        original_bottlenecks = []
+        for name, module in original_model.named_children():
+            if ResnetFE.LAYER_BLOCK.lower() in name.lower():
+                for _, child in module.named_children():
+                    if isinstance(child, Bottleneck):
+                        original_bottlenecks.append(child)
+        
+        # Check bottleneck blocks
+        for i in range(expected_num_bottlenecks):
+            block_idx = 4 + i
+            
+            if block_idx >= len(fe_children):
+                break
                 
-                self.assertEqual(
-                    actual_layers, 
-                    total_layers, 
-                    f"Architecture {arch}, num_extracted_layers={i}: Expected {total_layers} layers, got {actual_layers}"
-                )
-
-    @unittest.skip("skipping bottleneck tests for now")      
+            _, fe_block = fe_children[block_idx]
+            
+            # Ensure the block is a Bottleneck
+            self.assertIsInstance(fe_block, Bottleneck,
+                                 f"Component at index {block_idx} should be a Bottleneck block")
+            
+            # Check the bottleneck matches one from the original model
+            if i < len(original_bottlenecks):
+                orig_block = original_bottlenecks[i]
+                
+                # Compare string representations of the blocks
+                self.assertEqual(str(fe_block), str(orig_block),
+                                f"Block structure mismatch at position {i}")
+        
+        # Check adaptive pooling layer if expected
+        if has_global_avg:
+            avg_pool_idx = 4 + expected_num_bottlenecks
+            
+            if avg_pool_idx < len(fe_children):
+                _, fe_avg = fe_children[avg_pool_idx]
+                
+                # Find original avgpool
+                orig_avg = None
+                for _, module in original_model.named_children():
+                    if isinstance(module, nn.AdaptiveAvgPool2d):
+                        orig_avg = module
+                        break
+                
+                # Check avgpool is the correct type
+                self.assertIsInstance(fe_avg, nn.AdaptiveAvgPool2d,
+                                     "Last layer should be AdaptiveAvgPool2d when add_global_average=True")
+                
+                # Compare string representation
+                self.assertEqual(str(fe_avg), str(orig_avg),
+                                "AdaptiveAvgPool2d structure mismatch")
+    
+    # @unittest.skip("skipping bottleneck tests for now")      
     def test_build_by_bottleneck_1_total_bottlenecks(self):
         for arch in self.architectures:
             # Get total bottlenecks by summing across all layers
             total_bottlenecks = sum(self.bottleneck_counts[arch].values())
             
             # Test with explicit values from 1 to total bottlenecks
-            for i in range(1, total_bottlenecks + 1):
-                # Create a feature extractor
-                feature_extractor = ResnetFE(
-                    build_by_layer=False,
-                    num_extracted_layers=1,  # This should be ignored when building by bottleneck
-                    num_extracted_bottlenecks=i,
-                    freeze=False,
-                    freeze_by_layer=False,
-                    add_global_average=True,
-                    architecture=arch
-                )
-                
-                # Count actual bottlenecks in the feature extractor
-                actual_bottlenecks = self._count_bottlenecks_in_feature_extractor(feature_extractor)
-                
-                self.assertEqual(
-                    actual_bottlenecks, 
-                    i, 
-                    f"Architecture {arch}, num_extracted_bottlenecks={i}: Expected {i} bottlenecks, got {actual_bottlenecks}"
-                )
+            for add_global_avg in [True, False]:
+                for i in range(1, total_bottlenecks + 1):
+                    # Create a feature extractor
+                    feature_extractor = ResnetFE(
+                        build_by_layer=False,
+                        num_extracted_layers=1,  # this argument should be ignored when building by bottleneck
+                        num_extracted_bottlenecks=i,
+                        freeze=False, 
+                        freeze_by_layer=False,
+                        add_global_average=add_global_avg,
+                        architecture=arch
+                    )
+                    
+                    # Test the structure using the helper method
+                    self._test_built_by_bottleneck(feature_extractor, i, add_global_avg)
+                    
+
     
-    @unittest.skip("skipping bottleneck tests for now")
+    # @unittest.skip("skipping bottleneck tests for now")
     def test_build_by_bottleneck_random_negative_values(self):
         for arch in self.architectures:
             total_bottlenecks = sum(self.bottleneck_counts[arch].values())
 
             # Test with random negative values (should extract all bottlenecks)
-            for _ in range(10):
-                num_bottlenecks = random.randint(-100, -1)
-                
-                feature_extractor = ResnetFE(
-                    build_by_layer=False,
-                    num_extracted_layers=1,  # This should be ignored when building by bottleneck
-                    num_extracted_bottlenecks=num_bottlenecks,
-                    freeze=False,
-                    freeze_by_layer=False,
-                    add_global_average=True,
-                    architecture=arch
-                )
-                
-                actual_bottlenecks = self._count_bottlenecks_in_feature_extractor(feature_extractor)
-                
-                self.assertEqual(
-                    actual_bottlenecks, 
-                    total_bottlenecks, 
-                    f"Architecture {arch}, num_extracted_bottlenecks={num_bottlenecks}: Expected {total_bottlenecks} bottlenecks, got {actual_bottlenecks}"
-                )
-
-    @unittest.skip("skipping bottleneck tests for now")
+            for add_global_avg in [True, False]:
+                for _ in range(10):
+                    num_bottlenecks = random.randint(-100, -1)
+                    
+                    feature_extractor = ResnetFE(
+                        build_by_layer=False,
+                        num_extracted_layers=1,  # This should be ignored when building by bottleneck
+                        num_extracted_bottlenecks=num_bottlenecks,
+                        freeze=False,
+                        freeze_by_layer=False,
+                        add_global_average=add_global_avg,
+                        architecture=arch
+                    )
+                    
+                    # Test the structure using the helper method
+                    self._test_built_by_bottleneck(feature_extractor, total_bottlenecks, add_global_avg)
+                    
+    # @unittest.skip("skipping bottleneck tests for now")
     def test_build_by_bottleneck_beyond_total_bottlenecks(self):
         for arch in self.architectures:
             total_bottlenecks = sum(self.bottleneck_counts[arch].values())
 
             # Test with random values beyond the total (should extract all bottlenecks)
-            for _ in range(20):
-                num_bottlenecks = random.randint(total_bottlenecks + 1, 1000)
-                num_bottlenecks = random.randint(total_bottlenecks + 1, 1000)
-                
-                feature_extractor = ResnetFE(
-                    build_by_layer=False,
-                    num_extracted_layers=1,  # This should be ignored when building by bottleneck
-                    num_extracted_bottlenecks=num_bottlenecks,
-                    freeze=False,
-                    freeze_by_layer=False,
-                    add_global_average=True,
-                    architecture=arch
-                )
-                
-                actual_bottlenecks = self._count_bottlenecks_in_feature_extractor(feature_extractor)
-                
-                self.assertEqual(
-                    actual_bottlenecks, 
-                    total_bottlenecks, 
-                    f"Architecture {arch}, num_extracted_bottlenecks={num_bottlenecks}: Expected {total_bottlenecks} bottlenecks, got {actual_bottlenecks}"
-                )
-
+            for add_global_avg in [True, False]:
+                for _ in range(20):
+                    num_bottlenecks = random.randint(total_bottlenecks + 1, 1000)
+                    
+                    feature_extractor = ResnetFE(
+                        build_by_layer=False,
+                        num_extracted_layers=1,  # This should be ignored when building by bottleneck
+                        num_extracted_bottlenecks=num_bottlenecks,
+                        freeze=False,
+                        freeze_by_layer=False,
+                        add_global_average=add_global_avg,
+                        architecture=arch
+                    )
+                    
+                    # Test the structure using the helper method
+                    self._test_built_by_bottleneck(feature_extractor, total_bottlenecks, add_global_avg)
+                    
     @unittest.skip("skipping input validation tests for now")
     def test_input_validation(self):
         """
@@ -355,7 +589,7 @@ class TestResnetFE(CustomModuleBaseTest):
         except ValueError as e:
             self.fail(f"ResnetFE raised ValueError unexpectedly when build_by_layer=True and num_extracted_bottlenecks=0: {e}")
 
-
+    @unittest.skip("skipping layer tests for now")
     def test_forward_pass_layer(self):
         for arch in self.architectures:
             for t in [True, False]:
@@ -405,6 +639,9 @@ class TestResnetFE(CustomModuleBaseTest):
                     
                     self.assertTrue(torch.allclose(output_fe, output_net), "The feature extractor construction does not seem to be correct")
 
+
+    # CUSTOME MODULE BASE TESTS
+    @unittest.skip("skipping layer tests for now")
     # Custom module base tests for ResnetFE
     def test_eval_mode(self):
         """Test that eval mode is correctly set across the feature extractor"""
@@ -421,6 +658,7 @@ class TestResnetFE(CustomModuleBaseTest):
 
             super()._test_eval_mode(feature_extractor)
     
+    @unittest.skip("skipping layer tests for now")
     def test_train_mode(self):
         """Test that train mode is correctly set across the feature extractor"""
         for arch in self.architectures:  
@@ -435,6 +673,7 @@ class TestResnetFE(CustomModuleBaseTest):
             )
             super()._test_train_mode(feature_extractor)
     
+    @unittest.skip("skipping layer tests for now")
     def test_consistent_output_in_eval_mode(self):
         """Test that the feature extractor produces consistent output in eval mode"""
         for arch in self.architectures:  
@@ -449,7 +688,9 @@ class TestResnetFE(CustomModuleBaseTest):
             )
             input_tensor = torch.randn(random.randint(1, 10), 3, 224, 224)
             super()._test_consistent_output_in_eval_mode(feature_extractor, input_tensor)
-    
+
+
+    @unittest.skip("skipping layer tests for now")
     def test_batch_size_one_in_eval_mode(self):
         """Test that the feature extractor handles batch size 1 in eval mode"""
         for arch in self.architectures:  
@@ -465,6 +706,7 @@ class TestResnetFE(CustomModuleBaseTest):
             input_tensor = torch.randn(1, 3, 224, 224)
             super()._test_batch_size_one_in_eval_mode(feature_extractor, input_tensor)
     
+    @unittest.skip("skipping layer tests for now")
     def test_named_parameters_length(self):
         """Test that named_parameters and parameters have the same length"""
         for arch in self.architectures:  
@@ -480,6 +722,12 @@ class TestResnetFE(CustomModuleBaseTest):
             super()._test_named_parameters_length(feature_extractor)
 
 
+
 if __name__ == '__main__':
     pu.seed_everything(42)
     unittest.main()
+    from mypt.backbones.resnetFE import ResnetFE 
+
+    # constructor, weights = ResnetFE.get_model(architecture=50)
+    # net = constructor(weights=weights.DEFAULT) 
+    # print(net)

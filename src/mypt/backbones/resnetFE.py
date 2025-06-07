@@ -12,9 +12,9 @@ import warnings
 from torch import nn
 from collections import OrderedDict, defaultdict, deque
 from typing import Union, Tuple, Any
-from torchvision.models import resnet18, resnet34, resnet50, resnet101, resnet152
-from torchvision.models import ResNet18_Weights, ResNet34_Weights, ResNet50_Weights, ResNet101_Weights, ResNet152_Weights
-from torchvision.models.resnet import Bottleneck, BasicBlock
+from torchvision.models import resnet50, resnet101, resnet152
+from torchvision.models import ResNet50_Weights, ResNet101_Weights, ResNet152_Weights
+from torchvision.models.resnet import Bottleneck
 
 
 from mypt.building_blocks.mixins.custom_module_mixins import WrapperLikeModuleMixin  
@@ -47,7 +47,6 @@ class ResnetFE(WrapperLikeModuleMixin):
         This method build a feature extractor using the "layer" as a building block.
         """
 
-        # at this point, the module has children
         layer_blocks_counter = 0
         extracted_modules = []
 
@@ -90,8 +89,7 @@ class ResnetFE(WrapperLikeModuleMixin):
             extracted_modules.append((module_name, module))
             layer_blocks_counter += 1   
 
-        extended_modules = list(extracted_modules)
-        self._feature_extractor = nn.Sequential(OrderedDict(extended_modules))
+        self._feature_extractor = nn.Sequential(OrderedDict(extracted_modules))
             
 
     def __extract_feature_extractory_by_bottleneck(self):
@@ -108,8 +106,11 @@ class ResnetFE(WrapperLikeModuleMixin):
             # either a relu, maxpool, or a convolutional layer: those appear at the very beginning of the network
             # either an average pooling layer: this appears right after the last_layer_block
 
-            if isinstance(module, nn.AdaptiveAvgPool2d) and self._add_global_average:
-                extracted_modules.append((module_name, module))
+            if isinstance(module, nn.AdaptiveAvgPool2d):
+                if self._add_global_average:
+                    extracted_modules.append((module_name, module))
+                    
+                # make sure to move to the next iteration since the 3rd condition will also be met
                 continue
                 
             if isinstance(module, (nn.Linear, nn.LazyLinear)):
@@ -119,8 +120,8 @@ class ResnetFE(WrapperLikeModuleMixin):
             mc = list(module.named_children())
 
             if len(mc) == 0:
-                # if the module has no children, then it is a simply layer and must be one of the layers before the first layer block
-                extracted_modules.append((module_name, module))
+                # if the module has no children, then it is one of the simple modules before the first "resnet layers"
+                extracted_modules.append((module_name, module)) 
                 continue
             
 
@@ -136,11 +137,11 @@ class ResnetFE(WrapperLikeModuleMixin):
 
                 # at this point, the child is a residual block
                 if bottleneck_counter >= self._num_extracted_bottlenecks:
-                    # we use break since, within the layer block, we will not add any more residual blocks to the feature extractor.
+                    # we use break since, within the current layer block, we will not add any more residual blocks to the feature extractor.
                     break
-
+                
                 if self.RESIDUAL_BLOCK.lower() not in name.lower():
-                    name = self.RESIDUAL_BLOCK.lower() + '_' + f'{bottleneck_counter + 1}'
+                    name = module_name + '_' + f'{bottleneck_counter + 1}'
                 
                 # add the residual block to the feature extractor  
                 extracted_modules.append((name, child))
@@ -148,8 +149,7 @@ class ResnetFE(WrapperLikeModuleMixin):
 
                 self.bottleneck_per_layer[layer_counter] += 1
 
-        extended_modules = list(extracted_modules)
-        self._feature_extractor = nn.Sequential(OrderedDict(extended_modules))
+        self._feature_extractor = nn.Sequential(OrderedDict(extracted_modules))
 
 
     def __freeze_by_building_block(self, num_blocks: int):
@@ -174,8 +174,7 @@ class ResnetFE(WrapperLikeModuleMixin):
             mc = list(module.named_children())
 
             if len(mc) == 0:
-                # the module is a simple layer and must be one of the layers before the first layer block 
-                # freeze it
+                # the module is a simple layer and must be one of the layers before the first layer block so freeze it
                 for param in module.parameters():
                     param.requires_grad = False
 
@@ -242,23 +241,26 @@ class ResnetFE(WrapperLikeModuleMixin):
 
                 bottleneck_counter += 1
 
-        def _freeze(self):
-            # if the freeze is a boolean variable, then either freeze all parameters or leave them trainable 
-            if isinstance(self._freeze, bool):
-                if self._freeze:
-                    for param in self._feature_extractor.parameters():
-                        param.requires_grad = False
 
-                return 
-            
-            if self._build_by_layer == self._freeze_by_layer:
-                # in this case, the freeze and build_by_layer are of the same value
-                # we need to freeze the weights of the feature extractor
-                self.__freeze_by_building_block(self._freeze)
-                return 
-            
-            # in this case, we know that freeze_by_layer is true and build_by_layer is false (guaranteed by the initialization code)
-            self.__freeze_by_bottleneck_build_by_layer(self._freeze)
+    def _freeze_feature_extractor(self):
+        # if the freeze is a boolean variable, then either freeze all parameters or leave them trainable 
+        if isinstance(self._freeze, bool):
+            if self._freeze:
+                for param in self._feature_extractor.parameters():
+                    param.requires_grad = False
+
+            return 
+        
+        if self._build_by_layer == self._freeze_by_layer:
+            # in this case, the freeze and build_by_layer are of the same value
+            # we need to freeze the weights of the feature extractor
+            self.__freeze_by_building_block(self._freeze)
+            return 
+        
+        # in this case, we know that freeze_by_layer is true and build_by_layer is false (guaranteed by the initialization code)
+        self.__freeze_by_bottleneck_build_by_layer(self._freeze)
+
+
     def __init__(self, 
                  build_by_layer: bool,
                  num_extracted_layers: int,
@@ -323,5 +325,8 @@ class ResnetFE(WrapperLikeModuleMixin):
             self.__extract_feature_extractory_by_bottleneck()  
 
         del(self.__net) # remove the original network as it is no longer needed    
-    
-        self._freeze()
+
+        self._freeze_feature_extractor()
+
+
+    # the implementations of most methods are overridden by the WrapperLikeModuleMixin class
