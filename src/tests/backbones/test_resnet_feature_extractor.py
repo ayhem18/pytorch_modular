@@ -298,37 +298,36 @@ class TestResnetFE(CustomModuleBaseTest):
                     )
 
     @unittest.skip("passed")
-    def test_build_by_layer_random_negative_values(self):
+    def test_build_by_layer_negative_values(self):
         for arch in self.architectures:
             total_layers = self.layer_counts[arch]
 
             for global_avg in [True, False]:    
-                for _ in range(10):
-                    # test random negative values 
-                    num_layers = random.randint(-100, -1) 
+                # test random negative values 
+                num_layers = -1
 
-                    # Create a feature extractor
-                    feature_extractor = ResnetFE(
-                        build_by_layer=True,
-                        num_extracted_layers=num_layers,
-                        num_extracted_bottlenecks=total_layers,  # This should be ignored when building by layer
-                        freeze=False,
-                        freeze_by_layer=True,
-                        add_global_average=global_avg,
-                        architecture=arch
-                    )
-                    
-                    # Test the structure using the helper method
-                    self._test_built_by_layer(feature_extractor, total_layers, global_avg)
-                    
-                    # Count actual layers to ensure backward compatibility with existing tests
-                    actual_layers = self._count_layers_in_feature_extractor(feature_extractor)
-                    
-                    self.assertEqual(
-                        actual_layers, 
-                        total_layers, 
-                        f"Architecture {arch}, num_extracted_layers={actual_layers}: Expected {total_layers} layers, got {actual_layers}"
-                    )
+                # Create a feature extractor
+                feature_extractor = ResnetFE(
+                    build_by_layer=True,
+                    num_extracted_layers=num_layers,
+                    num_extracted_bottlenecks=total_layers,  # This should be ignored when building by layer
+                    freeze=False,
+                    freeze_by_layer=True,
+                    add_global_average=global_avg,
+                    architecture=arch
+                )
+                
+                # Test the structure using the helper method
+                self._test_built_by_layer(feature_extractor, total_layers, global_avg)
+                
+                # Count actual layers to ensure backward compatibility with existing tests
+                actual_layers = self._count_layers_in_feature_extractor(feature_extractor)
+                
+                self.assertEqual(
+                    actual_layers, 
+                    total_layers, 
+                    f"Architecture {arch}, num_extracted_layers={actual_layers}: Expected {total_layers} layers, got {actual_layers}"
+                )
                 
     @unittest.skip("passed")
     def test_build_by_layer_beyond_total_layers(self):
@@ -458,7 +457,7 @@ class TestResnetFE(CustomModuleBaseTest):
                 self.assertEqual(str(fe_avg), str(orig_avg),
                                 "AdaptiveAvgPool2d structure mismatch")
     
-    # @unittest.skip("skipping bottleneck tests for now")      
+    @unittest.skip("passed")
     def test_build_by_bottleneck_1_total_bottlenecks(self):
         for arch in self.architectures:
             # Get total bottlenecks by summing across all layers
@@ -480,33 +479,30 @@ class TestResnetFE(CustomModuleBaseTest):
                     
                     # Test the structure using the helper method
                     self._test_built_by_bottleneck(feature_extractor, i, add_global_avg)
-                    
 
-    
-    # @unittest.skip("skipping bottleneck tests for now")
-    def test_build_by_bottleneck_random_negative_values(self):
+    @unittest.skip("passed")
+    def test_build_by_bottleneck_negative_values(self):
         for arch in self.architectures:
             total_bottlenecks = sum(self.bottleneck_counts[arch].values())
 
             # Test with random negative values (should extract all bottlenecks)
             for add_global_avg in [True, False]:
-                for _ in range(10):
-                    num_bottlenecks = random.randint(-100, -1)
+                num_bottlenecks =  -1
+                
+                feature_extractor = ResnetFE(
+                    build_by_layer=False,
+                    num_extracted_layers=1,  # This should be ignored when building by bottleneck
+                    num_extracted_bottlenecks=num_bottlenecks,
+                    freeze=False,
+                    freeze_by_layer=False,
+                    add_global_average=add_global_avg,
+                    architecture=arch
+                )
+                
+                # Test the structure using the helper method
+                self._test_built_by_bottleneck(feature_extractor, total_bottlenecks, add_global_avg)
                     
-                    feature_extractor = ResnetFE(
-                        build_by_layer=False,
-                        num_extracted_layers=1,  # This should be ignored when building by bottleneck
-                        num_extracted_bottlenecks=num_bottlenecks,
-                        freeze=False,
-                        freeze_by_layer=False,
-                        add_global_average=add_global_avg,
-                        architecture=arch
-                    )
-                    
-                    # Test the structure using the helper method
-                    self._test_built_by_bottleneck(feature_extractor, total_bottlenecks, add_global_avg)
-                    
-    # @unittest.skip("skipping bottleneck tests for now")
+    @unittest.skip("passed")
     def test_build_by_bottleneck_beyond_total_bottlenecks(self):
         for arch in self.architectures:
             total_bottlenecks = sum(self.bottleneck_counts[arch].values())
@@ -529,7 +525,7 @@ class TestResnetFE(CustomModuleBaseTest):
                     # Test the structure using the helper method
                     self._test_built_by_bottleneck(feature_extractor, total_bottlenecks, add_global_avg)
                     
-    @unittest.skip("skipping input validation tests for now")
+    @unittest.skip("passed")
     def test_input_validation(self):
         """
         Tests that the ResnetFE class properly validates input parameters
@@ -546,7 +542,7 @@ class TestResnetFE(CustomModuleBaseTest):
                 add_global_average=True,
                 architecture=50
             )
-        self.assertTrue("number of extracted layers cannot be zeor" in str(context.exception))
+        self.assertTrue("number of extracted layers cannot be zero" in str(context.exception))
         
         # Test case 2: Passing 0 for num_extracted_bottlenecks when build_by_layer=False should raise ValueError
         with self.assertRaises(ValueError) as context:
@@ -555,11 +551,11 @@ class TestResnetFE(CustomModuleBaseTest):
                 num_extracted_layers=1,
                 num_extracted_bottlenecks=0,
                 freeze=False,
-                freeze_by_layer=True,
+                freeze_by_layer=False,
                 add_global_average=True,
                 architecture=50
             )
-        self.assertTrue("number of extracted blocks cannot be zeor" in str(context.exception))
+        self.assertTrue("number of extracted blocks cannot be zero" in str(context.exception))
         
         # Test case 3: Passing 0 for num_extracted_layers when build_by_layer=False should NOT raise error
         try:
@@ -568,7 +564,7 @@ class TestResnetFE(CustomModuleBaseTest):
                 num_extracted_layers=0,
                 num_extracted_bottlenecks=1,
                 freeze=False,
-                freeze_by_layer=True,
+                freeze_by_layer=False,
                 add_global_average=True,
                 architecture=50
             )
@@ -589,7 +585,64 @@ class TestResnetFE(CustomModuleBaseTest):
         except ValueError as e:
             self.fail(f"ResnetFE raised ValueError unexpectedly when build_by_layer=True and num_extracted_bottlenecks=0: {e}")
 
-    @unittest.skip("skipping layer tests for now")
+        # passing any negative value other than -1 should raise a ValueError
+        for _ in range(1, 10):
+            random_neg_value = random.randint(-100, -2)
+            with self.assertRaises(ValueError) as context:
+                ResnetFE(
+                    build_by_layer=True,
+                    num_extracted_layers=random_neg_value,
+                    num_extracted_bottlenecks=2,
+                    freeze=False,
+                    freeze_by_layer=True,
+                    add_global_average=True,
+                    architecture=50
+                )
+            self.assertTrue("only negative value allowed for `num_extracted_layers` is -1" in str(context.exception))
+
+        # passing any negative value other than -1 should raise a ValueError
+        for _ in range(1, 10):
+            random_neg_value = random.randint(-100, -2)
+            with self.assertRaises(ValueError) as context:
+                ResnetFE(
+                    build_by_layer=False,
+                    num_extracted_layers=2,
+                    num_extracted_bottlenecks=random_neg_value,
+                    freeze=False,
+                    freeze_by_layer=False,
+                    add_global_average=True,
+                    architecture=50
+                )
+            self.assertTrue("only negative value allowed for `num_extracted_bottlenecks` is -1" in str(context.exception))
+        
+
+        try:
+            ResnetFE(
+                build_by_layer=True,
+                num_extracted_layers=-1,
+                num_extracted_bottlenecks=2,
+                freeze=False,
+                freeze_by_layer=True,
+                add_global_average=True,
+                architecture=50
+            )
+        except ValueError as e:
+            self.fail(f"ResnetFE raised ValueError unexpectedly when build_by_layer=True and num_extracted_bottlenecks=-1: {e}")
+
+        try:
+            ResnetFE(
+                build_by_layer=False,
+                num_extracted_layers=2,
+                num_extracted_bottlenecks=-1,
+                freeze=False,
+                freeze_by_layer=False,
+                add_global_average=True,
+                architecture=50
+            )
+        except ValueError as e:
+            self.fail(f"ResnetFE raised ValueError unexpectedly when build_by_layer=False and num_extracted_bottlenecks=-1: {e}")
+
+    @unittest.skip("passed")
     def test_forward_pass_layer(self):
         for arch in self.architectures:
             for t in [True, False]:
@@ -641,85 +694,149 @@ class TestResnetFE(CustomModuleBaseTest):
 
 
     # CUSTOME MODULE BASE TESTS
-    @unittest.skip("skipping layer tests for now")
-    # Custom module base tests for ResnetFE
+    @unittest.skip("passed")
     def test_eval_mode(self):
         """Test that eval mode is correctly set across the feature extractor"""
         for arch in self.architectures:  
-            feature_extractor = ResnetFE(
-                build_by_layer=True,
-                num_extracted_layers=2,
-                num_extracted_bottlenecks=2,
-                freeze=False,
-                freeze_by_layer=True,
-                add_global_average=True,
-                architecture=arch
-            )
+            for avg_layer in [True, False]:
+                for bl in [True, False]:
+                    feature_extractor = ResnetFE(
+                        build_by_layer=bl,
+                        num_extracted_layers=random.randint(1, 10),
+                        num_extracted_bottlenecks=random.randint(1, 10),
+                        freeze=False,
+                        freeze_by_layer=bl,
+                        add_global_average=avg_layer,
+                        architecture=arch
+                    )
+                    super()._test_eval_mode(feature_extractor)
 
-            super()._test_eval_mode(feature_extractor)
-    
-    @unittest.skip("skipping layer tests for now")
+    @unittest.skip("passed")
+    # @unittest.skip("passed")
     def test_train_mode(self):
         """Test that train mode is correctly set across the feature extractor"""
         for arch in self.architectures:  
-            feature_extractor = ResnetFE(
-                build_by_layer=True,
-                num_extracted_layers=2,
-                num_extracted_bottlenecks=2,
-                freeze=False,
-                freeze_by_layer=True,
-                add_global_average=True,
-                architecture=arch
-            )
-            super()._test_train_mode(feature_extractor)
-    
-    @unittest.skip("skipping layer tests for now")
+            for avg_layer in [True, False]:
+                for bl in [True, False]:
+                    feature_extractor = ResnetFE(
+                        build_by_layer=bl,
+                        num_extracted_layers=random.randint(1, 10),
+                        num_extracted_bottlenecks=random.randint(1, 10),
+                        freeze=False,
+                        freeze_by_layer=bl,
+                        add_global_average=avg_layer,
+                        architecture=arch
+                    )
+                    super()._test_train_mode(feature_extractor)
+
+    @unittest.skip("passed")
     def test_consistent_output_in_eval_mode(self):
         """Test that the feature extractor produces consistent output in eval mode"""
         for arch in self.architectures:  
-            feature_extractor = ResnetFE(
-                build_by_layer=True,
-                num_extracted_layers=2,
-                num_extracted_bottlenecks=2,
-                freeze=False,
-                freeze_by_layer=True,
-                add_global_average=True,
-                architecture=arch
-            )
-            input_tensor = torch.randn(random.randint(1, 10), 3, 224, 224)
-            super()._test_consistent_output_in_eval_mode(feature_extractor, input_tensor)
+            for avg_layer in [True, False]:
+                for bl in [True, False]:
+                    feature_extractor = ResnetFE(
+                        build_by_layer=bl,
+                        num_extracted_layers=random.randint(1, 10),
+                        num_extracted_bottlenecks=random.randint(1, 10),
+                        freeze=False,
+                        freeze_by_layer=bl,
+                        add_global_average=avg_layer,
+                        architecture=arch
+                        )
+                    input_tensor = torch.randn(random.randint(1, 10), 3, 224, 224)
+                    super()._test_consistent_output_in_eval_mode(feature_extractor, input_tensor)
 
-
-    @unittest.skip("skipping layer tests for now")
+    @unittest.skip("passed")
     def test_batch_size_one_in_eval_mode(self):
         """Test that the feature extractor handles batch size 1 in eval mode"""
         for arch in self.architectures:  
-            feature_extractor = ResnetFE(
-                build_by_layer=True,
-                num_extracted_layers=2,
-                num_extracted_bottlenecks=2,
-                freeze=False,
-                freeze_by_layer=True,
-                add_global_average=True,
-                architecture=arch
-            )
-            input_tensor = torch.randn(1, 3, 224, 224)
-            super()._test_batch_size_one_in_eval_mode(feature_extractor, input_tensor)
+            for avg_layer in [True, False]:
+                for bl in [True, False]:
+                    feature_extractor = ResnetFE(
+                        build_by_layer=bl,
+                        num_extracted_layers=random.randint(1, 10),
+                        num_extracted_bottlenecks=random.randint(1, 10),
+                        freeze=False,
+                        freeze_by_layer=bl,
+                        add_global_average=avg_layer,
+                        architecture=arch
+                    )
+                    input_tensor = torch.randn(1, 3, 224, 224)
+                    super()._test_batch_size_one_in_eval_mode(feature_extractor, input_tensor)
     
-    @unittest.skip("skipping layer tests for now")
+    @unittest.skip("passed")
     def test_named_parameters_length(self):
         """Test that named_parameters and parameters have the same length"""
         for arch in self.architectures:  
-            feature_extractor = ResnetFE(
-                build_by_layer=True,
-                num_extracted_layers=2,
-                num_extracted_bottlenecks=2,
-                freeze=False,
-                freeze_by_layer=True,
-                add_global_average=True,
-                architecture=arch
-            )
-            super()._test_named_parameters_length(feature_extractor)
+            for avg_layer in [True, False]:
+                for bl in [True, False]:
+                    feature_extractor = ResnetFE(
+                        build_by_layer=bl,
+                        num_extracted_layers=random.randint(1, 10),
+                        num_extracted_bottlenecks=random.randint(1, 10),
+                        freeze=False,
+                        freeze_by_layer=bl,
+                        add_global_average=avg_layer,
+                        architecture=arch
+                    )
+                    super()._test_named_parameters_length(feature_extractor)
+
+    @unittest.skip("passed")
+    def test_batch_size_one_in_train_mode(self):
+        """Test that the feature extractor handles batch size 1 in train mode"""
+        for arch in self.architectures:  
+            for avg_layer in [True, False]:
+                for bl in [True, False]:
+                    feature_extractor = ResnetFE(
+                        build_by_layer=bl,
+                        num_extracted_layers=random.randint(1, 10),
+                        num_extracted_bottlenecks=random.randint(1, 10),
+                        freeze=False,
+                        freeze_by_layer=bl,
+                        add_global_average=avg_layer,
+                        architecture=arch
+                    )
+                    input_tensor = torch.randn(1, 3, 224, 224)
+                    super()._test_batch_size_one_in_train_mode(feature_extractor, input_tensor)
+    
+
+    @unittest.skip("passed")
+    def test_batch_size_one_in_eval_mode(self):
+        """Test that the feature extractor handles batch size 1 in eval mode"""
+        for arch in self.architectures:  
+            for avg_layer in [True, False]:
+                for bl in [True, False]:
+                    feature_extractor = ResnetFE(
+                        build_by_layer=bl,
+                        num_extracted_layers=random.randint(1, 10),
+                        num_extracted_bottlenecks=random.randint(1, 10),
+                        freeze=False,
+                        freeze_by_layer=bl,
+                        add_global_average=avg_layer,
+                        architecture=arch
+                    )
+                    input_tensor = torch.randn(1, 3, 224, 224)
+                    super()._test_batch_size_one_in_eval_mode(feature_extractor, input_tensor)
+
+
+    @unittest.skip("passed")
+    def test_to_device(self):
+        """Test that the feature extractor can be moved to a device"""
+        for arch in self.architectures:  
+            for avg_layer in [True, False]:
+                for bl in [True, False]:
+                    feature_extractor = ResnetFE(
+                        build_by_layer=bl,  
+                        num_extracted_layers=random.randint(1, 10),
+                        num_extracted_bottlenecks=random.randint(1, 10),
+                        freeze=False,
+                        freeze_by_layer=bl,
+                        add_global_average=avg_layer,
+                        architecture=arch   
+                    )
+                    input_tensor = torch.randn(1, 3, 224, 224)
+                    super()._test_to_device(feature_extractor, input_tensor)
 
 
 

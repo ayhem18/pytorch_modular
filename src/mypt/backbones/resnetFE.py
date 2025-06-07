@@ -298,11 +298,17 @@ class ResnetFE(WrapperLikeModuleMixin):
         self._architecture = architecture
 
         if  build_by_layer and num_extracted_layers == 0:
-            raise ValueError("The number of extracted layers cannot be zeor. Negative values indicate all layers should be extracted.")
+            raise ValueError("The number of extracted layers cannot be zero. Negative values indicate all layers should be extracted.")
 
         if not build_by_layer and num_extracted_bottlenecks == 0:
-            raise ValueError("The number of extracted blocks cannot be zeor. Negative values indicate all blocks should be extracted.")
+            raise ValueError("The number of extracted blocks cannot be zero. Negative values indicate all blocks should be extracted.")
 
+        if num_extracted_layers < 0 and num_extracted_layers != -1:
+            raise ValueError("The only negative value allowed for `num_extracted_layers` is -1. This indicates that all layers should be extracted.")
+
+        if num_extracted_bottlenecks < 0 and num_extracted_bottlenecks != -1:
+            raise ValueError("The only negative value allowed for `num_extracted_bottlenecks` is -1. This indicates that all bottlenecks should be extracted.")
+        
         self._num_extracted_layers = num_extracted_layers if num_extracted_layers > 0 else float('inf') 
         self._num_extracted_bottlenecks = num_extracted_bottlenecks if num_extracted_bottlenecks > 0 else float('inf') 
         
