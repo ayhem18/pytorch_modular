@@ -46,7 +46,6 @@ class ResnetFE(WrapperLikeModuleMixin):
         """
         This method build a feature extractor using the "layer" as a building block.
         """
-
         layer_blocks_counter = 0
         extracted_modules = []
 
@@ -197,9 +196,11 @@ class ResnetFE(WrapperLikeModuleMixin):
         This method freezes the weights of the feature extractor when build_by_layer = True and freeze_by_layer = False
         """
         bottleneck_counter = 0 
+        
+        layer_count = 0
 
         for name, module in self._feature_extractor.named_children():
-            if isinstance(module, nn.AdaptiveAvgPool2d) or isinstance(module, (nn.Linear, nn.LazyLinear)):                    
+            if isinstance(module, nn.AdaptiveAvgPool2d):                    
                 # linear and adaptive average pooling layers are not frozen
                 continue
             
@@ -211,23 +212,27 @@ class ResnetFE(WrapperLikeModuleMixin):
                 for param in module.parameters():
                     param.requires_grad = False
 
+                continue
+
             # at this point, the code assumes that the module is a layer
             if not self.LAYER_BLOCK.lower() in name.lower():
-                raise TypeError("The class is based on the wrong assumptions. Found a block with children that is not a layer block !!! it is named: {name}")
+                raise TypeError(f"The class is based on the wrong assumptions. Found a block with children that is not a layer block !!! it is named: {name}")
+
+            layer_count += 1
 
             if bottleneck_counter >= num_bottlenecks:
                 continue
 
             # at this point, we need to either freeze the entire block or some bottleneck layers within the block
             # compute the number of frozen bottleneck layers if we are to freeze the entire block
-            next_frozen_num_bottlenecks = bottleneck_counter + self.bottleneck_per_layer[bottleneck_counter + 1]
+            next_frozen_num_bottlenecks = bottleneck_counter + self.bottleneck_per_layer[layer_count]
 
             if next_frozen_num_bottlenecks <= num_bottlenecks:
                 # in this case, then freeze the entire block
                 for param in module.parameters():
                     param.requires_grad = False
 
-                bottleneck_counter += next_frozen_num_bottlenecks
+                bottleneck_counter = next_frozen_num_bottlenecks
                 continue
                 
             # at this point, freezing the entire block would exceed the number of frozen bottleneck layers 
@@ -261,6 +266,28 @@ class ResnetFE(WrapperLikeModuleMixin):
         self.__freeze_by_bottleneck_build_by_layer(self._freeze)
 
 
+    def _verify_input(self,
+                      build_by_layer: bool,
+                      num_extracted_layers: int,
+                      num_extracted_bottlenecks: int,
+                      freeze_by_layer: bool,
+                      ):
+
+        if not build_by_layer and freeze_by_layer:
+            raise ValueError("The feature extractor cannot be built by bottleneck and frozen by layer at the same time. However, it can be build by layers and frozen by bottleneck.")
+
+        if  build_by_layer and num_extracted_layers == 0:
+            raise ValueError("The number of extracted layers cannot be zero. Negative values indicate all layers should be extracted.")
+
+        if not build_by_layer and num_extracted_bottlenecks == 0:
+            raise ValueError("The number of extracted blocks cannot be zero. Negative values indicate all blocks should be extracted.")
+
+        if num_extracted_layers < 0 and num_extracted_layers != -1:
+            raise ValueError("The only negative value allowed for `num_extracted_layers` is -1. This indicates that all layers should be extracted.")
+
+        if num_extracted_bottlenecks < 0 and num_extracted_bottlenecks != -1:
+            raise ValueError("The only negative value allowed for `num_extracted_bottlenecks` is -1. This indicates that all bottlenecks should be extracted.")
+
     def __init__(self, 
                  build_by_layer: bool,
                  num_extracted_layers: int,
@@ -288,27 +315,12 @@ class ResnetFE(WrapperLikeModuleMixin):
         # in this case: "_feature_extractor"
         super().__init__("_feature_extractor", *args, **kwargs)
 
-        if not build_by_layer and freeze_by_layer:
-            raise ValueError("The feature extractor cannot be built by bottleneck and frozen by layer at the same time. However, it can be build by layers and frozen by bottleneck.")
+        self._verify_input(build_by_layer, num_extracted_layers, num_extracted_bottlenecks, freeze_by_layer)
 
         self._feature_extractor: nn.Module = None
-
         self._build_by_layer = build_by_layer
-
         self._architecture = architecture
 
-        if  build_by_layer and num_extracted_layers == 0:
-            raise ValueError("The number of extracted layers cannot be zero. Negative values indicate all layers should be extracted.")
-
-        if not build_by_layer and num_extracted_bottlenecks == 0:
-            raise ValueError("The number of extracted blocks cannot be zero. Negative values indicate all blocks should be extracted.")
-
-        if num_extracted_layers < 0 and num_extracted_layers != -1:
-            raise ValueError("The only negative value allowed for `num_extracted_layers` is -1. This indicates that all layers should be extracted.")
-
-        if num_extracted_bottlenecks < 0 and num_extracted_bottlenecks != -1:
-            raise ValueError("The only negative value allowed for `num_extracted_bottlenecks` is -1. This indicates that all bottlenecks should be extracted.")
-        
         self._num_extracted_layers = num_extracted_layers if num_extracted_layers > 0 else float('inf') 
         self._num_extracted_bottlenecks = num_extracted_bottlenecks if num_extracted_bottlenecks > 0 else float('inf') 
         

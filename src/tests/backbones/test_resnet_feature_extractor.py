@@ -93,7 +93,6 @@ class TestResnetFE(CustomModuleBaseTest):
         
         return bottleneck_counts
 
-
     def test_assumptions(self):
         """
         Verifies that all supported ResNet architectures follow the expected structure:
@@ -266,7 +265,6 @@ class TestResnetFE(CustomModuleBaseTest):
             self.assertEqual(str(fe_avg), str(orig_avg),
                             "AdaptiveAvgPool2d structure mismatch")
 
-    @unittest.skip("passed")
     def test_build_by_layer_1_total_layers(self):
         for arch in self.architectures:
             total_layers = self.layer_counts[arch]
@@ -297,7 +295,6 @@ class TestResnetFE(CustomModuleBaseTest):
                         f"Architecture {arch}, num_extracted_layers={i}: Expected {i} layers, got {actual_layers}"
                     )
 
-    @unittest.skip("passed")
     def test_build_by_layer_negative_values(self):
         for arch in self.architectures:
             total_layers = self.layer_counts[arch]
@@ -329,7 +326,7 @@ class TestResnetFE(CustomModuleBaseTest):
                     f"Architecture {arch}, num_extracted_layers={actual_layers}: Expected {total_layers} layers, got {actual_layers}"
                 )
                 
-    @unittest.skip("passed")
+    # @unittest.skip("passed")
     def test_build_by_layer_beyond_total_layers(self):
         for arch in self.architectures:
             total_layers = self.layer_counts[arch]
@@ -457,7 +454,7 @@ class TestResnetFE(CustomModuleBaseTest):
                 self.assertEqual(str(fe_avg), str(orig_avg),
                                 "AdaptiveAvgPool2d structure mismatch")
     
-    @unittest.skip("passed")
+    # @unittest.skip("passed")
     def test_build_by_bottleneck_1_total_bottlenecks(self):
         for arch in self.architectures:
             # Get total bottlenecks by summing across all layers
@@ -480,7 +477,7 @@ class TestResnetFE(CustomModuleBaseTest):
                     # Test the structure using the helper method
                     self._test_built_by_bottleneck(feature_extractor, i, add_global_avg)
 
-    @unittest.skip("passed")
+    # @unittest.skip("passed")
     def test_build_by_bottleneck_negative_values(self):
         for arch in self.architectures:
             total_bottlenecks = sum(self.bottleneck_counts[arch].values())
@@ -502,7 +499,7 @@ class TestResnetFE(CustomModuleBaseTest):
                 # Test the structure using the helper method
                 self._test_built_by_bottleneck(feature_extractor, total_bottlenecks, add_global_avg)
                     
-    @unittest.skip("passed")
+    # @unittest.skip("passed")
     def test_build_by_bottleneck_beyond_total_bottlenecks(self):
         for arch in self.architectures:
             total_bottlenecks = sum(self.bottleneck_counts[arch].values())
@@ -525,7 +522,7 @@ class TestResnetFE(CustomModuleBaseTest):
                     # Test the structure using the helper method
                     self._test_built_by_bottleneck(feature_extractor, total_bottlenecks, add_global_avg)
                     
-    @unittest.skip("passed")
+    # @unittest.skip("passed")
     def test_input_validation(self):
         """
         Tests that the ResnetFE class properly validates input parameters
@@ -642,7 +639,7 @@ class TestResnetFE(CustomModuleBaseTest):
         except ValueError as e:
             self.fail(f"ResnetFE raised ValueError unexpectedly when build_by_layer=False and num_extracted_bottlenecks=-1: {e}")
 
-    @unittest.skip("passed")
+    # @unittest.skip("passed")
     def test_forward_pass_layer(self):
         for arch in self.architectures:
             for t in [True, False]:
@@ -693,8 +690,319 @@ class TestResnetFE(CustomModuleBaseTest):
                     self.assertTrue(torch.allclose(output_fe, output_net), "The feature extractor construction does not seem to be correct")
 
 
-    # CUSTOME MODULE BASE TESTS
-    @unittest.skip("passed")
+    ################  test for freezing the feature extractor
+    
+    def _count_frozen_layer_blocks(self, feature_extractor: ResnetFE) -> int:
+        """
+        Counts the number of frozen layer blocks in a feature extractor.
+        
+        Args:
+            feature_extractor: The feature extractor to check
+            
+        Returns:
+            Number of frozen layer blocks
+        """
+        frozen_layer_count = 0
+        
+        for name, module in feature_extractor.named_children():
+            if ResnetFE.LAYER_BLOCK.lower() in name.lower():
+                # Check if all parameters in this layer block are frozen
+                all_frozen = True
+                for param in module.parameters():
+                    if param.requires_grad:
+                        all_frozen = False
+                        break
+                
+                if all_frozen:
+                    frozen_layer_count += 1
+                    
+        return frozen_layer_count
+    
+    def _count_frozen_bottlenecks(self, feature_extractor: ResnetFE) -> int:
+        """
+        Counts the number of frozen bottleneck blocks in a feature extractor.
+        
+        Args:
+            feature_extractor: The feature extractor to check
+            
+        Returns:
+            Number of frozen bottleneck blocks
+        """
+        frozen_bottleneck_count = 0
+        
+        for _, module in feature_extractor.named_modules():
+            if isinstance(module, Bottleneck):
+                # Check if all parameters in this bottleneck are frozen
+                all_frozen = True
+                for param in module.parameters():
+                    if param.requires_grad:
+                        all_frozen = False
+                        break
+                
+                if all_frozen:
+                    frozen_bottleneck_count += 1
+                    
+        return frozen_bottleneck_count
+
+    def _count_frozen_bottlenecks_by_layer(self, feature_extractor: ResnetFE) -> int:
+        """
+        Counts the number of frozen bottleneck blocks in a feature extractor.
+        
+        Args:
+            feature_extractor: The feature extractor to check
+            
+        Returns:
+            Number of frozen bottleneck blocks
+        """
+        frozen_bottleneck_count = 0
+        
+        for name, module in feature_extractor.named_modules():
+            if not ResnetFE.LAYER_BLOCK.lower() in name.lower():
+                continue
+                
+            for bl in module.children():
+                if not isinstance(bl, Bottleneck):
+                    continue
+
+                # Check if all parameters in this bottleneck are frozen
+                all_frozen = True
+
+                for param in bl.parameters():
+                    if param.requires_grad:
+                        all_frozen = False
+                        break
+            
+                if all_frozen:
+                    frozen_bottleneck_count += 1
+                
+        return frozen_bottleneck_count
+        
+    def _are_all_parameters_frozen(self, feature_extractor: ResnetFE) -> bool:
+        """
+        Checks if all parameters in the feature extractor are frozen.
+        
+        Args:
+            feature_extractor: The feature extractor to check
+            
+        Returns:
+            True if all parameters are frozen, False otherwise
+        """
+        for param in feature_extractor.parameters():
+            if param.requires_grad:
+                return False
+        return True
+        
+    def _are_all_parameters_trainable(self, feature_extractor: ResnetFE) -> bool:
+        """
+        Checks if all parameters in the feature extractor are trainable.
+        
+        Args:
+            feature_extractor: The feature extractor to check
+            
+        Returns:
+            True if all parameters are trainable, False otherwise
+        """
+        for param in feature_extractor.parameters():
+            if not param.requires_grad:
+                return False
+        return True
+    
+    # @unittest.skip("passed")
+    def test_invalid_freeze_configuration(self):
+        """
+        Tests that the combination of build_by_layer=False and freeze_by_layer=True raises an error.
+        """
+        # Test with each architecture
+        for arch in self.architectures:
+            with self.assertRaises(ValueError) as context:
+                ResnetFE(
+                    build_by_layer=False,
+                    num_extracted_layers=1,
+                    num_extracted_bottlenecks=1,
+                    freeze=False,
+                    freeze_by_layer=True,
+                    add_global_average=True,
+                    architecture=arch
+                )
+            
+            self.assertTrue(
+                "cannot be built by bottleneck and frozen by layer" in str(context.exception),
+                "Expected error message about incompatible build and freeze configuration"
+            )
+    
+    # @unittest.skip("passed")
+    def test_boolean_freeze_parameter(self):
+        """
+        Tests that when freeze=True, all parameters are frozen, and when freeze=False, 
+        all parameters are trainable, regardless of build_by_layer and extraction numbers.
+        """
+        for arch in self.architectures:
+            # Test various combinations
+            for build_by_layer in [True, False]:
+                # Skip invalid configuration
+                if not build_by_layer:
+                    freeze_by_layer_values = [False]
+                else:
+                    freeze_by_layer_values = [True, False]
+                    
+                for freeze_by_layer in freeze_by_layer_values:
+                    # Test with different numbers of extracted layers/bottlenecks
+                    extracted_layers = random.randint(1, 4)
+                    extracted_bottlenecks = random.randint(1, 10)
+                    
+                    # Test with freeze=True
+                    feature_extractor_frozen = ResnetFE(
+                        build_by_layer=build_by_layer,
+                        num_extracted_layers=extracted_layers,
+                        num_extracted_bottlenecks=extracted_bottlenecks,
+                        freeze=True,  # All parameters should be frozen
+                        freeze_by_layer=freeze_by_layer,
+                        add_global_average=True,
+                        architecture=arch
+                    )
+                    
+                    self.assertTrue(
+                        self._are_all_parameters_frozen(feature_extractor_frozen),
+                        f"All parameters should be frozen when freeze=True, but some are trainable. "
+                        f"Config: build_by_layer={build_by_layer}, freeze_by_layer={freeze_by_layer}, "
+                        f"extracted_layers={extracted_layers}, extracted_bottlenecks={extracted_bottlenecks}"
+                    )
+                    
+                    # Test with freeze=False
+                    feature_extractor_trainable = ResnetFE(
+                        build_by_layer=build_by_layer,
+                        num_extracted_layers=extracted_layers,
+                        num_extracted_bottlenecks=extracted_bottlenecks,
+                        freeze=False,  # All parameters should be trainable
+                        freeze_by_layer=freeze_by_layer,
+                        add_global_average=True,
+                        architecture=arch
+                    )
+                    
+                    self.assertTrue(
+                        self._are_all_parameters_trainable(feature_extractor_trainable),
+                        f"All parameters should be trainable when freeze=False, but some are frozen. "
+                        f"Config: build_by_layer={build_by_layer}, freeze_by_layer={freeze_by_layer}, "
+                        f"extracted_layers={extracted_layers}, extracted_bottlenecks={extracted_bottlenecks}"
+                    )
+    
+    # @unittest.skip("passed")
+    def test_freeze_layer_blocks(self):
+        """
+        Tests that when freeze=N, build_by_layer=True, and freeze_by_layer=True,
+        the number of frozen layer blocks is equal to N.
+        """
+        for arch in self.architectures:
+            total_layers = self.layer_counts[arch]
+            
+            # Test with different numbers of layers to freeze
+            for freeze_n in range(1, total_layers + 1):
+                feature_extractor = ResnetFE(
+                    build_by_layer=True,
+                    num_extracted_layers=total_layers,  # Extract all layers
+                    num_extracted_bottlenecks=1,  # This should be ignored
+                    freeze=freeze_n,  # Freeze N layer blocks
+                    freeze_by_layer=True,
+                    add_global_average=True,
+                    architecture=arch
+                )
+                
+                # Count frozen layer blocks
+                frozen_layers = self._count_frozen_layer_blocks(feature_extractor)
+                
+                self.assertEqual(
+                    frozen_layers,
+                    freeze_n,
+                    f"Architecture {arch}, freeze={freeze_n}: Expected {freeze_n} frozen layer blocks, got {frozen_layers}"
+                )
+                
+            # Test with freeze_n > total_layers (should freeze all layers)
+            freeze_n = total_layers + random.randint(1, 5)
+            feature_extractor = ResnetFE(
+                build_by_layer=True,
+                num_extracted_layers=total_layers,
+                num_extracted_bottlenecks=1,
+                freeze=freeze_n,
+                freeze_by_layer=True,
+                add_global_average=True,
+                architecture=arch
+            )
+            
+            frozen_layers = self._count_frozen_layer_blocks(feature_extractor)
+            
+            self.assertEqual(
+                frozen_layers,
+                total_layers,
+                f"Architecture {arch}, freeze={freeze_n}: Expected {total_layers} frozen layer blocks, got {frozen_layers}"
+            )
+    
+    # @unittest.skip("passed")
+    def test_freeze_bottlenecks_build_by_layer(self):
+        """
+        Tests that when freeze=N, build_by_layer=True, and freeze_by_layer=False,
+        the number of frozen bottleneck blocks is equal to N.
+        """
+        for arch in self.architectures:
+            # Get the total number of bottlenecks in this architecture
+            total_bottlenecks = sum(self.bottleneck_counts[arch].values())
+            
+            # Test with different numbers of bottlenecks to freeze
+            for freeze_n in range(1, min(total_bottlenecks, 10) + 1):  # Test with up to 10 bottlenecks for efficiency
+                feature_extractor = ResnetFE(
+                    build_by_layer=True,
+                    num_extracted_layers=len(self.bottleneck_counts[arch]),  # Extract all layers
+                    num_extracted_bottlenecks=1,  # This should be ignored
+                    freeze=freeze_n,  # Freeze N bottleneck blocks
+                    freeze_by_layer=False,
+                    add_global_average=True,
+                    architecture=arch
+                )
+                
+                # Count frozen bottleneck blocks
+                frozen_bottlenecks = self._count_frozen_bottlenecks_by_layer(feature_extractor)
+                
+                self.assertEqual(
+                    frozen_bottlenecks,
+                    freeze_n,
+                    f"Architecture {arch}, freeze={freeze_n}: Expected {freeze_n} frozen bottleneck blocks, got {frozen_bottlenecks}"
+                )
+    
+    # @unittest.skip("passed")
+    def test_freeze_bottlenecks_build_by_bottleneck(self):
+        """
+        Tests that when freeze=N, build_by_layer=False, and freeze_by_layer=False,
+        the number of frozen bottleneck blocks is equal to N.
+        """
+        for arch in self.architectures:
+            # Get the total number of bottlenecks in this architecture
+            total_bottlenecks = sum(self.bottleneck_counts[arch].values())
+            
+            # Test with different numbers of bottlenecks to freeze
+            for freeze_n in range(1, min(total_bottlenecks, 10) + 1):  # Test with up to 10 bottlenecks for efficiency
+                feature_extractor = ResnetFE(
+                    build_by_layer=False,
+                    num_extracted_layers=1,  # This should be ignored
+                    num_extracted_bottlenecks=total_bottlenecks,  # Extract all bottlenecks
+                    freeze=freeze_n,  # Freeze N bottleneck blocks
+                    freeze_by_layer=False,
+                    add_global_average=True,
+                    architecture=arch
+                )
+                
+                # Count frozen bottleneck blocks
+                frozen_bottlenecks = self._count_frozen_bottlenecks(feature_extractor)
+                
+                self.assertEqual(
+                    frozen_bottlenecks,
+                    freeze_n,
+                    f"Architecture {arch}, freeze={freeze_n}: Expected {freeze_n} frozen bottleneck blocks, got {frozen_bottlenecks}"
+                )
+
+    ##########################################################
+    # CUSTOM MODULE BASE TESTS
+    ##########################################################
+    
+    # @unittest.skip("passed")
     def test_eval_mode(self):
         """Test that eval mode is correctly set across the feature extractor"""
         for arch in self.architectures:  
@@ -711,7 +1019,6 @@ class TestResnetFE(CustomModuleBaseTest):
                     )
                     super()._test_eval_mode(feature_extractor)
 
-    @unittest.skip("passed")
     # @unittest.skip("passed")
     def test_train_mode(self):
         """Test that train mode is correctly set across the feature extractor"""
@@ -729,7 +1036,7 @@ class TestResnetFE(CustomModuleBaseTest):
                     )
                     super()._test_train_mode(feature_extractor)
 
-    @unittest.skip("passed")
+    # @unittest.skip("passed")
     def test_consistent_output_in_eval_mode(self):
         """Test that the feature extractor produces consistent output in eval mode"""
         for arch in self.architectures:  
@@ -747,7 +1054,7 @@ class TestResnetFE(CustomModuleBaseTest):
                     input_tensor = torch.randn(random.randint(1, 10), 3, 224, 224)
                     super()._test_consistent_output_in_eval_mode(feature_extractor, input_tensor)
 
-    @unittest.skip("passed")
+    # @unittest.skip("passed")
     def test_batch_size_one_in_eval_mode(self):
         """Test that the feature extractor handles batch size 1 in eval mode"""
         for arch in self.architectures:  
@@ -765,7 +1072,7 @@ class TestResnetFE(CustomModuleBaseTest):
                     input_tensor = torch.randn(1, 3, 224, 224)
                     super()._test_batch_size_one_in_eval_mode(feature_extractor, input_tensor)
     
-    @unittest.skip("passed")
+    # @unittest.skip("passed")
     def test_named_parameters_length(self):
         """Test that named_parameters and parameters have the same length"""
         for arch in self.architectures:  
@@ -782,7 +1089,7 @@ class TestResnetFE(CustomModuleBaseTest):
                     )
                     super()._test_named_parameters_length(feature_extractor)
 
-    @unittest.skip("passed")
+    # @unittest.skip("passed")
     def test_batch_size_one_in_train_mode(self):
         """Test that the feature extractor handles batch size 1 in train mode"""
         for arch in self.architectures:  
@@ -801,7 +1108,7 @@ class TestResnetFE(CustomModuleBaseTest):
                     super()._test_batch_size_one_in_train_mode(feature_extractor, input_tensor)
     
 
-    @unittest.skip("passed")
+    # @unittest.skip("passed")
     def test_batch_size_one_in_eval_mode(self):
         """Test that the feature extractor handles batch size 1 in eval mode"""
         for arch in self.architectures:  
@@ -820,7 +1127,7 @@ class TestResnetFE(CustomModuleBaseTest):
                     super()._test_batch_size_one_in_eval_mode(feature_extractor, input_tensor)
 
 
-    @unittest.skip("passed")
+    # @unittest.skip("passed")
     def test_to_device(self):
         """Test that the feature extractor can be moved to a device"""
         for arch in self.architectures:  
@@ -842,9 +1149,4 @@ class TestResnetFE(CustomModuleBaseTest):
 
 if __name__ == '__main__':
     pu.seed_everything(42)
-    unittest.main()
-    from mypt.backbones.resnetFE import ResnetFE 
-
-    # constructor, weights = ResnetFE.get_model(architecture=50)
-    # net = constructor(weights=weights.DEFAULT) 
-    # print(net)
+    unittest.main()    
