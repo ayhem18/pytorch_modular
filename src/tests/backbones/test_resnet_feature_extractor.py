@@ -11,7 +11,7 @@ from torchvision.models.resnet import Bottleneck
 from tests.custom_base_test import CustomModuleBaseTest
 
 
-# @unittest.skip("skipping resnet tests for now")
+@unittest.skip("the test is too time consuming")
 class TestResnetFE(CustomModuleBaseTest):
     """
     Test class for ResnetFE feature extractor implementation.

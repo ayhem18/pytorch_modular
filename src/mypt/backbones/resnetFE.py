@@ -10,11 +10,12 @@ in pretrained network. I am applying the same framework on the resnet architectu
 import warnings
 
 from torch import nn
-from collections import OrderedDict, defaultdict, deque
 from typing import Union, Tuple, Any
+from collections import OrderedDict, defaultdict, deque
+
+from torchvision.models.resnet import Bottleneck
 from torchvision.models import resnet50, resnet101, resnet152
 from torchvision.models import ResNet50_Weights, ResNet101_Weights, ResNet152_Weights
-from torchvision.models.resnet import Bottleneck
 
 
 from mypt.building_blocks.mixins.custom_module_mixins import WrapperLikeModuleMixin  

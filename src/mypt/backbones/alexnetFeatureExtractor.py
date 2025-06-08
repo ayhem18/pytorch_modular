@@ -4,10 +4,10 @@ This script contains functionalities to build classifiers on top of the pretrain
 
 import torch
 
-from typing import OrderedDict, Union, Tuple, List, Iterator
 from torch import nn
-from torchvision.models import alexnet, AlexNet_Weights
 from copy import deepcopy
+from torchvision.models import alexnet, AlexNet_Weights
+from typing import OrderedDict, Union, Tuple, List, Iterator
 
 
 class AlexNetFeatureExtractor(nn.Module):
@@ -15,7 +15,7 @@ class AlexNetFeatureExtractor(nn.Module):
     Since the architecture is relatively small, we can have more fine-grained control over its different components. The model will be split accordingly: 
     * conv1: [nn.Convolution layer, Relu, MaxPool]
     * conv2: [nn.Convolution layer, Relu, MaxPool]
-    * conv3: [nn.Convolution laye>r, Relu]
+    * conv3: [nn.Convolution layer, Relu]
     * conv4: [nn.Convolution layer, Relu]
     * conv5: [nn.Convolution layer, Relu, MaxPool]
     * adapool: Adaptive Pooling layer
