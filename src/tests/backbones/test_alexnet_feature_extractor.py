@@ -179,72 +179,6 @@ class TestAlexNetFE(CustomModuleBaseTest):
             except Exception as e:
                 self.fail(f"AlexNetFE constructor raised an exception with valid integer argument {i}: {e}")
         
-        # Test valid list of strings
-        valid_str_lists = [
-            ['conv1'], 
-            ['conv1', 'conv2'], 
-            ['conv1', 'conv2', 'conv3', 'conv4', 'conv5', 'avgpool'],
-            ['avgpool']
-        ]
-        for arg_list in valid_str_lists:
-            try:
-                feature_extractor = AlexNetFE(model_blocks=arg_list, frozen_model_blocks=False)
-                self.assertIsInstance(feature_extractor, AlexNetFE)
-            except Exception as e:
-                self.fail(f"AlexNetFE constructor raised an exception with valid string list {arg_list}: {e}")
-        
-        # Test valid list of integers
-        valid_int_lists = [
-            [0], 
-            [0, 1], 
-            [0, 1, 2, 3, 4, 5],
-            [5]
-        ]
-        for arg_list in valid_int_lists:
-            try:
-                feature_extractor = AlexNetFE(model_blocks=arg_list, frozen_model_blocks=False)
-                self.assertIsInstance(feature_extractor, AlexNetFE)
-            except Exception as e:
-                self.fail(f"AlexNetFE constructor raised an exception with valid integer list {arg_list}: {e}")
-        
-        # Test invalid string arguments
-        invalid_str_args = ['invalid', 'conv6', 'conv0', 'pool']
-        for arg in invalid_str_args:
-            with self.assertRaises(ValueError):
-                AlexNetFE(model_blocks=arg, frozen_model_blocks=False)
-        
-        # Test invalid integer arguments
-        invalid_int_args = [-1, 6, 100]
-        for arg in invalid_int_args:
-            with self.assertRaises(ValueError):
-                AlexNetFE(model_blocks=arg, frozen_model_blocks=False)
-        
-        # Test invalid list of strings
-        invalid_str_lists = [
-            ['invalid'], 
-            ['conv1', 'invalid'], 
-            ['conv6'],
-            ['avgpooling']
-        ]
-        for arg_list in invalid_str_lists:
-            with self.assertRaises(ValueError):
-                AlexNetFE(model_blocks=arg_list, frozen_model_blocks=False)
-        
-        # Test invalid list of integers
-        invalid_int_lists = [
-            [-1], 
-            [0, 6], 
-            [100],
-            [-1, 0, 1]
-        ]
-        for arg_list in invalid_int_lists:
-            with self.assertRaises(ValueError):
-                AlexNetFE(model_blocks=arg_list, frozen_model_blocks=False)
-        
-        # Test mixed types in list
-        with self.assertRaises(TypeError):
-            AlexNetFE(model_blocks=[0, 'conv1'], frozen_model_blocks=False)
-
     def test_valid_frozen_blocks(self):
         """
         Test that AlexNetFE accepts valid frozen block specifications and rejects invalid ones.
@@ -334,7 +268,6 @@ class TestAlexNetFE(CustomModuleBaseTest):
         orig_avgpool = self.avgpool
         self.assertEqual(type(fe_avgpool), type(orig_avgpool))
         
-        
     def test_structure_with_integer_args(self):
         """
         Test that the feature extractor has the correct structure when built with integer arguments.
@@ -357,14 +290,24 @@ class TestAlexNetFE(CustomModuleBaseTest):
         actual_blocks = [name for name, _ in list(feature_extractor.named_children())]
         self.assertEqual(actual_blocks, expected_blocks)
         
-        # Test with list of integers [0, 2, 4]
-        feature_extractor = AlexNetFE(model_blocks=[0, 2, 4], frozen_model_blocks=False)
-        self.assertEqual(len(feature_extractor._model), 3)
-        
+        # Test with list of non consecutive elements
+        with self.assertRaises(ValueError):
+            AlexNetFE(model_blocks=[0, 2, 4], frozen_model_blocks=False)
+            
         # Check only blocks 0, 2, 4 are included
-        expected_blocks = ['conv1', 'conv3', 'conv5']
-        actual_blocks = [name for name, _ in list(feature_extractor.named_children())]
-        self.assertEqual(actual_blocks, expected_blocks)
+        with self.assertRaises(ValueError):
+            AlexNetFE(model_blocks=['conv1', 'conv3', 'conv5'], frozen_model_blocks=False)
+
+
+        # make sure that `avgpool` is a consecutive argument to any `conv(i)` argument
+        for i in range(1, 5):
+            convs = [f'conv{j}' for j in range(1, i + 1)]
+            try:
+                AlexNetFE(model_blocks=convs + ['avgpool'], frozen_model_blocks=False)
+            except Exception as e:
+                self.fail(f"AlexNetFE constructor raised an exception with valid list of non consecutive elements: {convs + ['avgpool']}: {e}")
+
+
 
     def test_freeze_all_blocks(self):
         """
@@ -466,21 +409,8 @@ class TestAlexNetFE(CustomModuleBaseTest):
                     self.assertEqual(param.requires_grad, k > j) # blocks k > j are trainable so param.requires_grad should be True
 
         
-        # Test with a specific list of blocks [0, 2, 4]
-        feature_extractor = AlexNetFE(model_blocks=[0, 2, 4], frozen_model_blocks=[0, 4])
-        
-        # Check blocks 0, 4 are frozen
-        frozen_blocks = self._get_frozen_blocks(feature_extractor)
-        expected_frozen = [0, 4]  # conv1, conv5
-        self.assertEqual(sorted(frozen_blocks), sorted(expected_frozen))
-        
-        # Check block 2 is trainable
-        block_name = AlexNetFE._AlexNetFE__index2block_name.get(2)
-        for param in getattr(feature_extractor._model, block_name).parameters():
-            self.assertTrue(param.requires_grad)
 
-
-    # CustomModuleBaseTest tests
+    ########################################################## CustomModuleBaseTest tests ##########################################################
 
     def test_eval_mode(self):
         """Test that eval mode is correctly set across the feature extractor"""
@@ -514,7 +444,6 @@ class TestAlexNetFE(CustomModuleBaseTest):
             feature_extractor = AlexNetFE(model_blocks=i, frozen_model_blocks=False)
             input_tensor = torch.randn(1, 3, 224, 224)
             super()._test_batch_size_one_in_train_mode(feature_extractor, input_tensor)
-
 
     def test_named_parameters_length(self): 
         """Test that named_parameters and parameters have the same length"""

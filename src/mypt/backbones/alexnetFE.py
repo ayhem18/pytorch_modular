@@ -48,13 +48,28 @@ class AlexNetFE(WrapperLikeModuleMixin):
     __list_str_arguments = [f'conv{i}' for i in range(1, 6)] + ['avgpool']
     __str_arguments = ['conv_block', 'conv_block_avgpool'] + __list_str_arguments[:-1]
 
+
     @classmethod
-    def __verify_blocks(cls, blocks: Union[str, int, List[str], List[int]]) -> List[int]:
+    def __arguments_consecutive(cls, blocks: List) -> bool:
+        """
+        This function checks if the blocks are consecutive.
+        """
+        if isinstance(blocks[0], int):
+            return all([b == blocks[0] + i for i, b in enumerate(blocks)])
+
+        # there is a tricky detail with the 'string' argument
+        # the `avg_pool` argument can be seen as consecutive to any 'conv(i)' argument
+        if blocks[-1] == 'avgpool':
+            return cls.__arguments_consecutive([int(b[-1]) for b in blocks[:-1]])
+
+        return cls.__arguments_consecutive([int(b[-1]) for b in blocks])
+
+
+    @classmethod
+    def __verify_blocks(cls, blocks: Union[str, int, List[str], List[int]], consecutive_required: bool = True) -> List[int]:
         # the `blocks` argument can have one of the following typess / values:
         # 1. a string: representing the last layer of the architecture to add: either `all`, `conv_block`, `conv_block_adapool` or 'conv_{i}` where i from 1 to 5
         # 2. an integer: representing the index of the layer to add: from 0 to 5
-        # 3. a list of strings: representing the layers to add: must be one of the following'conv_{i}` where i from 1 to 5 or 'avgpool
-        # 4. a list of integers: representing the indices of the layers to add: from 0 to 5
         
         # make sure the argument is one of the expected arguments
         if isinstance(blocks, str):
@@ -76,9 +91,15 @@ class AlexNetFE(WrapperLikeModuleMixin):
                 raise ValueError(f"The initializer received an expected argument: {blocks}. integer arguments are expected to belong to the interval [0, 5].")
             
             return list(range(blocks + 1)) # return up to the block with index 'blocks'
-        
+
+
         if not isinstance(blocks, (List)):
             raise TypeError(f"The blocks argument is expected to be one of the following types: {str}, {int}, {List[str]}, {List[int]}. Found: {type(blocks)}")
+
+        # if the blocks argument is a list, then all elements must be of the same type
+        # if 'consecutive_required' is set to True, then all elements must be consecutive.
+        if consecutive_required and not cls.__arguments_consecutive(blocks):
+            raise ValueError(f"The elements of the `blocks` argument are expected to be consecutive so that that the channels of the convolutional blocks match without further manipulation. Found: {blocks}")
 
         # make sure all elements are of the same type
         if not (all([isinstance(b, type(blocks[0])) and isinstance(b, (str, int)) for b in blocks])):
@@ -178,7 +199,9 @@ class AlexNetFE(WrapperLikeModuleMixin):
             return list(range(6)) if frozen_blocks else []      
 
         # convert the frozen_blocks to a list of integers
-        fb_indices = self.__verify_blocks(frozen_blocks)
+        # the initial models cannot be a list (since they need to be consecutive for the architecture to be correct)
+        # the frozen blocks need not to be consecutive
+        fb_indices = self.__verify_blocks(frozen_blocks, consecutive_required=False) 
 
         # make sure that frozen_blocks is a subset of model_blocks
         if not set(fb_indices).issubset(self._model_blocks):

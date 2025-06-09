@@ -79,9 +79,9 @@ class AbstractCBM(WrapperLikeModuleMixin):
 
         # this function assumes that
         # both set_feature_extractor and set_concept_projection methods have been called
-        if (not hasattr(self, 'feature_extractor') or self.feature_extractor is None or
-                not hasattr(self, 'concept_projection') or self.concept_projection is None):
-            raise ValueError(f"The fields 'feature_extractor' and 'concept_projection'"
+        if (not hasattr(self, '_feature_extractor') or self._feature_extractor is None or
+                not hasattr(self, '_concept_projection') or self._concept_projection is None):
+            raise ValueError(f"The fields '_feature_extractor' and '_concept_projection'"
                              f"must be set before calling this function")
 
         if classifier is not None:
@@ -94,9 +94,6 @@ class AbstractCBM(WrapperLikeModuleMixin):
             dropout=dropout)
 
         return classifier
-
-
-
 
     def __init__(self,
                  input_shape: Tuple[int, int, int],
@@ -111,13 +108,11 @@ class AbstractCBM(WrapperLikeModuleMixin):
                  # those parameters can be passed to the inner setter methods to create the modules
                  num_concept_layers: int = 2, 
                  num_classification_layers: int = 2,
-                 dropout: Optional[float] = None,
-
-                 *args, **kwargs):
+                 dropout: Optional[float] = None
+                 ):
     
         # the initialization is common
-
-        super().__init__('_model', *args, **kwargs)
+        super().__init__('_model')
         
         self._input_shape = input_shape
         self._num_concepts = num_concepts
@@ -148,7 +143,7 @@ class AbstractCBM(WrapperLikeModuleMixin):
 
     
     def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-        concept_logits = self._concept_projection.forward(self._feature_extractor.forward(x).squeeze())
+        concept_logits = self._concept_projection.forward(self._flatten_layer(self._feature_extractor.forward(x)))
         class_logits = self._classification_head(concept_logits) 
         
         # make sure to return both types of logits

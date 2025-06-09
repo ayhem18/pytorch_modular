@@ -58,10 +58,9 @@ class ResnetCBM(AbstractCBM):
 
                  num_concept_layers: int = 2,
                  num_classification_layers: int = 2,
-                 concept_projection_dropout: Optional[float] = None,
+                 dropout: Optional[float] = None,
 
-
-                 *args, **kwargs):
+                 ):
 
         # before calling the super().__init__ method, it might be necessary to initialize a feature Extractor 
         feature_extractor = ResnetFE(build_by_layer=build_by_layer,
@@ -76,14 +75,15 @@ class ResnetCBM(AbstractCBM):
                          input_shape=input_shape,
                          num_concepts=num_concepts,
                          num_classes=num_classes,
+                         
                          feature_extractor=feature_extractor,
                          concept_projection=concept_projection,
                          classification_head=classification_head,
+        
                          num_concept_layers=num_concept_layers,
-                         concept_projection_dropout=concept_projection_dropout,
                          num_classification_layers=num_classification_layers,
-
-                         *args, **kwargs)
+                         dropout=dropout
+                         )
         
 
 

@@ -52,10 +52,7 @@ class AlexnetCBM(AbstractCBM):
 
                  num_concept_layers: int = 2,
                  num_classification_layers: int = 2,
-                 concept_projection_dropout: Optional[float] = None,
-
-
-                 *args, **kwargs):
+                 dropout: Optional[float] = None):
 
         # before calling the super().__init__ method, it might be necessary to initialize a feature Extractor 
         feature_extractor = AlexNetFE(model_blocks=alexnet_fe_blocks,
@@ -69,10 +66,8 @@ class AlexnetCBM(AbstractCBM):
                          concept_projection=concept_projection,
                          classification_head=classification_head,
                          num_concept_layers=num_concept_layers,
-                         concept_projection_dropout=concept_projection_dropout,
                          num_classification_layers=num_classification_layers,
-
-                         *args, **kwargs)
+                         dropout=dropout)
         
 
 
