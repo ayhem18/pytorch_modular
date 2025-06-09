@@ -63,8 +63,7 @@ class CbmWrapper(L.LightningModule):
         self.num_vis_images = num_vis_images
 
         # the concrete class has to implement the fields below
-        self._model: torch.nn.Module = None
-        self._transform, self._swag_model = None, None
+        self._model, self._transform, self._swag_model = None, None, None
 
         # create a field that will save all the data to be logged
         self.log_data = pd.DataFrame(data=[], columns=['image', 'predictions', 'labels', 'val_loss', 'epoch'])
@@ -598,26 +597,3 @@ def losses_per_cls(wrapper: CbmWrapper,
             concepts_loss_per_cls[label] /= label_count
 
         return concepts_loss_per_cls, cls_loss_per_cls
-
-
-    def __str__(self):
-        # the default __str__ function will display the self.__net module as well
-        # which might be confusing as .__net is definitely not part of the forward pass of the model
-        return self._model.__str__()
-    
-    def __repr__(self):
-        return self._model.__repr__() 
-    
-    def children(self) -> Iterator['Module']:
-        # not overloading this method will return to an iterator with 2 elements: self.__net and self.feature_extractor
-        return self._model.children()
-
-    def modules(self) -> Iterator[nn.Module]:
-        return self._model.modules()
-    
-    def named_children(self) -> Iterator[Tuple[str, Module]]:
-        return self._model.named_children()
-
-    def to(self, *args, **kwargs):
-        self._model = self._model.to(*args, **kwargs)
-        return self

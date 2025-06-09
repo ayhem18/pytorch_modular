@@ -3,9 +3,9 @@ This script contains a number of mixins to extend the functionalities of standar
 """
 import warnings
 
-from typing import Dict, Tuple
 from tqdm import tqdm
 from bisect import bisect
+from typing import Dict, Tuple
 
 class ClassificationDsWrapperMixin:
     # a class attribute saving the attributes that child classes are expected to have
@@ -86,4 +86,6 @@ class ClassificationDsWrapperMixin:
         final_index = cls_index_first_sample_original + (index - cls_index_first_sample_wrapper)
 
         return final_index
+
+
 

@@ -50,8 +50,7 @@ class BackboneCbmWrapper(CbmWrapper):
             self.automatic_optimization = False
 
         # the child class has to concretely implement these 2 fields
-        self._fe: torch.nn.Module = None 
-        self._model: torch.nn.Module = None
+        self._fe, self._model = None, None
 
 
     def training_step(self, batch, batch_idx, *args: Any, **kwargs: Any):

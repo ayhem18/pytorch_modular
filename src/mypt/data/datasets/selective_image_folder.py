@@ -1,0 +1,192 @@
+"""
+This script contains an implementation of a selective image folder dataset that only loads images 
+from a directory that are in a provided set of file names. This is useful for selective loading
+of images in a classification dataset.
+"""
+import os
+import torch
+from PIL import Image
+from typing import Set, Dict, Callable, Optional, List, Tuple
+import torchvision.transforms as tr
+from torch.utils.data import Dataset
+
+from mypt.shortcuts import P
+from mypt.code_utils import directories_and_files as dirf
+
+
+class SelectiveImageFolderDS(Dataset):
+    """
+    A dataset class that loads only specific files from an image classification folder structure.
+    The folder structure is expected to be:
+    root/
+        class1/
+            img1.jpg
+            img2.jpg
+            ...
+        class2/
+            img1.jpg
+            ...
+        ...
+    
+    The dataset will only load files whose names are in the provided set of filenames.
+    """
+    @classmethod
+    def load_sample(cls, sample_path: P):
+        # make sure the path is absolute
+        if not os.path.isabs(sample_path):
+            raise ValueError(f"The loader is expecting the sample path to be absolute.\nFound:{sample_path}")
+
+        # load image similar to torchvision's ImageFolder
+        with open(sample_path, "rb") as f:
+            img = Image.open(f)
+            return img.convert("RGB")
+
+    def __init__(self, 
+                 root: P,
+                 filenames: Set[str],
+                 transforms: List,
+                 is_class_dir: Optional[Callable[[str], bool]] = None,
+                 image_extensions: Optional[Tuple[str, ...]] = None
+                 ):
+        """
+        Initialize the selective image folder dataset.
+        
+        Args:
+            root: Path to the root directory containing class subdirectories
+            filenames: Set of filenames to include in the dataset
+            transforms: List of transformations to apply to images
+            is_class_dir: Optional function to determine if a subdirectory is a class directory.
+                          Default is to consider all subdirectories as class directories.
+            image_extensions: Optional tuple of valid image extensions. Default is to use 
+                             dirf.IMAGE_EXTENSIONS
+        """
+        super().__init__()
+
+        # Set default values
+        if image_extensions is None:
+            image_extensions = dirf.IMAGE_EXTENSIONS
+        
+        self.image_extensions = image_extensions
+
+        # Validate root directory
+        self.root = dirf.process_path(root, 
+                                     must_exist=True, 
+                                     dir_ok=True, 
+                                     file_ok=False)
+
+        # Store parameters
+        self.filenames = filenames
+        self.transforms = transforms
+        self.is_class_dir = is_class_dir or (lambda _: True)  # Default: consider all subdirectories as class dirs
+        
+        # Data structures for O(1) indexing
+        self.idx2path: Dict[int, str] = {}  # Maps index to file path
+        self.idx2class: Dict[int, int] = {}  # Maps index to class label
+        self.filename2idx: Dict[str, int] = {}  # Maps filename to index
+        self.classes: List[str] = []  # List of class names
+        self.class_to_idx: Dict[str, int] = {}  # Maps class name to class index
+        
+        # Build the mappings
+        self.build_dataset_mappings()
+        
+    def build_dataset_mappings(self):
+        """Build the mappings between indices, files, and classes for O(1) access."""
+        # First scan to identify valid classes
+        potential_class_dirs = [d for d in os.listdir(self.root) 
+                              if os.path.isdir(os.path.join(self.root, d)) and self.is_class_dir(d)]
+        
+        # sorting ensure reproducibility
+        self.classes = sorted(potential_class_dirs)
+        self.class_to_idx = {cls_name: i for i, cls_name in enumerate(self.classes)}
+        
+        # Validate file existence and uniqueness
+        found_files = set()
+        
+        # Scan the directory structure
+        idx = 0
+        for class_name in self.classes:
+            class_dir = os.path.join(self.root, class_name)
+            class_idx = self.class_to_idx[class_name]
+            
+            for filename in os.listdir(class_dir):
+                # Skip if not an image file with the right extension
+                if not any(filename.lower().endswith(ext) for ext in self.image_extensions):
+                    continue
+                
+                # Skip if not in the requested set of filenames
+                if filename not in self.filenames:
+                    continue
+                
+                # Check for duplicate filenames
+                if filename in found_files:
+                    raise ValueError(f"Duplicate filename detected: {filename}")
+                
+                found_files.add(filename)
+                
+                # Add to mappings
+                file_path = os.path.join(class_dir, filename)
+                self.idx2path[idx] = file_path
+                self.idx2class[idx] = class_idx
+                self.filename2idx[filename] = idx
+                
+                idx += 1
+        
+        # Check if all requested files were found
+        missing_files = self.filenames - found_files
+        
+        if len(missing_files) > 0:
+            raise ValueError(f"The following files were not found in the directory: {missing_files}")
+            
+        # Set the data count
+        self.data_count = idx
+        
+        # Verify we have at least one file
+        if self.data_count == 0:
+            raise ValueError("No valid files found in the dataset")
+    
+    def __getitem__(self, index: int) -> Tuple[torch.Tensor, int]:
+        """
+        Return the image and its class label for the given index.
+        
+        Args:
+            index: Index of the image to retrieve
+            
+        Returns:
+            Tuple of (image, class_label)
+        """
+        if index < 0 or index >= self.data_count:
+            raise IndexError(f"Index {index} out of range for dataset with {self.data_count} items")
+            
+        # Load the image
+        sample = self.load_sample(self.idx2path[index])
+        class_idx = self.idx2class[index]
+        
+        # Apply transforms
+        try:
+            compound_tr = tr.Compose(self.transforms)
+            sample = compound_tr(sample)
+        except Exception:
+            # Fallback approach, call each transformation sequentially
+            for t in self.transforms:
+                sample = t(sample)
+        
+        return sample, class_idx
+    
+    def __len__(self) -> int:
+        """Return the number of items in the dataset."""
+        return self.data_count
+    
+    def get_index_from_filename(self, filename: str) -> int:
+        """
+        Get the index for a given filename.
+        
+        Args:
+            filename: The filename to look up
+            
+        Returns:
+            The index of the file in the dataset
+            
+        Raises:
+            KeyError: If the filename is not in the dataset
+        """
+        return self.filename2idx[filename] 
