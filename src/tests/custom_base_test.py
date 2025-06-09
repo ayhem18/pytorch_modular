@@ -13,11 +13,52 @@ class CustomModuleBaseTest(unittest.TestCase):
         """Test that the module is an instance of torch.nn.Module. THIS IS VERY IMPORTANT"""
         self.assertIsInstance(block, torch.nn.Module, "Module should be an instance of torch.nn.Module")
 
+    # --- helper methods ---
+
     def _get_valid_input(self, *args, **kwargs) -> torch.Tensor:
         """
         Generate a random input tensor with the correct shape.
         """
         raise NotImplementedError("Subclasses must implement this method")
+
+    def _has_stochastic_layers(self, block: torch.nn.Module) -> bool:
+        """Check if the module contains dropout or batch normalization layers"""
+        for module in block.modules():
+            if isinstance(module, (torch.nn.Dropout, torch.nn.BatchNorm1d, torch.nn.BatchNorm2d, torch.nn.BatchNorm3d, torch.nn.GroupNorm, torch.nn.RMSNorm)):
+                return True
+        return False
+
+
+    def _test_outputs(self, output1: Union[torch.Tensor, Tuple, List], output2: Union[torch.Tensor, Tuple, List]) -> None:
+        """Test that outputs are identical"""
+
+        if isinstance(output1, torch.Tensor):
+            self.assertIsInstance(output2, torch.Tensor, "Output should be a tensor")
+            self.assertTrue(torch.allclose(output1, output2),
+                         "Module in eval mode should produce consistent outputs")
+            return 
+        
+        if isinstance(output1, (tuple, list)):
+            self.assertIsInstance(output2, (tuple, list), "Output should be a tuple or list")
+            self.assertEqual(len(output1), len(output2), "Output tuples or lists should have the same length")
+
+            for o1, o2 in zip(output1, output2):
+                self._test_outputs(o1, o2)
+                
+        else:
+            self.fail("Output should be a tensor, a tuple or a list")
+
+
+    def _set_arguments_to_device(self, arg: Union[torch.Tensor, Tuple, List, Any], device: str) -> Union[torch.Tensor, Tuple, List]:
+        """Set the arguments to CUDA"""
+        if isinstance(arg, torch.Tensor):
+            return arg.to(device)
+        elif isinstance(arg, (tuple, list)):
+            return [self._set_arguments_to_device(a, device) for a in arg]
+        return arg
+
+
+    # ---- tests ----
 
     def _test_eval_mode(self, block: torch.nn.Module) -> None:
         """Test that calling eval() sets training=False for all parameters and submodules"""
@@ -41,13 +82,6 @@ class CustomModuleBaseTest(unittest.TestCase):
         for module in block.modules():
             self.assertTrue(module.training, f"Submodule {module.__class__.__name__} should be in training mode")
     
-    def _has_stochastic_layers(self, block: torch.nn.Module) -> bool:
-        """Check if the module contains dropout or batch normalization layers"""
-        for module in block.modules():
-            if isinstance(module, (torch.nn.Dropout, torch.nn.BatchNorm1d, torch.nn.BatchNorm2d, torch.nn.BatchNorm3d, torch.nn.GroupNorm, torch.nn.RMSNorm)):
-                return True
-        return False
-    
     def _test_consistent_output_without_dropout_bn(self, block: torch.nn.Module, input_tensor: torch.Tensor) -> None:
         """
         Test that modules without dropout or batch normalization 
@@ -66,26 +100,6 @@ class CustomModuleBaseTest(unittest.TestCase):
         self.assertTrue(torch.allclose(output1, output2),
                          "Module without stochastic layers should produce consistent outputs")
     
-
-    def _test_outputs(self, output1: Union[torch.Tensor, Tuple, List], output2: Union[torch.Tensor, Tuple, List]) -> None:
-        """Test that outputs are identical"""
-
-        if isinstance(output1, torch.Tensor):
-            self.assertIsInstance(output2, torch.Tensor, "Output should be a tensor")
-            self.assertTrue(torch.allclose(output1, output2),
-                         "Module in eval mode should produce consistent outputs")
-            return 
-        
-        if isinstance(output1, (tuple, list)):
-            self.assertIsInstance(output2, (tuple, list), "Output should be a tuple or list")
-            self.assertEqual(len(output1), len(output2), "Output tuples or lists should have the same length")
-
-            for o1, o2 in zip(output1, output2):
-                self._test_outputs(o1, o2)
-                
-        else:
-            self.fail("Output should be a tensor, a tuple or a list")
-
     def _test_consistent_output_in_eval_mode(self, block: torch.nn.Module, input_tensor: torch.Tensor, *args, **kwargs) -> None:
         """Test that all modules in eval mode produce consistent output for the same input"""
         # Set to eval mode
@@ -156,16 +170,6 @@ class CustomModuleBaseTest(unittest.TestCase):
         self.assertEqual(len(param_names), len(set(param_names)),
                          "All parameters should have unique names")
     
-
-    def _set_arguments_to_device(self, arg: Union[torch.Tensor, Tuple, List, Any], device: str) -> Union[torch.Tensor, Tuple, List]:
-        """Set the arguments to CUDA"""
-        if isinstance(arg, torch.Tensor):
-            return arg.to(device)
-        elif isinstance(arg, (tuple, list)):
-            return [self._set_arguments_to_device(a, device) for a in arg]
-        return arg
-
-
     def _test_to_device(self, block: torch.nn.Module, input_tensor: torch.Tensor, *args, **kwargs) -> None:
         """Test that module can move between devices properly"""
         # Only run if CUDA is available

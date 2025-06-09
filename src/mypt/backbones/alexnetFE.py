@@ -6,12 +6,10 @@ The wrapper also allows to build a classifier on top of the extracted features.
 The wrapper is inspired is the analogous to the ResnetFE class.
 """
 
-import torch
 
 from torch import nn
-from copy import deepcopy
+from typing import OrderedDict, Union, List
 from torchvision.models import alexnet, AlexNet_Weights
-from typing import OrderedDict, Union, Tuple, List, Iterator
 
 from mypt.building_blocks.mixins.custom_module_mixins import WrapperLikeModuleMixin  
 
@@ -63,14 +61,21 @@ class AlexNetFE(WrapperLikeModuleMixin):
             # if the argument is a string, then it should be one of the arguments written above
             if blocks not in cls.__str_arguments:
                 raise ValueError(f"The initialize received an expected argument: {blocks}. string arguments are expected to be on of {cls.__str_arguments}.")    
+            if blocks == cls.__str_arguments[0]:
+                return list(range(5)) # return all blocks except the average pooling layer
+            elif blocks == cls.__str_arguments[1]:
+                return list(range(6)) # return all blocks
 
-            return list(range(6)) # return all blocks
-        
+            # at this points, `blocks` == [convX]
+            n = int(blocks[-1])
+            return list(range(n)) # return up to the block with index 'n'
+
+
         if isinstance(blocks, int):
             if not ( 0 <= blocks <= 5):
                 raise ValueError(f"The initializer received an expected argument: {blocks}. integer arguments are expected to belong to the interval [0, 5].")
             
-            return list(range(blocks)) # return up to the block with index 'blocks'
+            return list(range(blocks + 1)) # return up to the block with index 'blocks'
         
         if not isinstance(blocks, (List)):
             raise TypeError(f"The blocks argument is expected to be one of the following types: {str}, {int}, {List[str]}, {List[int]}. Found: {type(blocks)}")
@@ -147,42 +152,11 @@ class AlexNetFE(WrapperLikeModuleMixin):
         self.__set_convolutional_block(convolutional_block=convolutional_block)
         self._block_indices[5] = avgpool
 
-    def __build_model_str(self, blocks: str) -> nn.Module:
-        if blocks == self.__str_arguments[0]:
-            # blocks == ['conv_block']: use all convolutional blocks in the architecture
-            return nn.Sequential(OrderedDict([(self.__index2block_name[i], self._block_indices[i]) for i in range(5)]))
+
+    def _build_model(self) -> nn.Sequential:
+        # the self._model_blocks is a list of integers that represent the indices of the blocks to be used
+        return nn.Sequential(OrderedDict([(self.__index2block_name[i], self._block_indices[i]) for i in self._model_blocks]))
         
-        if blocks == self.__str_arguments[1]:
-            # blocks == ['conv_block_avgpool']: use all convolutional blocks in the architecture and the avgpool layer
-            return nn.Sequential(OrderedDict([(self.__index2block_name[block_index], block) for block_index, block in sorted(self._block_indices.items(), key=lambda x: x[0], reverse=False)]))
-                    
-        conv_index = int(blocks[-1])
-        return nn.Sequential(OrderedDict([(self.__index2block_name[i], self._block_indices[i]) for i in range(conv_index)]))
-
-    def __build_model_int(self, blocks: int) -> nn.Sequential:
-        """build a model up until the block with index 'blocks'
-        Args:
-            blocks (int): the index of the block to stop at
-
-        Returns:
-            nn.Sequential: the model up until the block with index 'blocks'
-        """
-        return nn.Sequential(OrderedDict([(self.__index2block_name[i], self._block_indices[i]) for i in range(blocks)]))
-
-    def _build_model(self, blocks: Union[str, List[str], int, List[int]]) -> nn.Sequential:
-        if isinstance(blocks, str):
-            return self.__build_model_str(blocks)
-        
-        if isinstance(blocks, int):
-            return self.__build_model_int(blocks)
-        
-        if isinstance(blocks, List):
-            if isinstance(blocks[0], str):
-                # map each name to the index
-                return nn.Sequential(OrderedDict([(b, self._block_indices[self.__block_name2index[b]]) for b in blocks]))
-            
-            return nn.Sequential(OrderedDict([(self.__index2block_name[b], self._block_indices[b]) for b in blocks]))
-
 
     def __verify_frozen_blocks(self,
                             frozen_blocks: Union[bool, str, List[str], int, List[int]]):
@@ -201,16 +175,16 @@ class AlexNetFE(WrapperLikeModuleMixin):
         """
 
         if isinstance(frozen_blocks, bool):
-            return        
+            return list(range(6)) if frozen_blocks else []      
 
         # convert the frozen_blocks to a list of integers
-        frozen_blocks = self.__verify_blocks(frozen_blocks)
+        fb_indices = self.__verify_blocks(frozen_blocks)
 
         # make sure that frozen_blocks is a subset of model_blocks
-        if not set(frozen_blocks).issubset(self._model_blocks):
+        if not set(fb_indices).issubset(self._model_blocks):
             raise ValueError(f"the frozen_blocks are expected to be part of the model blocks. Frozen_blocks: {frozen_blocks}, model_blocks: {self._model_blocks}")
 
-        return frozen_blocks
+        return fb_indices
 
 
     def _freeze_model(self) -> None:
@@ -238,8 +212,7 @@ class AlexNetFE(WrapperLikeModuleMixin):
         self._model_blocks = self.__verify_blocks(blocks=model_blocks)    
 
         # make sure the frozen blocks are passed correctly
-        self._frozen_blocks = self.__verify_frozen_blocks(model_blocks=self._model_blocks, 
-                                    frozen_blocks=frozen_model_blocks)
+        self._frozen_blocks = self.__verify_frozen_blocks(frozen_blocks=frozen_model_blocks)
         
         self._block_indices = {}
         self.__set_blocks()
@@ -248,7 +221,7 @@ class AlexNetFE(WrapperLikeModuleMixin):
         self._freeze_model()
 
         # build the model
-        self._model = self._build_model(model_blocks)
+        self._model = self._build_model()
 
         # delete the __net field and block_indices fields to reduce the size of the class
         del(self.__net)
