@@ -41,7 +41,7 @@ class BinaryConceptDataset(AbstractConceptDataset):
                  similarity: str,
                  top_k: int = 1,
                  label_generation_batch_size: int = 512,
-                 image_transform: tr = None,
+                 transforms: Optional[tr.Compose] = None,
                  remove_existing: bool = True,
                  image_extensions: Optional[List[str]] = None,
                  label_suffix: str = '_concept_label',
@@ -50,12 +50,22 @@ class BinaryConceptDataset(AbstractConceptDataset):
         Args:
             root: the root directory
             concepts: a list / dictionary of concepts used for all classes
-            image_transform: transformation applied on a given image
+            transforms: transformation applied on a given image
             remove_existing: whether to remove already-existing concept directories
+            label_generation_batch_size: the batch size used to generate the concept labels
+            label_dir: the directory where the concept labels are stored
+            similarity: the similarity metric used to generate the concept labels
+            top_k: the number of most similar concepts to be used for thresholding
+            label_generation_batch_size: the batch size used to generate the concept labels
+            transforms: transformation applied on a given image
+            remove_existing: whether to remove already-existing concept directories
+            image_extensions: the extensions of the images to be considered
+            label_suffix: the suffix of the concept labels
         """
+        
         super().__init__(root, 
                          filenames=filenames,
-                         image_transform=image_transform, 
+                         transforms=transforms, 
                          label_dir=label_dir,
                          remove_existing=remove_existing,
                          image_extensions=image_extensions,
@@ -66,19 +76,20 @@ class BinaryConceptDataset(AbstractConceptDataset):
 
         if similarity not in ['cosine', 'dot']: 
             raise ValueError(f"Please make sure the argument 'similarity' is in {['cosine', 'dot']}. Found: {similarity}")
-
         self.sim = similarity
 
         # create the label generator
         self.clip_generator = ClipLabelGenerator(similarity_as_cosine=self.sim == 'cosine')
         self.concepts_features = self.clip_generator.encode_concepts(concepts=self.concepts)
 
+
         self.top_k = top_k 
+
+        self.concepts_thresholds: torch.Tensor = None
 
         # let's compute the thresholds for each concept
         t_ready = False
         batch_size = label_generation_batch_size
-
         while not t_ready:
             try:
                 self._compute_thresholds(concepts_encoded=self.concepts_features, 
@@ -92,9 +103,9 @@ class BinaryConceptDataset(AbstractConceptDataset):
                 # make sure the batch_size is at least 32
                 batch_size = max(batch_size, 32)
                 
+        # having computed the thresholds, we can now generate the concept labels
         _labels_ready = False
         batch_size = label_generation_batch_size
-
         while not _labels_ready:
             try:
                 self._prepare_labels(batch_size=batch_size)
@@ -107,8 +118,7 @@ class BinaryConceptDataset(AbstractConceptDataset):
                 # make sure the batch_size is at least 32
                 batch_size = max(batch_size, 32)
             
-
-
+            
     def _class_concept_similarities(self, 
                                     cls_name: str,
                                     concepts_encoded: torch.Tensor, 
@@ -217,21 +227,13 @@ class BinaryConceptDataset(AbstractConceptDataset):
             # create the concept labels in batches
             for i in range(0, len(class_images), batch_size):
                 # extract the paths in the current batch
-                batch_file_paths = class_images[i:i + batch_size]
-                # extract the paths to the corresponding concept labels
-                batch_concept_labels_path = [self.get_concept_label_path(sample_path) for sample_path in batch_file_paths]
+                batch_file_paths = class_images[i:min(i + batch_size, len(class_images))]
 
-                # at this point, either all of them should be present or none of them
-                concept_labels_present = [os.path.exists(bclp) for bclp in batch_concept_labels_path]
+                batch_concept_labels_path = self._verify_full_batch_label_generation(batch_file_paths=batch_file_paths)
 
-                # we should make sure that either all files in the batch are associated with a concept label or none of them:
-                # this ensures reproducibility
-                if any(concept_labels_present) and not all(concept_labels_present):
-                    raise ValueError(f"Some files in the batch have concept labels and some do not. Please make sure the code is reproducible!!!")
-                
-                if all(concept_labels_present):
-                    # this means that these samples have been encountered before: no need to generate concept labels
-                    continue 
+                if batch_concept_labels_path is None:
+                    # this means the labels for this batch have already been computed... no need to repeat the process.
+                    continue
 
                 batch_labels = self._generate_concept_labels(batch_file_paths)
 

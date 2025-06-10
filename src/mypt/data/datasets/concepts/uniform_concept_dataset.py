@@ -105,7 +105,7 @@ class UniformConceptDataset(AbstractConceptDataset):
             class_indices = self._ds.class_to_indices[self._ds.class_to_idx[class_name]]
 
             for i in range(0, len(class_indices), batch_size):
-                batch_indices = class_indices[i:i + batch_size]
+                batch_indices = class_indices[i:min(i + batch_size, len(class_indices))]
 
                 batch_file_paths = [self._ds.idx2path[idx] for idx in batch_indices]
 

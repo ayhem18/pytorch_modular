@@ -85,6 +85,34 @@ class AbstractConceptDataset(ABC):
         """
         pass
     
+
+    def _verify_full_batch_label_generation(self, batch_file_paths: List[str]) -> Optional[List[str]]:
+        """
+        Verify that all the concept labels for a given batch of files are present.
+
+        Args:
+            batch_file_paths: the paths to the files in the batch
+
+        Returns:
+            True if all the concept labels are present, False otherwise
+        """
+        # extract the paths to the corresponding concept labels
+        batch_concept_labels_path = [self.get_concept_label_path(sample_path) for sample_path in batch_file_paths]
+
+        # at this point, either all of them should be present or none of them
+        concept_labels_present = [os.path.exists(bclp) for bclp in batch_concept_labels_path]
+
+        # we should make sure that either all files in the batch are associated with a concept label or none of them:
+        # this ensures reproducibility
+        if any(concept_labels_present) and not all(concept_labels_present):
+            raise ValueError(f"Some files in the batch have concept labels and some do not. Please make sure the code is reproducible!!!")
+        
+        if all(concept_labels_present):
+            return None
+        
+        return batch_concept_labels_path
+
+
     def get_concept_label_path(self, sample_path: str) -> str:
         """
         Get the path to the concept label for a given sample.

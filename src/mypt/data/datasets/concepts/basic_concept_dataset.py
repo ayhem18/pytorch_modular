@@ -28,7 +28,7 @@ class BasicConceptDataset(AbstractConceptDataset):
         cleanup()
 
         for i in range(0, len(self._ds), batch_size):
-            batch_file_paths = [self._ds.idx2path[idx] for idx in range(i, i + batch_size)]
+            batch_file_paths = [self._ds.idx2path[idx] for idx in range(i, min(i + batch_size, len(self._ds)))]
 
             batch_concept_labels_path = [self.get_concept_label_path(sample_path) for sample_path in batch_file_paths]
             
