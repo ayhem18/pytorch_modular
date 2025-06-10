@@ -2,22 +2,24 @@
 Tests for the AbstractConceptDataset class using unittest.
 """
 import os
-import shutil
 import torch
+import shutil
+import random
 import unittest
 import tempfile
+
 import numpy as np
 import torchvision.transforms as tr
 
 from PIL import Image
-from typing import Set, Dict, List, Tuple
+from typing import Set, List, Tuple, Optional
 
 from mypt.shortcuts import P
-from mypt.data.datasets.abstract_concept_dataset import AbstractConceptDataset
+from mypt.code_utils import directories_and_files as dirf
 from mypt.data.datasets.selective_image_folder import SelectiveImageFolderDS
+from mypt.data.datasets.concepts.abstract_concept_dataset import AbstractConceptDataset
 
-
-class ConcreteConceptDataset(AbstractConceptDataset):
+class ToyConceptsDS(AbstractConceptDataset):
     """
     Concrete implementation of AbstractConceptDataset for testing.
     """
@@ -28,25 +30,14 @@ class ConcreteConceptDataset(AbstractConceptDataset):
         Each concept label is a tensor with 5 random values.
         """
         # Iterate through all samples in the dataset
-        for idx in range(len(self.dataset)):
+        for idx in range(len(self._ds)):
             # Get the sample path
-            sample_path = self.dataset.idx2path[idx]
-            
-            # Get the class label
-            class_label = self.dataset.idx2class[idx]
-            
-            # Generate a concept vector (5 values between 0 and 1)
+            sample_path = self._ds.idx2path[idx]
+                        
+            # Generate a concept vector (5 values between 0 and 1)  
             # Use class_label to make concepts class-dependent for testing
-            concept_vector = torch.zeros(5)
-            concept_vector[class_label % 5] = 1.0
-            
-            # Add some random noise
-            noise = torch.rand(5) * 0.2
-            concept_vector = concept_vector + noise
-            
-            # Normalize
-            concept_vector = concept_vector / concept_vector.sum()
-            
+            concept_vector = torch.ones(10) * idx
+
             # Get the path to save the concept label
             concept_label_path = self.get_concept_label_path(sample_path)
             
@@ -59,10 +50,10 @@ class TestAbstractConceptDataset(unittest.TestCase):
     Test suite for the AbstractConceptDataset class.
     """
     
-    def create_toy_folder(
+    def create_toy_folder(      
         self,
         root_path: str,
-        class_names: List[str] = None,
+        class_names: Optional[List[str]] = None,
         samples_per_class: int = 5,
         image_size: Tuple[int, int] = (24, 24),
         seed: int = 42
@@ -114,8 +105,8 @@ class TestAbstractConceptDataset(unittest.TestCase):
     def setUp(self):
         """Set up a temporary directory for each test."""
         self.temp_dir = tempfile.mkdtemp()
-        self.images_dir = os.path.join(self.temp_dir, "images")
-        self.labels_dir = os.path.join(self.temp_dir, "labels")
+        self.images_dir = dirf.process_path(os.path.join(self.temp_dir, "images"), dir_ok=True, file_ok=False)
+        self.labels_dir =  dirf.process_path(os.path.join(self.temp_dir, "labels"), dir_ok=True, file_ok=False)
         
         # Create the toy dataset
         _, self.all_filenames = self.create_toy_folder(self.images_dir)
@@ -130,7 +121,8 @@ class TestAbstractConceptDataset(unittest.TestCase):
         """
         # Create the dataset
         transforms = [tr.ToTensor()]
-        dataset = ConcreteConceptDataset(
+
+        dataset = ToyConceptsDS(
             root=self.images_dir,
             filenames=self.all_filenames,
             transforms=transforms,
@@ -138,14 +130,15 @@ class TestAbstractConceptDataset(unittest.TestCase):
         )
         
         # Check that the dataset has the correct structure
-        self.assertIsInstance(dataset.dataset, SelectiveImageFolderDS)
+        self.assertIsInstance(dataset._ds, SelectiveImageFolderDS)
         self.assertEqual(dataset.label_dir, self.labels_dir)
-        self.assertEqual(dataset.label_suffix, '_concept')
+        self.assertEqual(dataset.label_suffix, 'concept_label')
         
         # Check that the label directory structure was created
         for class_name in dataset.classes:
             class_label_dir = os.path.join(self.labels_dir, class_name)
             self.assertTrue(os.path.exists(class_label_dir), f"Label directory for {class_name} not created")
+
 
     def test_concept_label_path(self):
         """
@@ -153,7 +146,7 @@ class TestAbstractConceptDataset(unittest.TestCase):
         """
         # Create the dataset
         transforms = [tr.ToTensor()]
-        dataset = ConcreteConceptDataset(
+        dataset = ToyConceptsDS(
             root=self.images_dir,
             filenames=self.all_filenames,
             transforms=transforms,
@@ -161,12 +154,12 @@ class TestAbstractConceptDataset(unittest.TestCase):
         )
         
         # Get a sample path
-        sample_path = dataset.dataset.idx2path[0]
+        sample_path = dataset._ds.idx2path[0]
         
         # Get the expected concept label path
         class_name = os.path.basename(os.path.dirname(sample_path))
         sample_filename = os.path.splitext(os.path.basename(sample_path))[0]
-        expected_path = os.path.join(self.labels_dir, class_name, f"{sample_filename}_concept.pt")
+        expected_path = os.path.join(self.labels_dir, class_name, f"{sample_filename}_concept_label.pt")
         
         # Call the method and compare
         actual_path = dataset.get_concept_label_path(sample_path)
@@ -176,45 +169,49 @@ class TestAbstractConceptDataset(unittest.TestCase):
         with self.assertRaises(ValueError):
             dataset.get_concept_label_path("relative/path/image.jpg")
 
+
     def test_prepare_labels_and_getitem(self):
         """
         Test that _prepare_labels creates concept labels and __getitem__ loads them correctly.
         """
-        # Create the dataset
-        transforms = [tr.ToTensor()]
-        dataset = ConcreteConceptDataset(
-            root=self.images_dir,
-            filenames=self.all_filenames,
-            transforms=transforms,
-            label_dir=self.labels_dir
-        )
-        
-        # Prepare the labels
-        dataset._prepare_labels()
-        
-        # Check that concept label files were created for all samples
-        for idx in range(len(dataset.dataset)):
-            sample_path = dataset.dataset.idx2path[idx]
-            concept_label_path = dataset.get_concept_label_path(sample_path)
-            self.assertTrue(os.path.exists(concept_label_path), 
-                           f"Concept label file not created: {concept_label_path}")
-        
-        # Test __getitem__
-        for idx in range(len(dataset)):
-            sample, concept_label, class_label = dataset[idx]
+        for _ in range(20):
+            dataset_filenames = set(random.sample(list(self.all_filenames), random.randint(1, len(self.all_filenames))))
             
-            # Check that sample is a tensor
-            self.assertIsInstance(sample, torch.Tensor)
+            dataset = ToyConceptsDS(
+                root=self.images_dir,
+                filenames=dataset_filenames,
+                transforms=[tr.ToTensor()],
+                label_dir=self.labels_dir
+            )
             
-            # Check that concept_label is a tensor with the right shape (5 values)
-            self.assertIsInstance(concept_label, torch.Tensor)
-            self.assertEqual(concept_label.shape, (5,))
+            # Prepare the labels
+            dataset._prepare_labels()
             
-            # Check that class_label is an integer
-            self.assertIsInstance(class_label, int)
+            # Check that concept label files were created for all samples
+            for idx in range(len(dataset)):
+                sample_path = dataset._ds.idx2path[idx]
+                concept_label_path = dataset.get_concept_label_path(sample_path)
+                self.assertTrue(os.path.exists(concept_label_path), 
+                            f"Concept label file not created: {concept_label_path}")
             
-            # Check that the class label matches the one from the inner dataset
-            self.assertEqual(class_label, dataset.dataset.idx2class[idx])
+            # Test __getitem__
+            for idx in range(len(dataset)):
+                sample, concept_label, class_label = dataset[idx]
+                
+                # Check that sample is a tensor
+                self.assertIsInstance(sample, torch.Tensor)
+                
+                # make sure each sample is associated with the correct concept label
+                self.assertIsInstance(concept_label, torch.Tensor)
+                self.assertEqual(concept_label.shape, (10,))
+                self.assertTrue(torch.allclose(concept_label, torch.ones(10) * idx))
+                
+                # Check that class_label is an integer
+                self.assertIsInstance(class_label, int)
+                
+                # Check that the class label matches the one from the inner dataset
+                self.assertEqual(class_label, dataset._ds.idx2class[idx])
+
 
     def test_missing_concept_label(self):
         """
@@ -222,7 +219,7 @@ class TestAbstractConceptDataset(unittest.TestCase):
         """
         # Create the dataset
         transforms = [tr.ToTensor()]
-        dataset = ConcreteConceptDataset(
+        dataset = ToyConceptsDS(
             root=self.images_dir,
             filenames=self.all_filenames,
             transforms=transforms,
@@ -241,7 +238,7 @@ class TestAbstractConceptDataset(unittest.TestCase):
         """
         # Create the dataset
         transforms = [tr.ToTensor()]
-        dataset = ConcreteConceptDataset(
+        dataset = ToyConceptsDS(
             root=self.images_dir,
             filenames=self.all_filenames,
             transforms=transforms,
@@ -249,13 +246,13 @@ class TestAbstractConceptDataset(unittest.TestCase):
         )
         
         # Test the classes property
-        self.assertEqual(dataset.classes, dataset.dataset.classes)
+        self.assertEqual(dataset.classes, dataset._ds.classes)
         
         # Test the class_to_idx property
-        self.assertEqual(dataset.class_to_idx, dataset.dataset.class_to_idx)
+        self.assertEqual(dataset.class_to_idx, dataset._ds.class_to_idx)
         
         # Test the len method
-        self.assertEqual(len(dataset), len(dataset.dataset))
+        self.assertEqual(len(dataset), len(dataset._ds))
 
 
 if __name__ == '__main__':

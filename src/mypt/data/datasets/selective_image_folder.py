@@ -113,12 +113,12 @@ class SelectiveImageFolderDS(Dataset):
         for class_name in self.classes:
             class_dir = os.path.join(self.root, class_name)
             class_idx = self.class_to_idx[class_name]
-            
-            for filename in os.listdir(class_dir):
-                # Skip if not an image file with the right extension
-                if not any(filename.lower().endswith(ext) for ext in self.image_extensions):
-                    continue
                 
+            # sort the files to ensure reproducibility
+            # and filter non-image files.
+            class_files_names = sorted([f for f in os.listdir(class_dir) if os.path.splitext(f.lower())[-1] in self.image_extensions])
+
+            for filename in class_files_names:
                 # Skip if not in the requested set of filenames
                 if filename not in self.filenames:
                     continue

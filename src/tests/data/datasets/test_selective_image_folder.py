@@ -12,7 +12,7 @@ import numpy as np
 
 from PIL import Image
 import torchvision.transforms as tr
-from typing import Set, List, Optional, Tuple
+from typing import Set, List, Optional, Tuple, Dict
 
 from mypt.shortcuts import P
 from mypt.code_utils import directories_and_files as dirf
@@ -86,6 +86,63 @@ class TestSelectiveImageFolderDS(unittest.TestCase):
     def tearDown(self):
         """Clean up the temporary directory after each test."""
         shutil.rmtree(self.temp_dir)
+
+    def test_class_samples_grouped(self):
+        """
+        Test that samples of the same class are grouped together in the dataset.
+        This is important for efficient batch processing and concept datasets.
+        """
+        # Create toy dataset with multiple classes
+        class_names = ['class1', 'class2', 'class3', 'class4', 'class5']
+        samples_per_class = 15
+        root_path, all_filenames = self.create_toy_folder(
+            self.temp_dir, 
+            class_names=class_names,
+            samples_per_class=samples_per_class
+        )
+        
+
+        for _ in range(20):
+            dataset_filenames = set(random.sample(list(all_filenames), random.randint(1, len(all_filenames))))
+            # Initialize the dataset with all filenames
+            dataset = SelectiveImageFolderDS(
+                root=root_path,
+                filenames=dataset_filenames,
+                transforms=[tr.ToTensor()]
+            )
+            
+            # Iterate through the dataset and collect class labels
+            class_labels = []
+            for idx in range(len(dataset)):
+                _, class_label = dataset[idx]
+                class_labels.append(class_label)
+                
+                # Verify the class label is correct by checking the file path
+                filepath = dataset.idx2path[idx]
+                class_dir = os.path.basename(os.path.dirname(filepath))
+                expected_class_idx = dataset.class_to_idx[class_dir]
+                self.assertEqual(class_label, expected_class_idx, 
+                                f"Class label mismatch for idx {idx}: got {class_label}, expected {expected_class_idx}")
+            
+            # Map each class label to a list of positions where it appears
+            class_positions: Dict[int, List[int]] = {}
+            for idx, label in enumerate(class_labels):
+                if label not in class_positions:
+                    class_positions[label] = []
+                class_positions[label].append(idx)
+            
+            # Check that each class's positions form a consecutive sequence
+            for label, positions in class_positions.items():
+                
+                is_consecutive = all(
+                    positions[i+1] - positions[i] == 1 
+                    for i in range(len(positions)-1)
+                )
+                
+                self.assertTrue(is_consecutive, 
+                                f"Positions for class {label} are not consecutive: {positions}")
+                
+        
 
     def test_selective_loading(self):
         """

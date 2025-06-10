@@ -5,12 +5,11 @@ alongside traditional class labels.
 import os
 import torch
 from abc import ABC, abstractmethod
-from typing import Set, Dict, Callable, Optional, List, Tuple
+from typing import Set, Dict, Callable, Optional, List, Tuple, Any
 
 from mypt.shortcuts import P
 from mypt.code_utils import directories_and_files as dirf
 from mypt.data.datasets.selective_image_folder import SelectiveImageFolderDS
-
 
 class AbstractConceptDataset(ABC):
     """
@@ -27,7 +26,7 @@ class AbstractConceptDataset(ABC):
                  filenames: Set[str],
                  transforms: List,
                  label_dir: P,
-                 label_suffix: str = '_concept',
+                 label_suffix: str = 'concept_label',
                  is_class_dir: Optional[Callable[[str], bool]] = None,
                  image_extensions: Optional[Tuple[str, ...]] = None
                  ):
@@ -44,7 +43,7 @@ class AbstractConceptDataset(ABC):
             image_extensions: Optional tuple of valid image extensions
         """
         # Create the inner SelectiveImageFolderDS instance
-        self.dataset = SelectiveImageFolderDS(
+        self._ds = SelectiveImageFolderDS(
             root=root,
             filenames=filenames,
             transforms=transforms,
@@ -52,6 +51,7 @@ class AbstractConceptDataset(ABC):
             image_extensions=image_extensions
         )
         
+
         # Store the label directory and suffix
         self.label_dir = dirf.process_path(label_dir,
                                          must_exist=False,  # We'll create it if it doesn't exist
@@ -59,15 +59,16 @@ class AbstractConceptDataset(ABC):
                                          file_ok=False)
         
         self.label_suffix = label_suffix
-
-
+        
+        # Create the label directory if it doesn't exist
+        if not os.path.exists(self.label_dir):
+            os.makedirs(self.label_dir, exist_ok=True)
+            
         # Create class subdirectories in the label directory
-        for class_name in self.dataset.classes:
+        for class_name in self._ds.classes:
             class_label_dir = os.path.join(self.label_dir, class_name)
-            dirf.process_path(class_label_dir,
-                              must_exist=False,
-                              dir_ok=True,
-                              file_ok=False)
+            if not os.path.exists(class_label_dir):
+                os.makedirs(class_label_dir, exist_ok=True)
         
     @abstractmethod
     def _prepare_labels(self) -> None:
@@ -92,7 +93,7 @@ class AbstractConceptDataset(ABC):
         if not os.path.isabs(sample_path):
             raise ValueError(f"The sample path must be absolute. Found: {sample_path}")
             
-        # Extract the class name from the sample path
+        # Extract the class name from the sample path   
         # The class is the name of the parent directory of the sample
         class_name = os.path.basename(os.path.dirname(sample_path))
         
@@ -119,10 +120,10 @@ class AbstractConceptDataset(ABC):
             Tuple of (image, concept_label, class_label)
         """
         # Get the sample and class label from the inner dataset
-        sample, class_label = self.dataset[index]
+        sample, class_label = self._ds[index]
         
         # Get the path to the sample
-        sample_path = self.dataset.idx2path[index]
+        sample_path = self._ds.idx2path[index]
         
         # Get the concept label path
         concept_label_path = self.get_concept_label_path(sample_path)
@@ -145,14 +146,14 @@ class AbstractConceptDataset(ABC):
         Returns:
             The dataset size
         """
-        return len(self.dataset)
+        return len(self._ds)
         
     @property
     def classes(self) -> List[str]:
         """Get the list of class names."""
-        return self.dataset.classes
+        return self._ds.classes
     
     @property
     def class_to_idx(self) -> Dict[str, int]:
         """Get the mapping from class names to indices."""
-        return self.dataset.class_to_idx 
+        return self._ds.class_to_idx 
