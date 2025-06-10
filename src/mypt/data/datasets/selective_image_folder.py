@@ -6,9 +6,9 @@ of images in a classification dataset.
 import os
 import torch
 from PIL import Image
-from typing import Set, Dict, Callable, Optional, List, Tuple
 import torchvision.transforms as tr
 from torch.utils.data import Dataset
+from typing import Set, Dict, Callable, Optional, List, Tuple
 
 from mypt.shortcuts import P
 from mypt.code_utils import directories_and_files as dirf
@@ -75,6 +75,9 @@ class SelectiveImageFolderDS(Dataset):
                                      file_ok=False)
 
         # Store parameters
+        if len(filenames) == 0:
+            raise ValueError("The provided set of filenames is empty. Please provide a non-empty set of filenames.")
+        
         self.filenames = filenames
         self.transforms = transforms
         self.is_class_dir = is_class_dir or (lambda _: True)  # Default: consider all subdirectories as class dirs
@@ -94,6 +97,9 @@ class SelectiveImageFolderDS(Dataset):
         # First scan to identify valid classes
         potential_class_dirs = [d for d in os.listdir(self.root) 
                               if os.path.isdir(os.path.join(self.root, d)) and self.is_class_dir(d)]
+        
+        if len(potential_class_dirs) == 0:
+            raise ValueError("No valid class directories found in the dataset. Please check the dataset folder and/or your filter condition.")
         
         # sorting ensure reproducibility
         self.classes = sorted(potential_class_dirs)
@@ -176,17 +182,4 @@ class SelectiveImageFolderDS(Dataset):
         """Return the number of items in the dataset."""
         return self.data_count
     
-    def get_index_from_filename(self, filename: str) -> int:
-        """
-        Get the index for a given filename.
-        
-        Args:
-            filename: The filename to look up
-            
-        Returns:
-            The index of the file in the dataset
-            
-        Raises:
-            KeyError: If the filename is not in the dataset
-        """
-        return self.filename2idx[filename] 
+    
