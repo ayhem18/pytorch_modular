@@ -3,6 +3,7 @@ This script contains an implementation of a selective image folder dataset that 
 from a directory that are in a provided set of file names. This is useful for selective loading
 of images in a classification dataset.
 """
+from collections import defaultdict
 import os
 import torch
 from PIL import Image
@@ -104,7 +105,8 @@ class SelectiveImageFolderDS(Dataset):
         # sorting ensure reproducibility
         self.classes = sorted(potential_class_dirs)
         self.class_to_idx = {cls_name: i for i, cls_name in enumerate(self.classes)}
-        
+        self.class_to_indices = defaultdict(lambda: [])
+
         # Validate file existence and uniqueness
         found_files = set()
         
@@ -131,9 +133,15 @@ class SelectiveImageFolderDS(Dataset):
                 
                 # Add to mappings
                 file_path = os.path.join(class_dir, filename)
+                # the sample index to the sample path
                 self.idx2path[idx] = file_path
+                # the sample index to the class index
                 self.idx2class[idx] = class_idx
+                # the sample file name to the sample index
                 self.filename2idx[filename] = idx
+
+                # save the indices of a single class in a dictionary                    
+                self.class_to_indices[class_idx].append(idx)
                 
                 idx += 1
         

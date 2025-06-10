@@ -28,7 +28,8 @@ class AbstractConceptDataset(ABC):
                  label_dir: P,
                  label_suffix: str = 'concept_label',
                  is_class_dir: Optional[Callable[[str], bool]] = None,
-                 image_extensions: Optional[Tuple[str, ...]] = None
+                 image_extensions: Optional[Tuple[str, ...]] = None,
+                 remove_existing: bool = False,
                  ):
         """
         Initialize the abstract concept dataset.
@@ -67,9 +68,14 @@ class AbstractConceptDataset(ABC):
         # Create class subdirectories in the label directory
         for class_name in self._ds.classes:
             class_label_dir = os.path.join(self.label_dir, class_name)
-            if not os.path.exists(class_label_dir):
-                os.makedirs(class_label_dir, exist_ok=True)
-        
+            dirf.process_path(class_label_dir,
+                              must_exist=False,
+                              dir_ok=True,
+                              file_ok=False)
+            if remove_existing:
+                # remove all the files in the class label directory
+                dirf.clear_directory(class_label_dir, lambda _ : True) 
+
     @abstractmethod
     def _prepare_labels(self) -> None:
         """

@@ -107,7 +107,7 @@ class ClipLabelGenerator:
         if not torch.allclose(imn, torch.ones(num_images, dtype=torch.float32), atol=10**-3):
             raise ValueError(f"The features are not normalized correctly")
 
-        # return the cosine difference between every image, concept tuple
+        # return the cosine difference for every image, concept tuple
         cosine_diffs = image_embeddings @ concepts_features.T
 
         return cosine_diffs
