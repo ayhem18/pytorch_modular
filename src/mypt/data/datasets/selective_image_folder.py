@@ -5,11 +5,12 @@ of images in a classification dataset.
 """
 from collections import defaultdict
 import os
+import warnings
 import torch
 from PIL import Image
 import torchvision.transforms as tr
 from torch.utils.data import Dataset
-from typing import Set, Dict, Callable, Optional, List, Tuple
+from typing import Iterable, Set, Dict, Callable, Optional, List, Tuple
 
 from mypt.shortcuts import P
 from mypt.code_utils import directories_and_files as dirf
@@ -41,6 +42,16 @@ class SelectiveImageFolderDS(Dataset):
         with open(sample_path, "rb") as f:
             img = Image.open(f)
             return img.convert("RGB")
+
+
+    def _process_filenames(self, filenames: Iterable[str]) -> Set[str]:        
+        filenames = set(filenames)
+        found_abs_paths = any(os.path.isabs(filename) for filename in filenames)
+        if found_abs_paths:
+            warnings.warn("The provided set of filenames contains absolute paths. They are converted to relative paths !!!")
+
+        filenames = set([os.path.basename(filename) for filename in filenames])
+        return filenames
 
     def __init__(self, 
                  root: P,
@@ -79,7 +90,7 @@ class SelectiveImageFolderDS(Dataset):
         if len(filenames) == 0:
             raise ValueError("The provided set of filenames is empty. Please provide a non-empty set of filenames.")
         
-        self.filenames = filenames
+        self.filenames = self._process_filenames(filenames)
         self.transforms = transforms
         self.is_class_dir = is_class_dir or (lambda _: True)  # Default: consider all subdirectories as class dirs
         

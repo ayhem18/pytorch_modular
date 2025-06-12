@@ -38,7 +38,6 @@ class BinaryConceptDataset(AbstractConceptDataset):
                  concepts: Union[Dict[str, List[str]], P],
                  filenames: Iterable[str],
                  label_dir: P,
-                 similarity: str,
                  top_k: int = 1,
                  label_generation_batch_size: int = 512,
                  transforms: Optional[tr.Compose] = None,
@@ -74,12 +73,8 @@ class BinaryConceptDataset(AbstractConceptDataset):
         # validate the concepts
         self.concepts = self._validate_concepts(concepts)
 
-        if similarity not in ['cosine', 'dot']: 
-            raise ValueError(f"Please make sure the argument 'similarity' is in {['cosine', 'dot']}. Found: {similarity}")
-        self.sim = similarity
-
         # create the label generator
-        self.clip_generator = ClipLabelGenerator(similarity_as_cosine=self.sim == 'cosine')
+        self.clip_generator = ClipLabelGenerator(similarity_as_cosine=False)
         self.concepts_features = self.clip_generator.encode_concepts(concepts=self.concepts)
 
 

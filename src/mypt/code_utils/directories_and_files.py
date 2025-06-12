@@ -2,11 +2,13 @@
 This scripts contains functionalities to manipulate files and directories
 """
 import os, zipfile, shutil, re, random
+
 import numpy as np
 
 from tqdm import tqdm
 from pathlib import Path
 from datetime import datetime
+from collections import deque
 from sklearn.model_selection import train_test_split
 from typing import Union, Optional, List, Dict, Callable, Tuple
 
@@ -21,7 +23,7 @@ DEFAULT_ERROR_MESSAGE = 'MAKE SURE THE passed path satisfies the condition passe
 IMAGE_EXTENSIONS = ['.png', '.jpeg', '.jpg']
 
 
-def process_path(save_path: Union[str, Path, None],
+def process_path(save_path: Optional[Union[str, Path]],
                       dir_ok: bool = True,
                       file_ok: bool = True,
                       must_exist: bool = False,
@@ -269,7 +271,7 @@ def image_directory(path: Union[Path, str], image_extensions = None) -> bool:
 
 
 def image_dataset_directory(path: Union[Path, str], 
-                            image_extensions: List[str] = None) -> bool:
+                            image_extensions: Optional[List[str]] = None) -> bool:
     if image_extensions is None:
         image_extensions = IMAGE_EXTENSIONS
     
@@ -443,3 +445,17 @@ def split_dir_disjoint(dir: Union[str, Path],
     
     if not copy and len(os.listdir(dir)) == 0:
         shutil.rmtree(dir)
+
+
+
+def get_all_files_names(directory: Union[str, Path]) -> List[str]:
+    # make sure the directory exists
+    directory = process_path(directory, dir_ok=True, file_ok=False, must_exist=True)
+    
+    file_names = deque() # use deque for efficient appends 
+
+    for r, _, files in os.walk(directory):
+        file_names.extend([os.path.join(r, f) for f in files])
+
+    return sorted(list(file_names))
+

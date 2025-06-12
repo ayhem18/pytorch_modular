@@ -5,7 +5,7 @@ alongside traditional class labels.
 import os
 import torch
 from abc import ABC, abstractmethod
-from typing import Set, Dict, Callable, Optional, List, Tuple, Any
+from typing import Iterable, Set, Dict, Callable, Optional, List, Tuple, Any
 
 from mypt.shortcuts import P
 from mypt.code_utils import directories_and_files as dirf
@@ -23,7 +23,7 @@ class AbstractConceptDataset(ABC):
     
     def __init__(self,
                  root: P,
-                 filenames: Set[str],
+                 filenames: Iterable[str],
                  transforms: List,
                  label_dir: P,
                  label_suffix: str = 'concept_label',
@@ -43,6 +43,8 @@ class AbstractConceptDataset(ABC):
             is_class_dir: Optional function to determine if a subdirectory is a class directory
             image_extensions: Optional tuple of valid image extensions
         """
+
+                
         # Create the inner SelectiveImageFolderDS instance
         self._ds = SelectiveImageFolderDS(
             root=root,

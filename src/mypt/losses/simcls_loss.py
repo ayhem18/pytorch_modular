@@ -9,7 +9,6 @@ from torch import nn
 from typing import List, Tuple
 
 
-from ..code_utilities import pytorch_utilities as pu
 from ..similarities.cosineSim import CosineSim
 
 class SimClrLoss(nn.Module):
