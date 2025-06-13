@@ -10,7 +10,7 @@ in pretrained network. I am applying the same framework on the resnet architectu
 import warnings
 
 from torch import nn
-from typing import Union, Tuple, Any
+from typing import Callable, Union, Tuple, Any
 from collections import OrderedDict, defaultdict, deque
 
 from torchvision.models.resnet import Bottleneck
@@ -333,7 +333,7 @@ class ResnetFE(WrapperLikeModuleMixin):
         # load the original network
         constructor, weights = self.get_model(architecture=architecture)
         self.__net = constructor(weights=weights.DEFAULT) 
-        self.default_transform = weights.DEFAULT.transforms()
+        self._transform = weights.DEFAULT.transforms()
 
         self.bottleneck_per_layer = defaultdict(lambda: 0)
 
@@ -349,3 +349,7 @@ class ResnetFE(WrapperLikeModuleMixin):
 
 
     # the implementations of most methods are overridden by the WrapperLikeModuleMixin class
+
+    @property
+    def transform(self) -> Callable:
+        return self._transform

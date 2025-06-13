@@ -2,10 +2,9 @@
 This script contains an abstract base class for datasets that use concept labels 
 alongside traditional class labels.
 """
-import os
-import torch
+import os, torch
 from abc import ABC, abstractmethod
-from typing import Iterable, Set, Dict, Callable, Optional, List, Tuple, Any
+from typing import Iterable, Dict, Callable, Optional, List, Tuple
 
 from mypt.shortcuts import P
 from mypt.code_utils import directories_and_files as dirf
@@ -63,10 +62,7 @@ class AbstractConceptDataset(ABC):
         
         self.label_suffix = label_suffix
         
-        # Create the label directory if it doesn't exist
-        if not os.path.exists(self.label_dir):
-            os.makedirs(self.label_dir, exist_ok=True)
-            
+
         # Create class subdirectories in the label directory
         for class_name in self._ds.classes:
             class_label_dir = os.path.join(self.label_dir, class_name)

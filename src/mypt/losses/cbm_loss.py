@@ -7,6 +7,8 @@ import torch
 from torch import nn
 from typing import Union, Tuple
 
+import torch.version
+
 
 class CBMLoss(nn.Module):
     """
@@ -70,7 +72,7 @@ class BinaryCBMLoss(nn.Module):
                 y_pred: torch.Tensor,
                 y_true: torch.Tensor,
                 return_all: bool = False, 
-                reduce_loss: bool = True) -> Union[nn.Module, Tuple[nn.Module, nn.Module, nn.Module]]:
+                reduce_loss: bool = True) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]:
 
         if not torch.all(torch.logical_or(input=(concepts_true == 1), other=(concepts_true == 0))):
             raise ValueError(f"the concept label should contain the values 1 or 0.")
@@ -80,21 +82,35 @@ class BinaryCBMLoss(nn.Module):
             raise ValueError((f"The concepts labels and concepts logits are expected to be of matching shapes\n"
                               f"Found logits: {concept_preds.shape}, labels: {concepts_true.shape}"))
 
-        # the shape of the output greatly depends on 
+        # the shape of the output depends on the 'reduce_loss' parameter
+        # if reduce_loss is True, the output will be a scalar: the loss by each sample in the batch will be averaged
+        # otherwise, all losses will be returned together
+
         reduction = ('mean' if reduce_loss else 'none')
-        class_loss = nn.CrossEntropyLoss(reduction=reduction)(input=y_pred, target=y_true)
-        
-        # set the reduction parameter in the 'loss' associated with concepts
-        concepts_loss_object = nn.BCEWithLogitsLoss(reduction=reduction)
-        concept_loss = concepts_loss_object(concept_preds, concepts_true)
+        class_loss = nn.CrossEntropyLoss(reduction=reduction).forward(input=y_pred, target=y_true)
+        concepts_loss = nn.BCEWithLogitsLoss(reduction=reduction).forward(input=concept_preds, target=concepts_true)
 
-        # if reduction is set to 'none' we will compute the mean at each element of the batch
-        concept_loss = torch.mean(concept_loss, dim=1) if reduction == 'none' else concept_loss
+        # reduce_loss = True
+        # class_loss of shape (1,)
+        # concepts_loss of shape (1,)
 
-        final_loss = class_loss + self.alpha * concept_loss
-        # final_loss = concept_loss
+
+        # reduce_loss = False
+        # class_loss of shape (batch_size,) 
+        # concepts_loss of shape (batch_size, num_concepts)
+
+        # so if even when reduce_loss is True, the concepts_loss should be averaged across concepts
+        concepts_loss = torch.mean(concepts_loss, dim=1) if reduction == 'none' else concepts_loss
+
+        # the expression below works 
+        final_loss = class_loss + self.alpha * concepts_loss
+
+        if reduce_loss:
+            assert final_loss.ndim == 0, f"The final loss should be a scalar when reduce_loss = True. Found: {final_loss.shape}"
+        else:
+            assert final_loss.shape == (concept_preds.shape[0],), f"The final loss should be a vector when reduce_loss = False. Found: {final_loss.shape}"
 
         if return_all:
-            return concept_loss, class_loss, final_loss
+            return concepts_loss, class_loss, final_loss
 
         return final_loss

@@ -169,6 +169,25 @@ class SelectiveImageFolderDS(Dataset):
         if self.data_count == 0:
             raise ValueError("No valid files found in the dataset")
     
+    def _apply_transforms(self, sample: torch.Tensor) -> torch.Tensor:
+        """
+        Apply the transforms to the sample.
+        """
+        if isinstance(self.transforms, Callable):
+            callable_tr = self.transforms
+        elif isinstance(self.transforms, Iterable):
+            callable_tr = tr.Compose(self.transforms)
+        else:
+            raise TypeError(f"The transforms must be a callable, an iterable of callables, or a torchvision.transforms.Compose object. Found: {type(self.transforms)}")
+
+        output = callable_tr(sample)
+
+        if not isinstance(output, torch.Tensor):
+            raise TypeError(f"The output of the transforms must be a torch.Tensor. Found: {type(output)}")
+
+        return output
+
+
     def __getitem__(self, index: int) -> Tuple[torch.Tensor, int]:
         """
         Return the image and its class label for the given index.
@@ -187,14 +206,10 @@ class SelectiveImageFolderDS(Dataset):
         class_idx = self.idx2class[index]
         
         # Apply transforms
-        try:
-            compound_tr = tr.Compose(self.transforms)
-            sample = compound_tr(sample)
-        except Exception:
-            # Fallback approach, call each transformation sequentially
-            for t in self.transforms:
-                sample = t(sample)
+        sample = self._apply_transforms(sample)
         
+
+
         return sample, class_idx
     
     def __len__(self) -> int:
