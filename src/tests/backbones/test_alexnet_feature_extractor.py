@@ -1,8 +1,8 @@
-import unittest
 import torch
 import random
+import unittest
 from torch import nn
-from typing import List, Dict, Union, Any
+from typing import List, Union
 from collections import OrderedDict
 
 from mypt.backbones.alexnetFE import AlexNetFE

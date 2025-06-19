@@ -6,7 +6,7 @@ from tqdm import tqdm
 
 from tests.custom_base_test import CustomModuleBaseTest
 from mypt.building_blocks.attention.multi_head_att import MultiHeadAttentionLayer
-from tests.building_blocks.attention.naive_implementations.multi_head_att import NaiveMHA
+from tests.building_blocks.attention.naive_implementations.naive_multi_head_att import NaiveMHA
 
 
 class TestMultiHeadAttentionLayer(CustomModuleBaseTest):

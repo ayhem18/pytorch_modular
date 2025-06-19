@@ -1,3 +1,4 @@
+from pyparsing import Optional
 import torch
 import numpy as np
 
@@ -30,7 +31,7 @@ class NaiveSHA(nn.Module):
             for j in range(sequence_length):
                 # Set values above the main diagonal to -inf (future tokens)
                 if j > i:
-                    mask[i, j] = float('-inf')
+                    mask[i, j] = 0
                 # Set values on or below the main diagonal to 1 (current and past tokens)
                 else:
                     mask[i, j] = 1.0
@@ -87,11 +88,11 @@ class NaiveSHA(nn.Module):
         for b in range(batch_size):
             batch_product = query_key_product[b]
 
-            sign_mask = torch.sign(batch_product) 
-            sign_mask += (sign_mask == 0).type(torch.float32)
+            # sign_mask = torch.sign(batch_product) 
+            # sign_mask += (sign_mask == 0).type(torch.float32)
 
             # make sure to apply both the mask and the sign mask
-            batch_product_masked = batch_product * sign_mask * mask 
+            batch_product_masked = batch_product.masked_fill(mask[b], float("-inf"))
             
             # apply softmax
             weights[b] = torch.softmax(batch_product_masked, dim=-1)
@@ -122,7 +123,7 @@ class NaiveSHA(nn.Module):
 
         return output
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
         """
         Process the input using naive loops instead of vectorized operations.
         
@@ -146,7 +147,13 @@ class NaiveSHA(nn.Module):
         query_key_product = self._key_query_product(q, k)
         
         # Create attention mask
-        mask = self._create_attention_mask(sequence_length)
+        if mask is None:
+            mask = self._create_attention_mask(sequence_length).unsqueeze(0).expand(batch_size, -1, -1).to(q.device)
+
+        else:
+            # the mask if of the shape batch_size, sequence_length (0 s represent padded tokens)
+            # expand the mask to the shape (batch_size, sequence_length, sequence_length)
+            mask = mask.unsqueeze(-1).expand(batch_size, sequence_length, sequence_length).to(q.device)
         
         # Compute attention weights
         weights = self._compute_weights(query_key_product, mask)

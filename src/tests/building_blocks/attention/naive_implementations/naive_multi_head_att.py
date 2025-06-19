@@ -3,7 +3,7 @@ from torch import nn
 from typing import List
 import numpy as np
 
-from tests.building_blocks.attention.naive_implementations.single_head_att import NaiveSHA
+from tests.building_blocks.attention.naive_implementations.naive_single_head_att import NaiveSHA
 
 class NaiveMHA(nn.Module):
     def __init__(self, d_model: int, num_heads: int, value_dim: int, key_dim: int) -> None:
@@ -34,7 +34,7 @@ class NaiveMHA(nn.Module):
         # Output projection
         self.W_o = nn.Linear(value_dim * num_heads, d_model)
     
-    def _create_attention_mask(self, sequence_length: int) -> torch.Tensor:
+    def _create_attention_mask(self, batch_size: int, sequence_length: int) -> torch.Tensor:
         """
         Create a causal attention mask without vectorization.
         """
@@ -47,7 +47,7 @@ class NaiveMHA(nn.Module):
                 if j > i:  # Future position
                     mask[i, j] = float('-inf')
         
-        return mask
+        return mask.unsqueeze(0).expand(batch_size, -1, -1)
     
     def _key_query_product(self, q: torch.Tensor, k: torch.Tensor) -> torch.Tensor:
         """
@@ -145,10 +145,12 @@ class NaiveMHA(nn.Module):
         Returns:
             Output tensor [batch_size, seq_len, d_model]
         """
+
+        # since this implementation is for testing purposes only, I do not move the vectors to the same device
         batch_size, seq_len, _ = x.shape
         
         # Create attention mask
-        mask = self._create_attention_mask(seq_len)
+        mask = self._create_attention_mask(batch_size, seq_len)
         
         # Process each head separately and collect outputs
         head_outputs = [None for _ in range(self.num_heads)]

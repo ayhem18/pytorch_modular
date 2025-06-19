@@ -16,12 +16,14 @@ class BasicLinearBlock(WrapperLikeModuleMixin, CloneableModuleMixin):
     _RELU = 'relu'
     _LEAKY_RELU = 'leaky_relu'
     _TANH = 'tanh'
-    _ACTIVATIONS = [_RELU, _LEAKY_RELU, _TANH]
+    _GELU = 'gelu'
+    _ACTIVATIONS = [_RELU, _LEAKY_RELU, _TANH, _GELU]
 
     _ACTIVATION_MAP = { # since activatin layers do not have weights, it is not an issue to have actual instances instead of classes in this mapping
                        _RELU: nn.ReLU(inplace=True), 
                        _TANH: nn.Tanh(),
-                       _LEAKY_RELU: nn.LeakyReLU(inplace=True)
+                       _LEAKY_RELU: nn.LeakyReLU(inplace=True),
+                       _GELU: nn.GELU()
                        }
 
     def __init__(self,

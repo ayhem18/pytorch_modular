@@ -7,7 +7,7 @@ import torch
 import numpy as np
 
 from torch import nn
-from typing import Iterator
+from typing import Iterator, Optional
 
 
 class SingleHeadAttentionLayer(nn.Module):
@@ -25,27 +25,26 @@ class SingleHeadAttentionLayer(nn.Module):
         self.W_o = nn.Linear(value_dim, input_dimension) # head_i = W_o * v_i
 
 
-    def _create_attention_mask(self, sequence_length: int) -> torch.Tensor:
+    def _create_attention_mask(self, batch_size: int, sequence_length: int) -> torch.Tensor:
         """
         Creates a mask of shape (sequence_length, sequence_length) with the lower triangular part set to 1 and the upper triangular part set to 0
         """
         # the mask must satisfy the following conditions: 
         # of the shape (sequence_length, sequence_length)
-        # the lower triangular part (including the diagonal) must be 1 and the upper triangular part must be -inf
+        # the lower triangular part (including the diagonal) must be 1 and the upper triangular part must be 0
 
         # create the ones part
         ones_mask = torch.tril(torch.ones(size=(sequence_length, sequence_length)), diagonal=0) 
 
-        # create the inf part 
-        inf_mask = torch.ones(size=(sequence_length, sequence_length)) * float("-inf") 
+        # create the zeros part 
+        zero_mask = torch.zeros(size=(sequence_length, sequence_length)) 
         
-        inf_mask = torch.tril(inf_mask, diagonal=-1).T 
+        zero_mask = torch.tril(zero_mask, diagonal=-1).T 
 
         # combine the two masks
+        mask = zero_mask + ones_mask
 
-        mask = inf_mask + ones_mask
-
-        return mask
+        return mask.unsqueeze(0).expand(batch_size, -1, -1)
 
     def _key_query_product(self, q: torch.Tensor, k: torch.Tensor) -> torch.Tensor:
         """
@@ -66,14 +65,15 @@ class SingleHeadAttentionLayer(nn.Module):
         """
         batch_size, sequence_length, __ = query_key_product.shape 
         
+        query_key_product = query_key_product.masked_fill(mask, float("-inf"))
+
         # so funny enough, neg_value * (-inf) = +inf, which means the product has mixed inf values
         # messing up the softmax operation
-
         # so I need to create a mask with the signs of the query_key_product while mapping any zeros to 1 (so that 0 * -inf = -inf (masked zeros))
-        sign_mask = torch.sign(query_key_product)
-        sign_mask += (sign_mask == 0).type(torch.float32)
+        # sign_mask = torch.sign(query_key_product)
+        # sign_mask += (sign_mask == 0).type(torch.float32)
 
-        weights = torch.softmax(query_key_product * sign_mask * mask, dim=2)
+        weights = torch.softmax(query_key_product, dim=2)
 
         if weights.shape != (batch_size, sequence_length, sequence_length):
             raise ValueError(f"The shape of the weights tensor is expected to be (batch_size, sequence_length, sequence_length), but got {weights.shape}")
@@ -93,7 +93,7 @@ class SingleHeadAttentionLayer(nn.Module):
 
         return output
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
         """
         x is expected to be of the shape (batch_size, sequence_length, input_dimension)
         """
@@ -109,7 +109,14 @@ class SingleHeadAttentionLayer(nn.Module):
 
         query_key_product = self._key_query_product(q, k)
 
-        mask = self._create_attention_mask(sequence_length).unsqueeze(0).expand(batch_size, -1, -1).to(q.device)# make sure to move the mask to the same device as the arguments
+        # if the mask is not provided, create a default mask (this assumes that no sequence is padded)
+        if mask is None:
+            mask = self._create_attention_mask(batch_size, sequence_length).to(q.device)# make sure to move the mask to the same device as the arguments
+
+        else:
+            # the mask if of the shape batch_size, sequence_length (0 s represent padded tokens)
+            # expand the mask to the shape (batch_size, sequence_length, sequence_length)
+            mask = mask.unsqueeze(-1).expand(batch_size, sequence_length, sequence_length).to(q.device)
 
         weights = self._compute_weights(query_key_product, mask)
         
