@@ -7,7 +7,7 @@ import torch
 import numpy as np
 
 from torch import nn
-from typing import Generator
+from typing import Iterator
 
 
 class SingleHeadAttentionLayer(nn.Module):
@@ -70,7 +70,7 @@ class SingleHeadAttentionLayer(nn.Module):
         # messing up the softmax operation
 
         # so I need to create a mask with the signs of the query_key_product while mapping any zeros to 1 (so that 0 * -inf = -inf (masked zeros))
-        sign_mask = torch.sign(query_key_product) 
+        sign_mask = torch.sign(query_key_product)
         sign_mask += (sign_mask == 0).type(torch.float32)
 
         weights = torch.softmax(query_key_product * sign_mask * mask, dim=2)
@@ -109,7 +109,7 @@ class SingleHeadAttentionLayer(nn.Module):
 
         query_key_product = self._key_query_product(q, k)
 
-        mask = self._create_attention_mask(sequence_length).unsqueeze(0).expand(batch_size, -1, -1)
+        mask = self._create_attention_mask(sequence_length).unsqueeze(0).expand(batch_size, -1, -1).to(q.device)# make sure to move the mask to the same device as the arguments
 
         weights = self._compute_weights(query_key_product, mask)
         
@@ -127,7 +127,7 @@ class SingleHeadAttentionLayer(nn.Module):
         return [("W_q", self.W_q), ("W_k", self.W_k), ("W_v", self.W_v), ("W_o", self.W_o)]
 
 
-    def modules(self) -> Generator[nn.Module]:
+    def modules(self) -> Iterator[nn.Module]:
         # yield the actual module as per Pytorch conventions
         yield self
 
