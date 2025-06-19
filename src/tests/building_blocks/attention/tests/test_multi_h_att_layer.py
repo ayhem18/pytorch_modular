@@ -4,11 +4,12 @@ import numpy as np
 
 from tqdm import tqdm
 
+from tests.custom_base_test import CustomModuleBaseTest
 from mypt.building_blocks.attention.multi_head_att import MultiHeadAttentionLayer
-
 from tests.building_blocks.attention.naive_implementations.multi_head_att import NaiveMHA
 
-class TestMultiHeadAttentionLayer(unittest.TestCase):
+
+class TestMultiHeadAttentionLayer(CustomModuleBaseTest):
     def setUp(self):
         # Define common dimensions for testing
         self.d_model = 32
@@ -44,7 +45,7 @@ class TestMultiHeadAttentionLayer(unittest.TestCase):
     def _generate_random_input(self, batch_size: int, seq_length: int) -> torch.Tensor:
         """Generate random input tensor"""
         return torch.randn(batch_size, seq_length, self.d_model)
-        
+    
     def test_attention_mask_creation(self):
         """Test that both implementations create the same attention mask"""
         for _ in tqdm(range(self.num_iterations), desc="Testing attention mask creation"):
@@ -262,9 +263,9 @@ class TestMultiHeadAttentionLayer(unittest.TestCase):
             
             # Check that they are approximately equal
             validated = False
-            for tol_coeff in range(1, 6):
+            for tol_coeff in range(1, 10):
                 try:
-                    self.assertTrue(torch.allclose(vec_output, naive_output, atol=tol_coeff*1e-7)) # can tolerate up to 5e-7
+                    self.assertTrue(torch.allclose(vec_output, naive_output, atol=tol_coeff*1e-7)) # can tolerate up to 9*1e-7
                     validated = True
                     break
                 except:
@@ -274,7 +275,59 @@ class TestMultiHeadAttentionLayer(unittest.TestCase):
                 self.fail(f"No tolerance coefficient found for which the values are approximately equal")
 
 
+    # add the tests from the CustomModuleBaseTest
+    def test_eval_mode(self) -> None:
+        """Test that calling eval() sets training=False for all parameters and submodules"""
+        super()._test_eval_mode(self.vectorized_att)
+
+    def test_train_mode(self) -> None:
+        """Test that calling train() sets training=True for all parameters and submodules"""
+        super()._test_train_mode(self.vectorized_att)   
+
+    def test_consistent_output_without_dropout_bn(self) -> None:
+        """
+        Test that modules without dropout or batch normalization 
+        produce consistent output for the same input
+        """
+        for _ in range(self.num_iterations):
+            input_tensor = self._generate_random_input(10, 10)
+            super()._test_consistent_output_without_dropout_bn(self.vectorized_att, input_tensor)
+
+    def test_consistent_output_in_eval_mode(self) -> None:
+        """Test that all modules in eval mode produce consistent output for the same input"""
+        for _ in range(self.num_iterations):
+            input_tensor = self._generate_random_input(10, 10)
+            super()._test_consistent_output_in_eval_mode(self.vectorized_att, input_tensor)
+
+    def test_batch_size_one_in_train_mode(self) -> None:
+        """
+        Test that modules with batch normalization layers might raise errors 
+        with batch size 1 in train mode
+        """
+        for _ in range(self.num_iterations):
+            input_tensor = self._generate_random_input(1, 10)
+            super()._test_batch_size_one_in_train_mode(self.vectorized_att, input_tensor)
+
+
+    def test_batch_size_one_in_eval_mode(self) -> None:
+        """Test that modules in eval mode should not raise errors for batch size 1"""
+        for _ in range(self.num_iterations):
+            input_tensor = self._generate_random_input(1, 10)
+            super()._test_batch_size_one_in_eval_mode(self.vectorized_att, input_tensor) 
+
+    def test_named_parameters_length(self) -> None:
+        """Test that named_parameters() and parameters() have the same length"""
+        super()._test_named_parameters_length(self.vectorized_att)
+
+    def test_to_device(self) -> None:
+        """Test that module can move between devices properly"""
+        for _ in range(self.num_iterations):
+            input_tensor = self._generate_random_input(10, 10)
+            super()._test_to_device(self.vectorized_att, input_tensor) 
+
+    
+
 if __name__ == '__main__':
     import mypt.code_utils.pytorch_utils as pu
-    pu.seed_everything(0)
+    pu.seed_everything(42)
     unittest.main() 

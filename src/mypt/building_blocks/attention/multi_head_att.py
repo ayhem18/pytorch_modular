@@ -124,7 +124,7 @@ class MultiHeadAttentionLayer(nn.Module):
 
         query_key_product = self._key_query_product(q, k)
 
-        mask = self._create_attention_mask(sequence_length).unsqueeze(0).unsqueeze(0).expand(batch_size, self.num_heads, -1, -1)
+        mask = self._create_attention_mask(sequence_length).unsqueeze(0).unsqueeze(0).expand(batch_size, self.num_heads, -1, -1).to(q.device)
 
         weights = self._compute_weights(query_key_product, mask)
 
