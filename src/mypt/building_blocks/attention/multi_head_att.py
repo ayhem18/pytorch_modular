@@ -7,6 +7,7 @@ import torch
 import numpy as np
 
 from torch import nn
+from typing import Optional
 
 
 class MultiHeadAttentionLayer(nn.Module):
@@ -30,28 +31,36 @@ class MultiHeadAttentionLayer(nn.Module):
 
         self.W_o = nn.Linear(value_dim * num_heads, d_model) 
 
-    def _create_attention_mask(self, sequence_length: int) -> torch.Tensor:
+    # --------------------------------------------------------------
+    # Mask helpers (aligned with SingleHeadAttentionLayer)
+    # --------------------------------------------------------------
+
+    def _causal_attention_mask(self, batch_size: int, sequence_length: int) -> torch.Tensor:
+        """Boolean lower-triangular mask broadcast over heads.
+        Shape: (B, 1, S, S) so it can be broadcast against (B,H,S,S)."""
+        causal = torch.tril(torch.ones(sequence_length, sequence_length, dtype=torch.bool))
+        return causal.unsqueeze(0).unsqueeze(1).expand(batch_size, self.num_heads, -1, -1)
+
+    def create_final_mask(self, causal_mask: torch.Tensor, pad_mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+        """Combine causal and optional padding mask.
+
+        causal_mask: (B,1,S,S) bool
+        pad_mask:    (B,S) with 1/True keep, 0/False mask (optional)
+        Returns: (B,1,S,S) bool mask ready to broadcast across heads.
         """
-        Creates a mask of shape (sequence_length, sequence_length) with the lower triangular part set to 1 and the upper triangular part set to 0
-        """
-        # the mask must satisfy the following conditions: 
-        # of the shape (sequence_length, sequence_length)
-        # the lower triangular part (including the diagonal) must be 1 and the upper triangular part must be -inf
+        if pad_mask is None:
+            return causal_mask
 
-        # create the ones part
-        ones_mask = torch.tril(torch.ones(size=(sequence_length, sequence_length)), diagonal=0) 
+        pad_bool = pad_mask.to(dtype=torch.bool)
+        b, s = pad_bool.shape
+        row = pad_bool.unsqueeze(-1).unsqueeze(1).expand(b, self.num_heads, s, s)
+        col = pad_bool.unsqueeze(1).unsqueeze(1).expand(b, self.num_heads, s, s)
+        return causal_mask & row & col
 
-        # create the inf part 
-        inf_mask = torch.ones(size=(sequence_length, sequence_length)) * float("-inf") 
-        
-        inf_mask = torch.tril(inf_mask, diagonal=-1).T 
-
-        # combine the two masks
-
-        mask = inf_mask + ones_mask
-
-        return mask
-
+    def _process_final_mask(self, final_mask: torch.Tensor) -> torch.Tensor:
+        """Convert boolean mask to float mask (-inf / 1) for multiplication."""
+        float_mask = final_mask.type(torch.float32)
+        return float_mask.masked_fill(~final_mask, float("-inf")).masked_fill(final_mask, 1)
 
     def _key_query_product(self, q: torch.Tensor, k: torch.Tensor) -> torch.Tensor:
         """
@@ -60,9 +69,6 @@ class MultiHeadAttentionLayer(nn.Module):
 
         query_key_product = torch.matmul(q, k.permute(0, 1, 3, 2)) / np.sqrt(self.key_dim).item()
 
-        # compute the dot product of the query and key matrices 
-        # query_key_product = torch.bmm(q, k.permute(0, 1, 3, 2)) / np.sqrt(self.key_dim).item()
-        
         # the result must be of the shape (batch_size, num_heads, sequence_length, sequence_length)
         if query_key_product.shape != (batch_size, self.num_heads, sequence_length, sequence_length):
             raise ValueError(f"The shape of the query_key_product tensor is expected to be (batch_size, num_heads, sequence_length, sequence_length), but got {query_key_product.shape}")
@@ -71,25 +77,13 @@ class MultiHeadAttentionLayer(nn.Module):
 
 
 
-    def _compute_weights(self, query_key_product: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
-        """
-        """
-        # the query_key_product must be of the shape (batch_size, num_heads, sequence_length, sequence_length)
-
-        batch_size, _, sequence_length, _ = query_key_product.shape 
-        
-        # so funny enough, neg_value * (-inf) = +inf, which means the product has mixed inf values
-        # messing up the softmax operation
-
-        # so I need to create a mask with the signs of the query_key_product while mapping any zeros to 1 (so that 0 * -inf = -inf (masked zeros))
-        sign_mask = torch.sign(query_key_product) 
+    def _compute_weights(self, query_key_product: torch.Tensor, final_mask: torch.Tensor) -> torch.Tensor:
+        """Compute softmax weights using float mask (-inf/1)."""
+        sign_mask = torch.sign(query_key_product)
         sign_mask += (sign_mask == 0).type(torch.float32)
-
-        weights = torch.softmax(query_key_product * sign_mask * mask, dim=-1)
-
-        if weights.shape != (batch_size, self.num_heads, sequence_length, sequence_length):
-            raise ValueError(f"The shape of the weights tensor is expected to be (batch_size, num_heads, sequence_length, sequence_length), but got {weights.shape}")
-
+        weights = torch.softmax(query_key_product * sign_mask * final_mask, dim=-1)
+        # Replace NaNs with 0 (rows fully masked)
+        weights = weights.masked_fill(torch.isnan(weights), 0)
         return weights
 
 
@@ -107,7 +101,7 @@ class MultiHeadAttentionLayer(nn.Module):
         return output
 
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
         """
         """
         batch_size, sequence_length, __ = x.shape 
@@ -124,9 +118,11 @@ class MultiHeadAttentionLayer(nn.Module):
 
         query_key_product = self._key_query_product(q, k)
 
-        mask = self._create_attention_mask(sequence_length).unsqueeze(0).unsqueeze(0).expand(batch_size, self.num_heads, -1, -1).to(q.device)
+        causal_mask = self._causal_attention_mask(batch_size, sequence_length).to(q.device)
+        final_mask_bool = self.create_final_mask(causal_mask, mask.to(q.device) if mask is not None else None)
+        final_mask = self._process_final_mask(final_mask_bool)
 
-        weights = self._compute_weights(query_key_product, mask)
+        weights = self._compute_weights(query_key_product, final_mask)
 
         new_v = self._compute_new_v(weights, v)
 
@@ -142,8 +138,8 @@ class MultiHeadAttentionLayer(nn.Module):
         return output
 
 
-    def __call__(self, x: torch.Tensor) -> torch.Tensor:
-        return self.forward(x)
+    def __call__(self, x: torch.Tensor, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+        return self.forward(x, mask)
 
     def children(self) -> list[nn.Module]:
         return [self.W_q, self.W_k, self.W_v, self.W_o] 

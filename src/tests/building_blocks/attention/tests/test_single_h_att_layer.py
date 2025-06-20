@@ -305,7 +305,7 @@ class TestSingleHeadAttentionLayer(CustomModuleBaseTest):
                 for i in range(seq_length):
                     for j in range(seq_length):
                         allowed = vec_final[b, i, j].item()
-                        if j > i or pad_mask[b, i] == 0 or pad_mask[b, j] == 0:
+                        if j > i or not(pad_mask[b, i]) or not(pad_mask[b, j]):
                             self.assertFalse(allowed)
                         else:
                             self.assertTrue(allowed)

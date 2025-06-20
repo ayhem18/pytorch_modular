@@ -1,6 +1,6 @@
 import torch
 from torch import nn
-from typing import List
+from typing import List, Optional
 import numpy as np
 
 from tests.building_blocks.attention.naive_implementations.naive_single_head_att import NaiveSHA
@@ -34,20 +34,29 @@ class NaiveMHA(nn.Module):
         # Output projection
         self.W_o = nn.Linear(value_dim * num_heads, d_model)
     
-    def _create_attention_mask(self, batch_size: int, sequence_length: int) -> torch.Tensor:
-        """
-        Create a causal attention mask without vectorization.
-        """
-        # Create a matrix filled with ones
-        mask = torch.ones(size=(sequence_length, sequence_length))
-        
-        # Iterate through each position and mask future positions
+    # --------------------------------------------------------------
+    # Mask helpers
+    # --------------------------------------------------------------
+
+    def _causal_attention_mask(self, batch_size: int, sequence_length: int) -> torch.Tensor:
+        causal = torch.zeros(sequence_length, sequence_length, dtype=torch.bool)
         for i in range(sequence_length):
             for j in range(sequence_length):
-                if j > i:  # Future position
-                    mask[i, j] = float('-inf')
-        
-        return mask.unsqueeze(0).expand(batch_size, -1, -1)
+                causal[i, j] = j <= i
+        return causal.unsqueeze(0).unsqueeze(1).expand(batch_size, self.num_heads, -1, -1)
+
+    def create_final_mask(self, causal_mask: torch.Tensor, pad_mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+        if pad_mask is None:
+            return causal_mask
+        pad_bool = pad_mask.to(dtype=torch.bool)
+        b, s = pad_bool.shape
+        row = pad_bool.unsqueeze(-1).unsqueeze(1).expand(b, self.num_heads, s, s)
+        col = pad_bool.unsqueeze(1).unsqueeze(1).expand(b, self.num_heads, s, s)
+        return causal_mask & row & col
+
+    def _process_final_mask(self, final_mask: torch.Tensor) -> torch.Tensor:
+        float_mask = final_mask.type(torch.float32)
+        return float_mask.masked_fill(~final_mask, float("-inf")).masked_fill(final_mask, 1)
     
     def _key_query_product(self, q: torch.Tensor, k: torch.Tensor) -> torch.Tensor:
         """
@@ -80,17 +89,20 @@ class NaiveMHA(nn.Module):
         return result
 
     
-    def _compute_weights(self, query_key_product: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+    def _compute_weights(self, query_key_product: torch.Tensor, final_mask: torch.Tensor) -> torch.Tensor:
         """
         Apply mask and compute attention weights without vectorization.
         
         Args:
             query_key_product: Tensor [batch_size, seq_len, seq_len]
-            mask: Attention mask [seq_len, seq_len]
+            final_mask: Attention mask [batch_size, seq_len, seq_len]
             
         Returns:
             Attention weights [batch_size, seq_len, seq_len]
         """        
+        if query_key_product.shape != final_mask.shape:
+            raise ValueError(f"query_key_product and final_mask must have the same shape, but got {query_key_product.shape} and {final_mask.shape}")
+        
         batch_size, _, _ = query_key_product.shape
         
         # Initialize the output tensor
@@ -98,16 +110,12 @@ class NaiveMHA(nn.Module):
         
         # Apply mask and compute softmax for each row in each batch
         for b in range(batch_size):
-            batch_product = query_key_product[b]
-
-            sign_mask = torch.sign(batch_product) 
+            sign_mask = torch.sign(query_key_product[b])
             sign_mask += (sign_mask == 0).type(torch.float32)
-
-            # make sure to apply both the mask and the sign mask
-            batch_product_masked = batch_product * sign_mask * mask 
-            
-            # apply softmax
-            weights[b] = torch.softmax(batch_product_masked, dim=-1)
+            masked_scores = query_key_product[b] * sign_mask * final_mask[b]
+            row = torch.softmax(masked_scores, dim=-1)
+            row = row.masked_fill(torch.isnan(row), 0)
+            weights[b] = row
 
         return weights
     
@@ -135,12 +143,13 @@ class NaiveMHA(nn.Module):
 
         return output
     
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
         """
         Forward pass using explicit loops instead of vectorized operations.
         
         Args:
             x: Input tensor [batch_size, seq_len, d_model]
+            mask: Attention mask [batch_size, seq_len, seq_len]
             
         Returns:
             Output tensor [batch_size, seq_len, d_model]
@@ -150,7 +159,9 @@ class NaiveMHA(nn.Module):
         batch_size, seq_len, _ = x.shape
         
         # Create attention mask
-        mask = self._create_attention_mask(batch_size, seq_len)
+        causal_mask = self._causal_attention_mask(batch_size, seq_len).to(x.device)
+        final_mask_bool = self.create_final_mask(causal_mask, mask.to(x.device) if mask is not None else None)
+        final_mask = self._process_final_mask(final_mask_bool)
         
         # Process each head separately and collect outputs
         head_outputs = [None for _ in range(self.num_heads)]
@@ -165,7 +176,7 @@ class NaiveMHA(nn.Module):
             qk_product = self._key_query_product(q_head, k_head)
             
             # Apply masking and compute weights
-            attn_weights = self._compute_weights(qk_product, mask)
+            attn_weights = self._compute_weights(qk_product, final_mask[:, h])
             
             # Compute weighted sum of values
             head_output = self._compute_new_v(attn_weights, v_head)
@@ -186,8 +197,8 @@ class NaiveMHA(nn.Module):
         
         return output
     
-    def __call__(self, x: torch.Tensor) -> torch.Tensor:
-        return self.forward(x)
+    def __call__(self, x: torch.Tensor, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+        return self.forward(x, mask)
         
     # Helper methods for syncing weights with vectorized implementation
     def sync_weights_from_vectorized(self, vectorized_mha):
