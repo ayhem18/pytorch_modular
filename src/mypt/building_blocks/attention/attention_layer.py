@@ -25,26 +25,51 @@ class SingleHeadAttentionLayer(nn.Module):
         self.W_o = nn.Linear(value_dim, input_dimension) # head_i = W_o * v_i
 
 
-    def _create_attention_mask(self, batch_size: int, sequence_length: int) -> torch.Tensor:
+    # ------------------------------------------------------------------
+    # Mask helpers
+    # ------------------------------------------------------------------
+
+    def _causal_attention_mask(self, batch_size: int, sequence_length: int) -> torch.Tensor:
+        """Return a *boolean* causal (lower-triangular) mask of shape
+        (batch_size, sequence_length, sequence_length).
+
+        True  = position is *visible* (allowed to attend)
+        False = position is *masked* (disallowed)
         """
-        Creates a mask of shape (sequence_length, sequence_length) with the lower triangular part set to 1 and the upper triangular part set to 0
+        causal = torch.tril(torch.ones(sequence_length, sequence_length, dtype=torch.bool))
+        return causal.unsqueeze(0).expand(batch_size, -1, -1)
+
+    def create_final_mask(self, causal_mask: torch.Tensor, pad_mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+        """Combine the causal mask with an optional *padding* (sequence) mask.
+
+        Args:
+            causal_mask: Bool tensor (B,S,S) from `_causal_attention_mask`.
+            pad_mask:    Bool/byte/int tensor (B,S) where 1/True keeps the token,
+                         0/False masks it.  May be ``None``.
+
+        Returns:
+            Bool tensor (B,S,S) where True indicates *keep*, False indicates mask.
         """
-        # the mask must satisfy the following conditions: 
-        # of the shape (sequence_length, sequence_length)
-        # the lower triangular part (including the diagonal) must be 1 and the upper triangular part must be 0
+        if pad_mask is None:
+            return causal_mask
 
-        # create the ones part
-        ones_mask = torch.tril(torch.ones(size=(sequence_length, sequence_length)), diagonal=0) 
+        # Convert to boolean where True = keep
+        pad_mask_bool = pad_mask.to(dtype=torch.bool)
 
-        # create the zeros part 
-        zero_mask = torch.zeros(size=(sequence_length, sequence_length)) 
-        
-        zero_mask = torch.tril(zero_mask, diagonal=-1).T 
+        b, s = pad_mask_bool.shape
 
-        # combine the two masks
-        mask = zero_mask + ones_mask
+        # Expand along rows and columns
+        mask_row = pad_mask_bool.unsqueeze(-1).expand(b, s, s)  # queries
+        mask_col = pad_mask_bool.unsqueeze(1).expand(b, s, s)   # keys
 
-        return mask.unsqueeze(0).expand(batch_size, -1, -1)
+        final_mask = causal_mask & mask_row & mask_col
+        return final_mask
+
+    def _process_final_mask(self, final_mask: torch.Tensor) -> torch.Tensor:
+        """
+        """
+        return final_mask.masked_fill(final_mask == 0, float("-inf"))
+
 
     def _key_query_product(self, q: torch.Tensor, k: torch.Tensor) -> torch.Tensor:
         """
@@ -60,28 +85,23 @@ class SingleHeadAttentionLayer(nn.Module):
 
         return query_key_product
 
-    def _compute_weights(self, query_key_product: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
-        """
-        """
-        batch_size, sequence_length, __ = query_key_product.shape 
-        
-        query_key_product = query_key_product.masked_fill(mask, float("-inf"))
+    def _compute_weights(self, query_key_product: torch.Tensor, final_mask: torch.Tensor) -> torch.Tensor:
+        """Apply the boolean *final_mask* to the scores and return soft-max weights.
 
-        # so funny enough, neg_value * (-inf) = +inf, which means the product has mixed inf values
-        # messing up the softmax operation
+        Args:
+            query_key_product: (B,S,S) raw scaled dot-product scores.
+            final_mask:        (B,S,S) bool mask where True = keep, False = mask.
+        """
+        # so funny enough, neg_value * (-inf) = +inf, which means the product has mixed inf values (+inf and -inf) messing up the softmax operation
         # so I need to create a mask with the signs of the query_key_product while mapping any zeros to 1 (so that 0 * -inf = -inf (masked zeros))
-        # sign_mask = torch.sign(query_key_product)
-        # sign_mask += (sign_mask == 0).type(torch.float32)
-
-        weights = torch.softmax(query_key_product, dim=2)
-
-        if weights.shape != (batch_size, sequence_length, sequence_length):
-            raise ValueError(f"The shape of the weights tensor is expected to be (batch_size, sequence_length, sequence_length), but got {weights.shape}")
-
+        sign_mask = torch.sign(query_key_product)
+        sign_mask += (sign_mask == 0).type(torch.float32)
+        weights = torch.softmax(query_key_product  * sign_mask * final_mask, dim=2)
         return weights
 
     def _compute_new_v(self, weights: torch.Tensor, v: torch.Tensor) -> torch.Tensor:
         """
+        can be refactored
         """
         batch_size, sequence_length, __ = v.shape
 
@@ -109,16 +129,16 @@ class SingleHeadAttentionLayer(nn.Module):
 
         query_key_product = self._key_query_product(q, k)
 
-        # if the mask is not provided, create a default mask (this assumes that no sequence is padded)
-        if mask is None:
-            mask = self._create_attention_mask(batch_size, sequence_length).to(q.device)# make sure to move the mask to the same device as the arguments
+        # Build masks -----------------------------------------------------
+        causal_mask = self._causal_attention_mask(batch_size, sequence_length).to(q.device)
 
-        else:
-            # the mask if of the shape batch_size, sequence_length (0 s represent padded tokens)
-            # expand the mask to the shape (batch_size, sequence_length, sequence_length)
-            mask = mask.unsqueeze(-1).expand(batch_size, sequence_length, sequence_length).to(q.device)
+        final_mask = self.create_final_mask(causal_mask, mask.to(q.device) if mask is not None else None)
 
-        weights = self._compute_weights(query_key_product, mask)
+        # convert zeros to -inf to be used in the softmax operation
+        final_mask = self._process_final_mask(final_mask)
+
+        # Compute weights using the final boolean mask
+        weights = self._compute_weights(query_key_product, final_mask)
         
         output = self._compute_new_v(weights, v) 
 

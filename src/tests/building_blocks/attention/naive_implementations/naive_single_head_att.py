@@ -1,8 +1,9 @@
-from pyparsing import Optional
 import torch
 import numpy as np
 
 from torch import nn
+from typing import Optional
+
 
 class NaiveSHA(nn.Module):
     def __init__(self, input_dimension: int, value_dim: int, key_dim: int) -> None:
@@ -18,25 +19,36 @@ class NaiveSHA(nn.Module):
         
         self.W_o = nn.Linear(value_dim, input_dimension)  # head_i = W_o * v_i
 
-    def _create_attention_mask(self, sequence_length: int) -> torch.Tensor:
+    # --------------------------------------------------------------
+    # Mask helpers
+    # --------------------------------------------------------------
+
+    def _causal_attention_mask(self, batch_size: int, sequence_length: int) -> torch.Tensor:
+        """Return boolean lower-triangular mask (B,S,S)."""
+        causal = torch.tril(torch.ones(sequence_length, sequence_length, dtype=torch.bool))
+        return causal.unsqueeze(0).expand(batch_size, -1, -1)
+
+    def create_final_mask(self, causal_mask: torch.Tensor, pad_mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+        """Same semantics as in the vectorised implementation."""
+        if pad_mask is None:
+            return causal_mask
+
+        pad_mask_bool = pad_mask.to(dtype=torch.bool)
+
+        b, s = pad_mask_bool.shape
+
+        # Expand along rows and columns
+        mask_row = pad_mask_bool.unsqueeze(-1).expand(b, s, s)  # queries
+        mask_col = pad_mask_bool.unsqueeze(1).expand(b, s, s)   # keys
+
+        final_mask = causal_mask & mask_row & mask_col
+        return final_mask
+    
+    def _process_final_mask(self, final_mask: torch.Tensor) -> torch.Tensor:
         """
-        Creates a mask of shape (sequence_length, sequence_length) using explicit loops
-        instead of vectorized operations.
+        Convert zeros to -inf to be used in the softmax operation.
         """
-        # Create a matrix filled with zeros
-        mask = torch.ones(size=(sequence_length, sequence_length))
-        
-        # Iterate through each row and column
-        for i in range(sequence_length):
-            for j in range(sequence_length):
-                # Set values above the main diagonal to -inf (future tokens)
-                if j > i:
-                    mask[i, j] = 0
-                # Set values on or below the main diagonal to 1 (current and past tokens)
-                else:
-                    mask[i, j] = 1.0
-                    
-        return mask
+        return final_mask.masked_fill(final_mask == 0, float("-inf"))
 
     def _key_query_product(self, q: torch.Tensor, k: torch.Tensor) -> torch.Tensor:
         """
@@ -88,14 +100,11 @@ class NaiveSHA(nn.Module):
         for b in range(batch_size):
             batch_product = query_key_product[b]
 
-            # sign_mask = torch.sign(batch_product) 
-            # sign_mask += (sign_mask == 0).type(torch.float32)
-
-            # make sure to apply both the mask and the sign mask
-            batch_product_masked = batch_product.masked_fill(mask[b], float("-inf"))
+            sign_mask = torch.sign(batch_product)
+            sign_mask += (sign_mask == 0).type(torch.float32)
             
             # apply softmax
-            weights[b] = torch.softmax(batch_product_masked, dim=-1)
+            weights[b] = torch.softmax(batch_product * sign_mask * mask[b], dim=-1)
 
         return weights
 
@@ -146,17 +155,16 @@ class NaiveSHA(nn.Module):
         # Compute attention scores
         query_key_product = self._key_query_product(q, k)
         
-        # Create attention mask
-        if mask is None:
-            mask = self._create_attention_mask(sequence_length).unsqueeze(0).expand(batch_size, -1, -1).to(q.device)
+        # Build masks
+        causal_mask = self._causal_attention_mask(batch_size, sequence_length).to(q.device)
 
-        else:
-            # the mask if of the shape batch_size, sequence_length (0 s represent padded tokens)
-            # expand the mask to the shape (batch_size, sequence_length, sequence_length)
-            mask = mask.unsqueeze(-1).expand(batch_size, sequence_length, sequence_length).to(q.device)
+        final_mask = self.create_final_mask(causal_mask, mask.to(q.device) if mask is not None else None)
+
+        # convert zeros to -inf to be used in the softmax operation
+        final_mask = self._process_final_mask(final_mask)
         
         # Compute attention weights
-        weights = self._compute_weights(query_key_product, mask)
+        weights = self._compute_weights(query_key_product, final_mask)
         
         # Compute weighted sum of values
         output = self._compute_new_v(weights, v)
