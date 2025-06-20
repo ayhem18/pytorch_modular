@@ -201,19 +201,21 @@ class NonSequentialModuleMixin:
     
     def children(self) -> Iterator[nn.Module]:
         for field in self._inner_components_fields:
-            for child in getattr(self, field).children():
-                yield child
+            field_as_module = getattr(self, field)
+
+            if field_as_module is None:
+                continue
+
+            yield field_as_module
 
     def named_children(self) -> Iterator[Tuple[str, nn.Module]]:
-        yield self
         for field in self._inner_components_fields:
             field_as_module = getattr(self, field)
 
             if field_as_module is None:
                 continue
 
-            for name, child in field_as_module.named_children():
-                yield f"{field}.{name}", child
+            yield field, field_as_module
 
     def modules(self) -> Iterator[nn.Module]:
         yield self
