@@ -67,8 +67,16 @@ class SingleHeadAttentionLayer(nn.Module):
 
     def _process_final_mask(self, final_mask: torch.Tensor) -> torch.Tensor:
         """
+            final_mask is a boolean mask where True = keep, False = mask.
+            we need to convert it to a float mask where -inf = mask, 1 = keep.
         """
-        return final_mask.masked_fill(final_mask == 0, float("-inf"))
+        final_mask_float = final_mask.type(torch.float32)
+
+        # convert to -inf where False, 1 where True
+        res = final_mask_float.masked_fill(~final_mask, float("-inf")).masked_fill(final_mask, 1)
+        
+        return res
+
 
 
     def _key_query_product(self, q: torch.Tensor, k: torch.Tensor) -> torch.Tensor:
@@ -90,14 +98,19 @@ class SingleHeadAttentionLayer(nn.Module):
 
         Args:
             query_key_product: (B,S,S) raw scaled dot-product scores.
-            final_mask:        (B,S,S) bool mask where True = keep, False = mask.
+            final_mask:        (B,S,S) float mask where -inf = mask, 1 = keep.
         """
         # so funny enough, neg_value * (-inf) = +inf, which means the product has mixed inf values (+inf and -inf) messing up the softmax operation
         # so I need to create a mask with the signs of the query_key_product while mapping any zeros to 1 (so that 0 * -inf = -inf (masked zeros))
         sign_mask = torch.sign(query_key_product)
         sign_mask += (sign_mask == 0).type(torch.float32)
-        weights = torch.softmax(query_key_product  * sign_mask * final_mask, dim=2)
-        return weights
+        weights = torch.softmax(query_key_product * sign_mask * final_mask, dim=2)
+
+        # an important computational note: 
+        # the mask might have rows full of -inf values. 
+        # this resuls in a the corresponding rows of the weights being all nans
+        # these values must be converted to 0
+        return weights.masked_fill(torch.isnan(weights), 0)
 
     def _compute_new_v(self, weights: torch.Tensor, v: torch.Tensor) -> torch.Tensor:
         """
@@ -131,9 +144,8 @@ class SingleHeadAttentionLayer(nn.Module):
 
         # Build masks -----------------------------------------------------
         causal_mask = self._causal_attention_mask(batch_size, sequence_length).to(q.device)
-
+        # combine the causal mask with the padding mask if provided
         final_mask = self.create_final_mask(causal_mask, mask.to(q.device) if mask is not None else None)
-
         # convert zeros to -inf to be used in the softmax operation
         final_mask = self._process_final_mask(final_mask)
 

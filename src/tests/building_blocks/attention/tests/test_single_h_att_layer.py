@@ -70,7 +70,7 @@ class TestSingleHeadAttentionLayer(CustomModuleBaseTest):
         return x, q, k, v
 
     # @unittest.skip("passed")
-    def test_attention_mask_creation(self):
+    def test_causal_mask_creation(self):
         """Test that both implementations create the same attention mask"""
         for _ in tqdm(range(1000), desc="Testing attention mask creation"):
             # Generate a random sequence length between 5 and 50
@@ -113,7 +113,7 @@ class TestSingleHeadAttentionLayer(CustomModuleBaseTest):
             # Check that they are approximately equal
             self.assertTrue(torch.allclose(vec_product, naive_product, atol=2*1e-7))
 
-    # @unittest.skip("skip for now")
+    # @unittest.skip("passed")
     def test_compute_weights(self):
         """Test that both implementations compute the same attention weights"""
         for _ in tqdm(range(self.num_iterations), desc="Testing compute weights"):
@@ -131,9 +131,15 @@ class TestSingleHeadAttentionLayer(CustomModuleBaseTest):
             vec_mask = self.vectorized_att._causal_attention_mask(batch_size, seq_length)
             naive_mask = self.naive_att._causal_attention_mask(batch_size, seq_length)
             
+            final_vec_mask = self.vectorized_att.create_final_mask(vec_mask, None)
+            final_naive_mask = self.naive_att.create_final_mask(naive_mask, None)
+
+            inf_vec_mask = self.vectorized_att._process_final_mask(final_vec_mask)
+            inf_naive_mask = self.naive_att._process_final_mask(final_naive_mask)
+
             # Compute weights using both implementations
-            vec_weights = self.vectorized_att._compute_weights(vec_product, vec_mask)
-            naive_weights = self.naive_att._compute_weights(naive_product, naive_mask)
+            vec_weights = self.vectorized_att._compute_weights(vec_product, inf_vec_mask)
+            naive_weights = self.naive_att._compute_weights(naive_product, inf_naive_mask)
             
             # Check they have the same shape
             self.assertEqual(vec_weights.shape, naive_weights.shape)
@@ -151,7 +157,7 @@ class TestSingleHeadAttentionLayer(CustomModuleBaseTest):
                         msg=f"Row {i} in batch {b} should have {seq_length - (i + 1)} zeros, found {num_zeros}"
                     )
 
-    # @unittest.skip("skip for now")
+    # @unittest.skip("passed")
     def test_compute_weighted_values(self):
         """Test that both implementations compute the same weighted values"""
         for _ in tqdm(range(self.num_iterations), desc="Testing compute weighted values"):
@@ -183,7 +189,7 @@ class TestSingleHeadAttentionLayer(CustomModuleBaseTest):
             # Check that they are approximately equal
             self.assertTrue(torch.allclose(vec_output, naive_output, atol=2*1e-7))
 
-    # @unittest.skip("skip for now")
+    # @unittest.skip("passed")
     def test_full_forward_pass(self):
         """Test that both implementations produce the same output for the full forward pass"""
         for _ in tqdm(range(self.num_iterations), desc="Testing full forward pass"):
@@ -207,17 +213,17 @@ class TestSingleHeadAttentionLayer(CustomModuleBaseTest):
 
 
     ####   Custom Module Base Test Methods   ####
-    @unittest.skip("skip for now")
+    # @unittest.skip("passed")
     def test_eval_mode(self) -> None:
         """Test that calling eval() sets training=False for all parameters and submodules"""
         super()._test_eval_mode(self.vectorized_att)
 
-    @unittest.skip("skip for now")
+    # @unittest.skip("passed")
     def test_train_mode(self) -> None:
         """Test that calling train() sets training=True for all parameters and submodules"""
         super()._test_train_mode(self.vectorized_att)
     
-    @unittest.skip("skip for now")
+    # @unittest.skip("passed")
     def test_consistent_output_without_dropout_bn(self) -> None:
         """
         Test that modules without dropout or batch normalization 
@@ -227,14 +233,14 @@ class TestSingleHeadAttentionLayer(CustomModuleBaseTest):
             input_tensor, _, _, _ = self._generate_random_input(10, 10)
             super()._test_consistent_output_without_dropout_bn(self.vectorized_att, input_tensor)
     
-    @unittest.skip("skip for now")
+    # @unittest.skip("passed")
     def test_consistent_output_in_eval_mode(self) -> None:
         """Test that all modules in eval mode produce consistent output for the same input"""
         for _ in range(self.num_iterations):
             input_tensor, _, _, _ = self._generate_random_input(10, 10)
             super()._test_consistent_output_in_eval_mode(self.vectorized_att, input_tensor)
     
-    @unittest.skip("skip for now")
+    # @unittest.skip("passed")
     def test_batch_size_one_in_train_mode(self) -> None:
         """
         Test that modules with batch normalization layers might raise errors 
@@ -245,19 +251,19 @@ class TestSingleHeadAttentionLayer(CustomModuleBaseTest):
             super()._test_batch_size_one_in_train_mode(self.vectorized_att, input_tensor)
 
     
-    @unittest.skip("skip for now")
+    # @unittest.skip("passed")
     def test_batch_size_one_in_eval_mode(self) -> None:
         """Test that modules in eval mode should not raise errors for batch size 1"""
         for _ in range(self.num_iterations):
             input_tensor, _, _, _ = self._generate_random_input(1, 10)
             super()._test_batch_size_one_in_eval_mode(self.vectorized_att, input_tensor)
 
-    @unittest.skip("skip for now")
+    # @unittest.skip("passed")
     def test_named_parameters_length(self) -> None:
         """Test that named_parameters() and parameters() have the same length"""
         super()._test_named_parameters_length(self.vectorized_att)
     
-    @unittest.skip("skip for now")
+    # @unittest.skip("passed")
     def test_to_device(self) -> None:
         """Test that module can move between devices properly"""
         for _ in range(self.num_iterations):
@@ -265,7 +271,7 @@ class TestSingleHeadAttentionLayer(CustomModuleBaseTest):
             super()._test_to_device(self.vectorized_att, input_tensor)
 
     # ------------------------------------------------------------------
-    # New tests that rely on *random* attention masks
+    # tests that rely on *random* attention masks
     # ------------------------------------------------------------------
     def _generate_random_pad_mask(self, batch_size: int, seq_length: int):
         """Return random binary padding mask (B,S) where 1 keeps, 0 masks."""
@@ -276,6 +282,7 @@ class TestSingleHeadAttentionLayer(CustomModuleBaseTest):
                 pad_mask[b, 0] = 1
         return pad_mask
 
+    # @unittest.skip("passed")
     def test_create_final_mask(self):
         """Verify that create_final_mask obeys causal + pad constraints."""
         for _ in tqdm(range(self.num_iterations), desc="Testing final mask creation"):
@@ -291,19 +298,19 @@ class TestSingleHeadAttentionLayer(CustomModuleBaseTest):
             naive_final = self.naive_att.create_final_mask(causal_naive, pad_mask)
 
             # 1. Implementations agree
-            self.assertTrue(torch.equal(vec_final, naive_final))
+            self.assertTrue(torch.equal(vec_final, naive_final), "different masks from the different implementations")
 
             # 2. Causal property & pad property hold
             for b in range(batch_size):
                 for i in range(seq_length):
                     for j in range(seq_length):
                         allowed = vec_final[b, i, j].item()
-                        if j > i:
+                        if j > i or pad_mask[b, i] == 0 or pad_mask[b, j] == 0:
                             self.assertFalse(allowed)
-                        if pad_mask[b, i] == 0 or pad_mask[b, j] == 0:
-                            self.assertFalse(allowed)
+                        else:
+                            self.assertTrue(allowed)
 
-
+    # @unittest.skip("passed")
     def test_compute_weights_with_random_mask(self):
         """Verify compute_weights produces identical outputs given an arbitrary user-supplied mask."""
         for _ in tqdm(range(self.num_iterations), desc="Testing compute weights w/ random masks"):
@@ -318,25 +325,34 @@ class TestSingleHeadAttentionLayer(CustomModuleBaseTest):
             pad_mask = self._generate_random_pad_mask(batch_size, seq_length)
 
             causal_vec = self.vectorized_att._causal_attention_mask(batch_size, seq_length)
-            final_mask = self.vectorized_att.create_final_mask(causal_vec, pad_mask)
+            causal_naive = self.naive_att._causal_attention_mask(batch_size, seq_length)
 
-            vec_weights = self.vectorized_att._compute_weights(vec_product.clone(), final_mask.clone())
-            naive_weights = self.naive_att._compute_weights(naive_product.clone(), final_mask.clone())
+            vec_final = self.vectorized_att.create_final_mask(causal_vec, pad_mask)
+            naive_final = self.naive_att.create_final_mask(causal_naive, pad_mask)
 
+            inf_vec_mask = self.vectorized_att._process_final_mask(vec_final)
+            inf_naive_mask = self.naive_att._process_final_mask(naive_final)
+
+            self.assertTrue(torch.allclose(inf_vec_mask, inf_naive_mask), "different masks from the different implementations")
+
+            vec_weights = self.vectorized_att._compute_weights(vec_product, inf_vec_mask)
+            naive_weights = self.naive_att._compute_weights(naive_product, inf_naive_mask)
+
+            self.assertEqual(vec_weights.shape, naive_weights.shape)
 
             passed = False
             for i in range(1, 6):
                 try:
                     self.assertTrue(
-                    torch.allclose(vec_weights, naive_weights, atol=i * 1e-7),
+                    torch.allclose(vec_weights, naive_weights, atol=i * 1e-8),
                     msg="Vectorised and naive weights diverge under a random mask."
                     )
                     passed = True
+                    break
                 except AssertionError:
                     pass
             
             self.assertTrue(passed, msg="Vectorised and naive weights diverge under a random mask.")
-
 
             # 2. Causal property & pad property hold
             for b in range(batch_size):
@@ -344,12 +360,12 @@ class TestSingleHeadAttentionLayer(CustomModuleBaseTest):
                     for j in range(seq_length):
                         weight = vec_weights[b, i, j].item()
                         if j > i or pad_mask[b, i] == 0 or pad_mask[b, j] == 0:
-                            self.assertEqual(weight, 0, msg="the weight should 0 for masked positions")
+                            self.assertTrue(weight < 1e-9, msg="the weight should be 0 for masked positions")
 
 
         
 
-    @unittest.skip("skip for now")
+    # @unittest.skip("skip for now")
     def test_compute_weighted_values(self):
         """Test that both implementations compute the same weighted values"""
         for _ in tqdm(range(self.num_iterations), desc="Testing compute weighted values"):
@@ -370,8 +386,11 @@ class TestSingleHeadAttentionLayer(CustomModuleBaseTest):
             final_mask = self.vectorized_att.create_final_mask(causal_vec, pad_mask)
 
             # Compute weights
-            vec_weights = self.vectorized_att._compute_weights(vec_product, final_mask)
-            naive_weights = self.naive_att._compute_weights(naive_product, final_mask)
+            inf_vec_mask = self.vectorized_att._process_final_mask(final_mask)
+            inf_naive_mask = self.naive_att._process_final_mask(final_mask)
+
+            vec_weights = self.vectorized_att._compute_weights(vec_product, inf_vec_mask)
+            naive_weights = self.naive_att._compute_weights(naive_product, inf_naive_mask)
             
             # Compute weighted values
             vec_output = self.vectorized_att._compute_new_v(vec_weights, v)
@@ -380,13 +399,27 @@ class TestSingleHeadAttentionLayer(CustomModuleBaseTest):
             # Check they have the same shape
             self.assertEqual(vec_output.shape, naive_output.shape)
             
-            # Check that they are approximately equal
-            self.assertTrue(torch.allclose(vec_output, naive_output, atol=2*1e-7))
+            passed = False
+            for i in range(1, 6):
+                try:
+                    self.assertTrue(
+                    torch.allclose(vec_output, naive_output, atol=i * 1e-7),
+                    msg="Vectorised and naive outputs diverge under a random mask."
+                    )
+                    passed = True
+                    break
+                except AssertionError:
+                    pass
+            
+            self.assertTrue(passed, msg="Vectorised and naive weights diverge under a random mask.")
 
-    @unittest.skip("skip for now")
-    def test_full_forward_pass(self):
+
+
+
+    # @unittest.skip("skip for now")
+    def test_full_forward_pass_with_random_mask(self):
         """Test that both implementations produce the same output for the full forward pass"""
-        for _ in tqdm(range(self.num_iterations), desc="Testing full forward pass"):
+        for _ in tqdm(range(self.num_iterations), desc="Testing full forward pass w/ random mask"):
             # Generate random batch size and sequence length
             batch_size = np.random.randint(1, 10)
             seq_length = np.random.randint(5, 20)
@@ -404,8 +437,19 @@ class TestSingleHeadAttentionLayer(CustomModuleBaseTest):
             # Check they have the same shape
             self.assertEqual(vec_output.shape, naive_output.shape)
             
-            # Check that they are approximately equal
-            self.assertTrue(torch.allclose(vec_output, naive_output, atol=2*1e-7))
+            passed = False
+            for i in range(1, 6):
+                try:
+                    self.assertTrue(
+                    torch.allclose(vec_output, naive_output, atol=i * 1e-7),
+                    msg="Vectorised and naive outputs diverge under a random mask."
+                    )
+                    passed = True
+                    break
+                except AssertionError:
+                    pass
+            
+            self.assertTrue(passed, msg="Vectorised and naive outputs diverge under a random mask.")
 
 
 

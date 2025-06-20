@@ -25,8 +25,18 @@ class NaiveSHA(nn.Module):
 
     def _causal_attention_mask(self, batch_size: int, sequence_length: int) -> torch.Tensor:
         """Return boolean lower-triangular mask (B,S,S)."""
-        causal = torch.tril(torch.ones(sequence_length, sequence_length, dtype=torch.bool))
+
+        causal = torch.zeros(sequence_length, sequence_length, dtype=torch.bool)
+
+        for i in range(sequence_length):
+            for j in range(sequence_length):
+                if j > i:
+                    causal[i, j] = False
+                else:
+                    causal[i, j] = True
+
         return causal.unsqueeze(0).expand(batch_size, -1, -1)
+
 
     def create_final_mask(self, causal_mask: torch.Tensor, pad_mask: Optional[torch.Tensor] = None) -> torch.Tensor:
         """Same semantics as in the vectorised implementation."""
@@ -48,7 +58,9 @@ class NaiveSHA(nn.Module):
         """
         Convert zeros to -inf to be used in the softmax operation.
         """
-        return final_mask.masked_fill(final_mask == 0, float("-inf"))
+        final_mask_float = final_mask.type(torch.float32)
+        res = final_mask_float.masked_fill(~final_mask, float("-inf")).masked_fill(final_mask, 1)
+        return res
 
     def _key_query_product(self, q: torch.Tensor, k: torch.Tensor) -> torch.Tensor:
         """
@@ -80,13 +92,13 @@ class NaiveSHA(nn.Module):
         
         return result
         
-    def _compute_weights(self, query_key_product: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+    def _compute_weights(self, query_key_product: torch.Tensor, final_mask: torch.Tensor) -> torch.Tensor:
         """
         Apply the attention mask and compute softmax weights with explicit loops.
         
         Args:
             query_key_product: Tensor of shape (batch_size, sequence_length, sequence_length)
-            mask: Attention mask of shape (sequence_length, sequence_length)
+            final_mask: Attention mask of shape (batch_size, sequence_length, sequence_length)
             
         Returns:
             Attention weights tensor of shape (batch_size, sequence_length, sequence_length)
@@ -99,12 +111,12 @@ class NaiveSHA(nn.Module):
         # Apply mask and compute softmax for each row in each batch
         for b in range(batch_size):
             batch_product = query_key_product[b]
-
-            sign_mask = torch.sign(batch_product)
+            sign_mask = torch.sign(batch_product) 
             sign_mask += (sign_mask == 0).type(torch.float32)
-            
             # apply softmax
-            weights[b] = torch.softmax(batch_product * sign_mask * mask[b], dim=-1)
+            weights[b] = torch.softmax(batch_product * sign_mask * final_mask[b], dim=-1)
+            
+            weights[b] = weights[b].masked_fill(torch.isnan(weights[b]), 0)
 
         return weights
 
@@ -157,9 +169,8 @@ class NaiveSHA(nn.Module):
         
         # Build masks
         causal_mask = self._causal_attention_mask(batch_size, sequence_length).to(q.device)
-
+        # combine the causal mask with the padding mask if provided 
         final_mask = self.create_final_mask(causal_mask, mask.to(q.device) if mask is not None else None)
-
         # convert zeros to -inf to be used in the softmax operation
         final_mask = self._process_final_mask(final_mask)
         
