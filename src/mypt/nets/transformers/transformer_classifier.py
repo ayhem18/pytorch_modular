@@ -2,12 +2,11 @@ import abc
 import torch
 
 from torch import nn
-from __future__ import annotations
 from typing import Optional, Dict, Callable
 
-from mypt.transformers.transformer_block import TransformerBlock
 from mypt.building_blocks.mixins.general import NonSequentialModuleMixin
 from mypt.building_blocks.linear_blocks.fc_blocks import ExponentialFCBlock
+from mypt.building_blocks.transformers.transformer_block import TransformerBlock
 from mypt.building_blocks.auxiliary.embeddings.scalar.encoding import PositionalEncoding
 
 class _BasePooling(nn.Module, abc.ABC):
@@ -96,18 +95,19 @@ class TransformerClassifier(NonSequentialModuleMixin, nn.Module):
 
         self.pos_emb = PositionalEncoding(d_model)
 
-        blocks = [TransformerBlock(d_model, num_heads, value_dim, key_dim, dropout) for _ in range(num_transformer_blocks)]
-        self.encoder = nn.Sequential(*blocks)
+        self.encoder = nn.ModuleList([TransformerBlock(d_model, num_heads, value_dim, key_dim, dropout) for _ in range(num_transformer_blocks)])
 
         # pooling module
         self.pooling_name = pooling
         self.pool = _POOLING_REGISTRY[pooling]()
 
-        self.head = ExponentialFCBlock(output=num_classes,
+        self.head = ExponentialFCBlock(output=1 if num_classes == 2 else num_classes,
                                        in_features=d_model,
                                        num_layers=num_classification_layers,
                                        dropout=dropout,
-                                       activation='gelu')
+                                       activation='gelu',
+                                       norm_layer='batchnorm1d' # the input to the head is 2D: batchnorm would do the trick
+                                       )
 
     def forward(self, sequence: torch.Tensor, pad_mask: Optional[torch.Tensor] = None) -> torch.Tensor:
         # the first step is to encode the position of the tokens in the sequence
@@ -116,15 +116,27 @@ class TransformerClassifier(NonSequentialModuleMixin, nn.Module):
         if pad_mask is not None:
             pos_encoding = pos_encoding.masked_fill(~pad_mask.bool().unsqueeze(-1), 0)
         
-        sequence = sequence + pos_encoding
-        sequence = self.encoder(sequence, pad_mask)
-        sequence = self.pool(sequence, pad_mask)
 
-        return self.head(sequence)
+        x = sequence + pos_encoding
+        # according to the original paper, there is a dropout layer after the position encoding...
+        # not sure if it makes much of a difference. Keep it simple for now.
+        for block in self.encoder:
+            x = block(x, pad_mask)
+
+        pooled_output = self.pool(x, pad_mask)
+
+        result = self.head(pooled_output)
+
+        if torch.isnan(result).any():
+            raise ValueError("NaN in result")
+        
+        return result
 
 
     def get_pooling_type(self) -> str:  # utility accessor
         return self.pooling_name
 
 
+    def __call__(self, sequence: torch.Tensor, pad_mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+        return self.forward(sequence, pad_mask)
 

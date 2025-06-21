@@ -1,5 +1,7 @@
 import torch
 
+from typing import Optional
+
 from mypt.building_blocks.linear_blocks.fc_blocks import GenericFCBlock
 from mypt.building_blocks.mixins.general import NonSequentialModuleMixin
 from mypt.building_blocks.attention.multi_head_att import MultiHeadAttentionLayer
@@ -30,12 +32,12 @@ class TransformerBlock(NonSequentialModuleMixin, torch.nn.Module):
         self.ln1 = torch.nn.LayerNorm(normalized_shape=(d_model,))
         self.ln2 = torch.nn.LayerNorm(normalized_shape=(d_model,))
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, pad_mask: Optional[torch.Tensor] = None) -> torch.Tensor:
         # I am implementing the forward pass as explained in the stanford NLP book: 
         # chapter 9, section 2 
         residual = x
         x = self.ln1(x)
-        x = self.att(x)
+        x = self.att(x, pad_mask)
         x = x + residual
         residual = x
         x = self.ln2(x)
@@ -43,6 +45,6 @@ class TransformerBlock(NonSequentialModuleMixin, torch.nn.Module):
         return x + residual 
     
 
-    def __call__(self, x: torch.Tensor) -> torch.Tensor:
-        return self.forward(x)
+    def __call__(self, x: torch.Tensor, pad_mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+        return self.forward(x, pad_mask)
     

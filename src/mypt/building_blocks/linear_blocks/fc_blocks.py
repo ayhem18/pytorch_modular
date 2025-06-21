@@ -59,7 +59,7 @@ class ExponentialFCBlock(
                  num_layers: int,
                  dropout: Optional[Union[List[float], float]]=None,
                  activation: str = 'relu',
-                 norm_layer: str = "batchnorm"):
+                 norm_layer: str = "batchnorm1d"):
         
         super().__init__(output=output, 
                          in_features=in_features,

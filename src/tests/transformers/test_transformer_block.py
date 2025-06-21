@@ -1,10 +1,9 @@
 import torch
 import unittest
 import numpy as np
-from tqdm import tqdm
 
 from tests.custom_base_test import CustomModuleBaseTest
-from mypt.transformers.transformer_block import TransformerBlock
+from mypt.building_blocks.transformers.transformer_block import TransformerBlock
 
 
 class TestTransformerBlock(CustomModuleBaseTest):
@@ -36,10 +35,9 @@ class TestTransformerBlock(CustomModuleBaseTest):
         return TransformerBlock(d_model, num_heads, value_dim, key_dim, dropout)
 
     # --- tests ---
-    @unittest.skip("passed")
     def test_structure_children(self):
         """Test that the transformer block has the expected structure across multiple configurations."""
-        for _ in tqdm(range(self.num_iterations), desc="Testing block structure"):
+        for _ in range(self.num_iterations):
             block = self._generate_random_block()
             
             expected_order = [block.ln1, block.att, block.ln2, block.ffn]
@@ -53,10 +51,9 @@ class TestTransformerBlock(CustomModuleBaseTest):
             self.assertEqual(list(block.named_children()), expected_named,
                             "named_children() should return correct mapping")
 
-    # @unittest.skip("skip for now")
     def test_output_shape(self):
         """Test that output shape matches input shape across multiple configurations."""
-        for _ in tqdm(range(self.num_iterations), desc="Testing output shape"):
+        for _ in range(self.num_iterations):
             block = self._generate_random_block()
             
             # Generate random batch size and sequence length
@@ -74,75 +71,68 @@ class TestTransformerBlock(CustomModuleBaseTest):
                             f"Output shape {out.shape} should match input shape {x.shape}")
 
     # ---- Override inherited checks with more thorough versions ----
-    @unittest.skip("skip for now")
     def test_eval_mode(self) -> None:
         """Test that calling eval() sets training=False for all parameters and submodules"""
-        for _ in tqdm(range(self.num_iterations), desc="Testing eval mode"):
+        for _ in range(self.num_iterations):
             block = self._generate_random_block()
             super()._test_eval_mode(block)
 
-    @unittest.skip("skip for now")
     def test_train_mode(self) -> None:
         """Test that calling train() sets training=True for all parameters and submodules"""
-        for _ in tqdm(range(self.num_iterations), desc="Testing train mode"):
+        for _ in range(self.num_iterations):
             block = self._generate_random_block()
             super()._test_train_mode(block)
     
-    @unittest.skip("skip for now")
     def test_consistent_output_without_dropout_bn(self) -> None:
         """
         Test that modules without dropout or batch normalization 
         produce consistent output for the same input
         """
-        for _ in tqdm(range(self.num_iterations), desc="Testing consistent output"):
+        for _ in range(self.num_iterations):
             block = self._generate_random_block()
             batch_size = np.random.randint(1, 10)
             seq_length = np.random.randint(5, 20)
             input_tensor = torch.randn(batch_size, seq_length, block.d_model)
             super()._test_consistent_output_without_dropout_bn(block, input_tensor)
     
-    @unittest.skip("skip for now")
+
     def test_consistent_output_in_eval_mode(self) -> None:
         """Test that all modules in eval mode produce consistent output for the same input"""
-        for _ in tqdm(range(self.num_iterations), desc="Testing eval consistency"):
+        for _ in range(self.num_iterations):
             block = self._generate_random_block()
             batch_size = np.random.randint(1, 10)
             seq_length = np.random.randint(5, 20)
             input_tensor = torch.randn(batch_size, seq_length, block.d_model)
             super()._test_consistent_output_in_eval_mode(block, input_tensor)
     
-    @unittest.skip("skip for now")
     def test_batch_size_one_in_train_mode(self) -> None:
         """
         Test that modules with batch normalization layers might raise errors 
         with batch size 1 in train mode
         """
-        for _ in tqdm(range(self.num_iterations), desc="Testing batch size 1 (train)"):
+        for _ in range(self.num_iterations):
             block = self._generate_random_block()
             seq_length = np.random.randint(5, 20)
             input_tensor = torch.randn(1, seq_length, block.d_model)
             super()._test_batch_size_one_in_train_mode(block, input_tensor)
     
-    @unittest.skip("skip for now")
     def test_batch_size_one_in_eval_mode(self) -> None:
         """Test that modules in eval mode should not raise errors for batch size 1"""
-        for _ in tqdm(range(self.num_iterations), desc="Testing batch size 1 (eval)"):
+        for _ in range(self.num_iterations):
             block = self._generate_random_block()
             seq_length = np.random.randint(5, 20)
             input_tensor = torch.randn(1, seq_length, block.d_model)
             super()._test_batch_size_one_in_eval_mode(block, input_tensor)
 
-    @unittest.skip("skip for now")
     def test_named_parameters_length(self) -> None:
         """Test that named_parameters() and parameters() have the same length"""
-        for _ in tqdm(range(self.num_iterations), desc="Testing named parameters"):
+        for _ in range(self.num_iterations):
             block = self._generate_random_block()
             super()._test_named_parameters_length(block)
     
-    @unittest.skip("skip for now")
     def test_to_device(self) -> None:
         """Test that module can move between devices properly"""
-        for _ in tqdm(range(self.num_iterations), desc="Testing device movement"):
+        for _ in range(self.num_iterations):
             block = self._generate_random_block()
             batch_size = np.random.randint(1, 10)
             seq_length = np.random.randint(5, 20)
