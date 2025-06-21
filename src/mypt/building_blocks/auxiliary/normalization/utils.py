@@ -16,7 +16,8 @@ _normalization_functions = {
 
     # layer normalization
     # TODO: UNDERSTAND LAYERNORM AND ADD IT TO THE TESTS
-    # "layernorm": nn.LayerNorm,    
+    # TODO: add to tests !!!!!
+    "layernorm": nn.LayerNorm,    
 
     # group normalization
     "groupnorm": nn.GroupNorm,

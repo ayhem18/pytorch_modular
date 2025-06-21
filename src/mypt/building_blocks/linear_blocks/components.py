@@ -5,12 +5,12 @@ import torch
 
 from torch import nn
 from torch.nn import Module
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 from typing import Iterable, Iterator, Union, Optional, List, Tuple
 
 from mypt.building_blocks.mixins.residual_mixins import GeneralResidualMixin
+from mypt.building_blocks.auxiliary.normalization.utils import get_normalization
 from mypt.building_blocks.mixins.custom_module_mixins import CloneableModuleMixin, WrapperLikeModuleMixin
-
 
 class BasicLinearBlock(WrapperLikeModuleMixin, CloneableModuleMixin):
     _RELU = 'relu'
@@ -26,6 +26,38 @@ class BasicLinearBlock(WrapperLikeModuleMixin, CloneableModuleMixin):
                        _GELU: nn.GELU()
                        }
 
+    _NORMALIZATION_LAYERS = {"batchnorm1d": nn.BatchNorm1d, "layernorm": nn.LayerNorm}
+
+    def _set_normalization_layer(self, norm_layer: str, in_features: int) -> Union[nn.BatchNorm1d, nn.LayerNorm]:
+        """Allowing different normalization layers adds flexibility to linear blocks. 
+
+        For example, batchnorm1d does not work for sequence inputs. 
+
+        Args:
+            norm_layer (str): type of normalization layer
+            in_features (int): number of features in the input
+
+        Raises:
+            ValueError: if the normalization layer is not supported
+
+        Returns:
+            Union[nn.BatchNorm1d, nn.LayerNorm]: the normalization layer
+        """
+        
+        # extract the normalization layer from the the norm_layer string
+        # prepare the arguments depending on the normalization layer
+        
+        if norm_layer not in self._NORMALIZATION_LAYERS:
+            raise ValueError(f"The normalization layer {norm_layer} is not supported") 
+        
+        if norm_layer == "batchnorm1d":
+            norm_args = {"num_features": in_features}
+
+        elif norm_layer == "layernorm":
+            norm_args = {"normalized_shape": (in_features,)}
+
+        return get_normalization(norm_layer, norm_args)
+
     def __init__(self,
                  in_features: int,
                  out_features: int,
@@ -33,6 +65,7 @@ class BasicLinearBlock(WrapperLikeModuleMixin, CloneableModuleMixin):
                  dropout: Optional[float] = None,
                  is_final: bool = False,
                  add_activation: bool = True,
+                 norm_layer: str = "batchnorm1d", # the default is 1d Batch normalization 
                  *args, **kwargs) -> None:
         
         # initialize the WrapperLikeModuleMixin parent
@@ -57,7 +90,7 @@ class BasicLinearBlock(WrapperLikeModuleMixin, CloneableModuleMixin):
         linear_layer = nn.Linear(in_features=in_features, out_features=out_features)
 
         if not is_final:
-            norm_layer = nn.BatchNorm1d(num_features=in_features)
+            norm_layer = self._set_normalization_layer(norm_layer, in_features)
             activation_layer = self._ACTIVATION_MAP[activation]
 
             components = [norm_layer] 
@@ -133,9 +166,10 @@ class FullyConnectedBlock(WrapperLikeModuleMixin, CloneableModuleMixin):
     def __init__(self, 
                  output: int,
                  in_features: int,
-                 num_layers:int, 
+                 num_layers:int,    
                  activation='relu',
-                 dropout: Optional[Union[List[float], float]]=None):
+                 dropout: Optional[Union[List[float], float]]=None,
+                 norm_layer: str = "batchnorm1d"):
 
         # make sure works in a specific way
         if not (isinstance(dropout, float) or dropout is None):
@@ -154,7 +188,7 @@ class FullyConnectedBlock(WrapperLikeModuleMixin, CloneableModuleMixin):
         self._num_layers = num_layers
         self._activation = activation
         self._dropout = dropout
-
+        self._norm_layer = norm_layer
         self._block: nn.Module = None
 
     @property
@@ -168,6 +202,10 @@ class FullyConnectedBlock(WrapperLikeModuleMixin, CloneableModuleMixin):
     @property
     def in_features(self):
         return self._in_features
+
+    @property
+    def norm_layer(self):
+        return self._norm_layer
 
 
     @property
@@ -198,6 +236,7 @@ class ResidualFullyConnectedBlock(GeneralResidualMixin, FullyConnectedBlock, Clo
                  activation='relu',
                  dropout: Optional[Union[List[float], float]]=None,
                  force_residual:bool=False,
+                 norm_layer: str = "batchnorm1d", # the default is 1d Batch normalization 
                  *args, **kwargs):
         
         FullyConnectedBlock.__init__(self,
@@ -205,7 +244,9 @@ class ResidualFullyConnectedBlock(GeneralResidualMixin, FullyConnectedBlock, Clo
                          in_features=in_features,
                          num_layers=num_layers,
                          activation=activation,
-                         dropout=dropout, *args, **kwargs)
+                         dropout=dropout,
+                         norm_layer=norm_layer,
+                         *args, **kwargs)
 
         self._force_residual = force_residual 
         self._adaptive_layer = None 
@@ -261,5 +302,6 @@ class ResidualFullyConnectedBlock(GeneralResidualMixin, FullyConnectedBlock, Clo
             'num_layers': self.num_layers,
             'activation': self.activation,
             'dropout': self.dropout,
-            'force_residual': self.force_residual
+            'force_residual': self.force_residual,
+            'norm_layer': self.norm_layer
         }

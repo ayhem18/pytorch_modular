@@ -3,16 +3,18 @@ This module is my attempt to efficiently implement the multi-head attention laye
 """
 
 import torch
-
 import numpy as np
 
 from torch import nn
 from typing import Optional
 
+from mypt.building_blocks.mixins.general import NonSequentialModuleMixin
 
-class MultiHeadAttentionLayer(nn.Module):
+
+class MultiHeadAttentionLayer(NonSequentialModuleMixin, nn.Module):
     def __init__(self, d_model: int, num_heads: int, value_dim: int, key_dim: int) -> None:
-        super().__init__()
+        nn.Module.__init__(self)
+        NonSequentialModuleMixin.__init__(self, inner_components_fields=['W_q', 'W_k', 'W_v', 'W_o'])
 
         if (d_model % num_heads != 0):
             raise ValueError(f"d_model must be divisible by num_heads, but got d_model={d_model} and num_heads={num_heads}")
@@ -141,31 +143,31 @@ class MultiHeadAttentionLayer(nn.Module):
     def __call__(self, x: torch.Tensor, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
         return self.forward(x, mask)
 
-    def children(self) -> list[nn.Module]:
-        return [self.W_q, self.W_k, self.W_v, self.W_o] 
+    # def children(self) -> list[nn.Module]:
+    #     return [self.W_q, self.W_k, self.W_v, self.W_o] 
 
 
-    def named_children(self) -> list[tuple[str, nn.Module]]:
-        return [("W_q", self.W_q), ("W_k", self.W_k), ("W_v", self.W_v), ("W_o", self.W_o)] 
+    # def named_children(self) -> list[tuple[str, nn.Module]]:
+    #     return [("W_q", self.W_q), ("W_k", self.W_k), ("W_v", self.W_v), ("W_o", self.W_o)] 
     
 
-    def train(self, mode: bool = True) -> "MultiHeadAttentionLayer":    
-        """
-        """
-        super().train(mode)
-        for c in self.children():
-            c.train(mode)
-        return self
+    # def train(self, mode: bool = True) -> "MultiHeadAttentionLayer":    
+    #     """
+    #     """
+    #     super().train(mode)
+    #     for c in self.children():
+    #         c.train(mode)
+    #     return self
     
-    def eval(self) -> "MultiHeadAttentionLayer":    
-        """
-        """
-        return self.train(False)
+    # def eval(self) -> "MultiHeadAttentionLayer":    
+    #     """
+    #     """
+    #     return self.train(False)
     
-    def to(self, *args, **kwargs) -> "MultiHeadAttentionLayer":
-        """
-        """
-        for c in self.children():
-            c.to(*args, **kwargs)
-        return self
+    # def to(self, *args, **kwargs) -> "MultiHeadAttentionLayer":
+    #     """
+    #     """
+    #     for c in self.children():
+    #         c.to(*args, **kwargs)
+    #     return self
     

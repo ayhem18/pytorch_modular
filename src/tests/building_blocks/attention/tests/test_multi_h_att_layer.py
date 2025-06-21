@@ -357,16 +357,6 @@ class TestMultiHeadAttentionLayer(CustomModuleBaseTest):
 
                 # Check values are approximately equal
                 self.assertTrue(torch.allclose(weights_vec[:, h], weights_h, atol=5e-6))
-                # validated = False
-                # for tol_coeff in range(1, 20):
-                #     try:
-                #         self.assertTrue(torch.allclose(weights_vec[:, h], weights_h, atol=tol_coeff*1e-7))
-                #         validated = True
-                #         break
-                #     except:
-                #         continue
-
-                # self.assertTrue(validated, msg="Vectorised and naive weights diverge")
 
             for b in range(batch_size):
                 for i in range(seq_length):

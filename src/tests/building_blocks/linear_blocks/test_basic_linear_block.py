@@ -7,9 +7,9 @@ from random import randint as ri
 
 import mypt.code_utils.pytorch_utils as pu
 
+from tests.custom_base_test import CustomModuleBaseTest
 from mypt.building_blocks.linear_blocks.components import BasicLinearBlock
 from mypt.dimensions_analysis.dimension_analyser import DimensionsAnalyser
-from tests.custom_base_test import CustomModuleBaseTest
 
 
 class TestBasicLinearBlock(CustomModuleBaseTest):
@@ -17,6 +17,7 @@ class TestBasicLinearBlock(CustomModuleBaseTest):
         self.dim_analyser = DimensionsAnalyser()
         self.activation_types = [type(BasicLinearBlock._ACTIVATION_MAP[t]) for t in BasicLinearBlock._ACTIVATIONS]
         self.activation_names = BasicLinearBlock._ACTIVATIONS.copy()
+        self.num_iterations = 1000
 
     def _generate_random_linear_block(self, is_final=None, add_activation=None, activation=None, dropout=None):
         """
@@ -40,18 +41,21 @@ class TestBasicLinearBlock(CustomModuleBaseTest):
         if dropout is False:
             dropout = None
 
+        norm_layer = random.choice(["batchnorm1d", "layernorm"])
+
         return BasicLinearBlock(
             in_features=in_features,
             out_features=out_features,
             activation=activation,
             dropout=dropout,
             is_final=is_final,
-            add_activation=add_activation
+            add_activation=add_activation,
+            norm_layer=norm_layer
         )
 
     def test_non_final_block_structure(self):
         """Test that non-final blocks have the correct structure"""
-        for _ in range(100):
+        for _ in range(self.num_iterations):
             # Create a non-final block
             block = self._generate_random_linear_block(is_final=False, add_activation=True)
             
@@ -59,13 +63,13 @@ class TestBasicLinearBlock(CustomModuleBaseTest):
             children = list(block.children())
             
             # For non-final blocks with activation, we expect:
-            # 1. BatchNorm1d
+            # 1. BatchNorm1d or LayerNorm
             # 2. Optional Dropout
             # 3. Linear
             # 4. Activation
             
-            # First layer should be BatchNorm1d
-            self.assertIsInstance(children[0], nn.BatchNorm1d)
+            # First layer should be BatchNorm1d or LayerNorm
+            self.assertIsInstance(children[0], (nn.BatchNorm1d, nn.LayerNorm))
             
             # Last layer should be an activation
             self.assertIsInstance(children[-1], nn.Module)
@@ -80,22 +84,22 @@ class TestBasicLinearBlock(CustomModuleBaseTest):
 
     def test_non_final_block_no_activation(self):
         """Test non-final blocks without activation"""
-        for _ in range(100):
+        for _ in range(self.num_iterations):
             # Create a non-final block without activation
             block = self._generate_random_linear_block(is_final=False, add_activation=False)
             
             # Get all children
-            children = list(block.children())
+            children = list(block.children())   
             
             # Last layer should be Linear
             self.assertIsInstance(children[-1], nn.Linear)
             
-            # First layer should be BatchNorm1d
-            self.assertIsInstance(children[0], nn.BatchNorm1d)
+            # First layer should be BatchNorm1d or LayerNorm
+            self.assertIsInstance(children[0], (nn.BatchNorm1d, nn.LayerNorm))
 
     def test_final_block_structure(self):
         """Test that final blocks have the correct structure"""
-        for _ in range(100):
+        for _ in range(self.num_iterations):
             # Create a final block
             block = self._generate_random_linear_block(is_final=True)
             
@@ -126,7 +130,7 @@ class TestBasicLinearBlock(CustomModuleBaseTest):
 
     def test_with_dropout(self):
         """Test blocks with dropout"""
-        for _ in range(100):
+        for _ in range(self.num_iterations):
             dropout_prob = random.uniform(0.1, 0.5)
             block = self._generate_random_linear_block(is_final=False, dropout=dropout_prob, add_activation=True)
             
@@ -134,28 +138,29 @@ class TestBasicLinearBlock(CustomModuleBaseTest):
             children = list(block.children())
             
             # For non-final blocks with dropout:
-            # 1. BatchNorm1d
+            # 1. BatchNorm1d or LayerNorm
             # 2. Dropout
             # 3. Linear
             # 4. Activation
             
             self.assertGreaterEqual(len(children), 4)
             
-            self.assertIsInstance(children[0], nn.BatchNorm1d)
+            # First layer should be BatchNorm1d or LayerNorm
+            self.assertIsInstance(children[0], (nn.BatchNorm1d, nn.LayerNorm))
             self.assertIsInstance(children[1], nn.Dropout)
             self.assertIsInstance(children[2], nn.Linear)
             self.assertTrue(type(children[3]) in self.activation_types)
 
     def test_without_dropout(self):
         """Test blocks without dropout"""
-        for _ in range(100):
+        for _ in range(self.num_iterations):
             block = self._generate_random_linear_block(is_final=False, dropout=False)
             
             # Get all children
             children = list(block.children())
             
             # For non-final blocks without dropout:
-            # 1. BatchNorm1d
+            # 1. BatchNorm1d or LayerNorm
             # 2. Linear
             # 3. Activation
             
@@ -185,8 +190,8 @@ class TestBasicLinearBlock(CustomModuleBaseTest):
                 self.assertEqual(len(named_children), 1)
                 self.assertTrue(any(isinstance(module, nn.Linear) for module in named_children.values()))
             else:
-                # Non-final blocks have BatchNorm and Linear
-                self.assertTrue(any(isinstance(module, nn.BatchNorm1d) for module in named_children.values()))
+                # Non-final blocks have BatchNorm1d or LayerNorm and Linear
+                self.assertTrue(any(isinstance(module, (nn.BatchNorm1d, nn.LayerNorm)) for module in named_children.values()))
                 self.assertTrue(any(isinstance(module, nn.Linear) for module in named_children.values()))
                 
                 # Check for Dropout if specified
@@ -195,11 +200,11 @@ class TestBasicLinearBlock(CustomModuleBaseTest):
                 
                 # Check for activation if specified
                 if config["add_activation"]:
-                    self.assertTrue(any(type(module) in [nn.ReLU, nn.LeakyReLU, nn.Tanh] for module in named_children.values()))
+                    self.assertTrue(any(type(module) in [nn.ReLU, nn.LeakyReLU, nn.Tanh, nn.GELU] for module in named_children.values()))
 
     def test_forward_pass_shape(self):
         """Test that forward pass produces output with expected shape"""
-        for _ in range(100):
+        for _ in range(self.num_iterations):
             # Generate a random block
             block = self._generate_random_linear_block()
             
@@ -227,7 +232,7 @@ class TestBasicLinearBlock(CustomModuleBaseTest):
 
     def test_train_and_eval_modes(self):
         """Test that train and eval modes work correctly"""
-        for _ in range(100):
+        for _ in range(self.num_iterations):
             # Create a block with batch normalization
             block = self._generate_random_linear_block(is_final=False)
             
@@ -263,7 +268,7 @@ class TestBasicLinearBlock(CustomModuleBaseTest):
             except Exception as e:
                 pass
 
-            # Find BatchNorm1d modules
+            # Find BatchNorm1d or LayerNorm modules
             bn_modules = [m for m in block.modules() if isinstance(m, nn.BatchNorm1d)]
             
             # If there are batch norm modules (non-final blocks)
@@ -289,7 +294,7 @@ class TestBasicLinearBlock(CustomModuleBaseTest):
         if not torch.cuda.is_available():
             self.skipTest("CUDA not available")
         
-        for _ in range(10):
+        for _ in range(self.num_iterations):
             # Create a random block
             block = self._generate_random_linear_block()
             
@@ -309,7 +314,7 @@ class TestBasicLinearBlock(CustomModuleBaseTest):
 
     def test_parameters_access(self):
         """Test that parameters can be accessed correctly"""
-        for _ in range(20):
+        for _ in range(self.num_iterations):
             # Create a random block
             block = self._generate_random_linear_block()
             
@@ -345,6 +350,7 @@ class TestBasicLinearBlock(CustomModuleBaseTest):
             # Create input with batch size 1
             input_tensor = torch.randn(1, in_features)
             
+
             # For final blocks (no batch norm), should work in both modes
             if is_final:
                 block.train()
@@ -353,54 +359,61 @@ class TestBasicLinearBlock(CustomModuleBaseTest):
                 block.eval()
                 _ = block(input_tensor)  # Should not raise error
             else:
+                # check if the normalization layer is batch
+                norm_layer = [m for m in block.modules() if isinstance(m, (nn.BatchNorm1d, nn.LayerNorm))]
+
                 # For non-final blocks (with batch norm)
                 # Eval mode should work with batch size 1
                 block.eval()
                 _ = block(input_tensor)  # Should not raise error
                 
                 block.train()
-                
-                with self.assertRaises(ValueError):
-                    block.forward(input_tensor) # having an error ensures that batch normalization indeed moved to the train mode.
+
+                if isinstance(norm_layer[0], nn.BatchNorm1d):
+                    with self.assertRaises(ValueError):
+                        block.forward(input_tensor) # having an error ensures that batch normalization indeed moved to the train mode.
 
     def test_eval_mode(self):
-        for _ in range(100):
+        for _ in range(self.num_iterations):
             block = self._generate_random_linear_block()
             self._test_eval_mode(block)
     
     def test_train_mode(self):
-        for _ in range(100):
+        for _ in range(self.num_iterations):
             block = self._generate_random_linear_block()
             self._test_train_mode(block)
     
     # Custom module base tests
     def test_consistent_output_without_dropout_bn(self):
         # This shouldn't pass with BatchNorm, so we'll use final blocks
-        for _ in range(100):
+        for _ in range(self.num_iterations):
             block = self._generate_random_linear_block(is_final=True, dropout=None)
             input_tensor = torch.randn(random.randint(1, 10), block.in_features)
             super()._test_consistent_output_without_dropout_bn(block, input_tensor)
-    
+
+
     def test_consistent_output_in_eval_mode(self):
-        for _ in range(100):
+        for _ in range(self.num_iterations):
             block = self._generate_random_linear_block()
             input_tensor = torch.randn(random.randint(1, 10), block.in_features)
             super()._test_consistent_output_in_eval_mode(block, input_tensor)
     
     def test_batch_size_one_in_train_mode(self):
-        for _ in range(100):
+        for _ in range(self.num_iterations):
             block = self._generate_random_linear_block(is_final=False)  # Include BatchNorm
             input_tensor = torch.randn(1, block.in_features)
             super()._test_batch_size_one_in_train_mode(block, input_tensor)
-    
+
+
     def test_batch_size_one_in_eval_mode(self):
-        for _ in range(100):
+        for _ in range(self.num_iterations):
             block = self._generate_random_linear_block()
             input_tensor = torch.randn(1, block.in_features)
             super()._test_batch_size_one_in_eval_mode(block, input_tensor)
-    
+
+
     def test_named_parameters_length(self):
-        for _ in range(100):
+        for _ in range(self.num_iterations):
             block = self._generate_random_linear_block()
             super()._test_named_parameters_length(block)
 

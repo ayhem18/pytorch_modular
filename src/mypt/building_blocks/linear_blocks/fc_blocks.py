@@ -20,7 +20,8 @@ class GenericFCBlock(
                  num_layers:int, 
                  units: List[int],
                  activation='relu',
-                 dropout: Optional[Union[List[float], float]]=None
+                 dropout: Optional[Union[List[float], float]]=None,
+                 norm_layer: str = "batchnorm1d"
                  ):
         
         if len(units) != num_layers + 1:
@@ -30,7 +31,8 @@ class GenericFCBlock(
                          in_features=in_features,
                          num_layers=num_layers,
                          activation=activation,
-                         dropout=dropout)
+                         dropout=dropout,
+                         norm_layer=norm_layer)
 
         self.units = units
         self._block = self._build() # the self._build is implemented in the GeneralLinearBlockMixin
@@ -43,9 +45,9 @@ class GenericFCBlock(
             'units': self.units,
             'activation': self.activation,
             'dropout': self.dropout,
+            'norm_layer': self.norm_layer,
         }
 
-# TODO: better understand multiple inheritance in PYTHON
 class ExponentialFCBlock(
                         GeneralLinearBlockMixin,
                         ExponentialLinearBlockMixin, 
@@ -56,13 +58,15 @@ class ExponentialFCBlock(
                  in_features: int,
                  num_layers: int,
                  dropout: Optional[Union[List[float], float]]=None,
-                 activation: str = 'relu'):
+                 activation: str = 'relu',
+                 norm_layer: str = "batchnorm"):
         
         super().__init__(output=output, 
                          in_features=in_features,
                          num_layers=num_layers,
                          activation=activation,
-                         dropout=dropout
+                         dropout=dropout,
+                         norm_layer=norm_layer
                          )
         # set the units to None first 
         # self.units = None 
@@ -78,5 +82,6 @@ class ExponentialFCBlock(
             'units': self.units,
             'activation': self.activation,
             'dropout': self.dropout,
+            'norm_layer': self.norm_layer,
         }
 

@@ -24,8 +24,8 @@ class TransformerBlock(NonSequentialModuleMixin, torch.nn.Module):
                                   activation='gelu',
                                   dropout=dropout)
 
-        self.ln1 = torch.nn.LayerNorm(d_model)
-        self.ln2 = torch.nn.LayerNorm(d_model)
+        self.ln1 = torch.nn.LayerNorm(normalized_shape=(d_model,))
+        self.ln2 = torch.nn.LayerNorm(normalized_shape=(d_model,))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # I am implementing the forward pass as explained in the stanford NLP book: 
