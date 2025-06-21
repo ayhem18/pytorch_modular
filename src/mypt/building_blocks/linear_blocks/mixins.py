@@ -16,6 +16,13 @@ class GeneralLinearBlockMixin:
     """
 
     def _verify_instance_generalLinearBlockMixin(self):
+        # verify the instance only once...
+        if not hasattr(self, '_general_linear_block_mixin_verified'):
+            self._general_linear_block_mixin_verified = False
+
+        if self._general_linear_block_mixin_verified:
+            return 
+
         attrs = ['units', 'activation', 'dropout']
         
         for att in attrs:
@@ -34,7 +41,8 @@ class GeneralLinearBlockMixin:
                                 out_features=self.units[i + 1],
                                 is_final=False,
                                 activation=self.activation,
-                                dropout=self.dropout[i]
+                                dropout=self.dropout[i],
+                                norm_layer=self.norm_layer # make sure to pass the "norm_layer" argument !!!
                             ) 
                     for i in range(len(self.units) - 2)
                 ]
@@ -58,6 +66,12 @@ class ExponentialLinearBlockMixin:
     """
 
     def _verify_instance_exponentialLinearBlockMixin(self):
+        if not hasattr(self, '_exponential_linear_block_mixin_verified'):
+            self._exponential_linear_block_mixin_verified = False
+
+        if self._exponential_linear_block_mixin_verified:
+            return 
+
         attrs = ['num_layers', 'output', 'in_features']
         for att in attrs:
             if not hasattr(self, att):

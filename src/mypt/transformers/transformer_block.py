@@ -22,7 +22,10 @@ class TransformerBlock(NonSequentialModuleMixin, torch.nn.Module):
                                   num_layers=2,
                                   units=[d_model, d_model * 4, d_model],
                                   activation='gelu',
-                                  dropout=dropout)
+                                  dropout=dropout,
+                                  # make sure to pass the "norm_layer" argument since the default is "batchnorm1d" which wouldn't work with sequence inputs
+                                  norm_layer='layernorm' 
+                                  )
 
         self.ln1 = torch.nn.LayerNorm(normalized_shape=(d_model,))
         self.ln2 = torch.nn.LayerNorm(normalized_shape=(d_model,))

@@ -1,10 +1,10 @@
-import unittest
 import torch
 import random
-import numpy as np
-from torch import nn
-from random import randint as ri
+import unittest
 
+from torch import nn
+from typing import Optional
+from random import randint as ri
 
 import mypt.code_utils.pytorch_utils as pu
 from tests.custom_base_test import CustomModuleBaseTest
@@ -31,14 +31,36 @@ class ResidualFCBlockTestBase(CustomModuleBaseTest):
                                            activation=None,
                                            dropout=None, 
                                            force_residual=None,
-                                           matching_dimensions=None) -> ResidualFullyConnectedBlock:
+                                           matching_dimensions=None,
+                                           norm_layer=None) -> ResidualFullyConnectedBlock:
         """Generate a random residual FC block with configurable parameters"""
         raise NotImplementedError("Subclasses must implement this method")
     
 
-    def _get_valid_input(self, block: ResidualFullyConnectedBlock, batch_size: int = 2) -> torch.Tensor:
+    def _get_valid_input(self, block: ResidualFullyConnectedBlock, batch_size: Optional[int] = None, seq_len: Optional[int] = None) -> torch.Tensor:
         """Get a valid input tensor for the block"""
-        return torch.randn(batch_size, block.in_features)
+        # return torch.randn(batch_size, block.in_features)
+
+        if batch_size is None:
+            batch_size = ri(1, 16)
+        
+        # Find if the block has BatchNorm1d
+        has_batchnorm = any(isinstance(m, nn.BatchNorm1d) for m in block.modules())
+        
+        if has_batchnorm:
+            # For BatchNorm1d, we need 2D input
+            return torch.randn(batch_size, block.in_features)
+        else:
+            # For LayerNorm, we can use either 2D or 3D input
+            use_3d = random.choice([True, False]) if seq_len is None else True
+            
+            if use_3d:
+                if seq_len is None:
+                    seq_len = ri(5, 20)
+                return torch.randn(batch_size, seq_len, block.in_features)
+            else:
+                return torch.randn(batch_size, block.in_features)
+
 
     def _test_block_structure(self):
         """Test that the FC block has the correct structure"""
@@ -87,7 +109,7 @@ class ResidualFCBlockTestBase(CustomModuleBaseTest):
         for _ in range(100):
             block = self._generate_random_residual_fc_block(matching_dimensions=True, force_residual=False)
             block.eval() # make sure to set the block to eval mode for consistent output
-            x = torch.randn(2, block.in_features)
+            x = self._get_valid_input(block, batch_size=2)
             
             # Forward through main block manually to compare
             main_output = block._block(x)
@@ -103,7 +125,7 @@ class ResidualFCBlockTestBase(CustomModuleBaseTest):
             # Test with non-matching dimensions or force_residual=True
             block = self._generate_random_residual_fc_block(matching_dimensions=False, force_residual=False)
             block.eval() # make sure to set the block to eval mode for consistent output
-            x = torch.randn(2, block.in_features)
+            x = self._get_valid_input(block, batch_size=2)
             
             # Forward through components manually to compare
             main_output = block._block(x)
@@ -206,15 +228,20 @@ class ResidualFCBlockTestBase(CustomModuleBaseTest):
             batch_size = ri(2, 16)
             
             # Create input tensor
-            input_tensor = torch.randn(batch_size, block.in_features)
+            input_tensor = self._get_valid_input(block, batch_size=batch_size)
             
             # Get actual output shape
             output = block(input_tensor)
             actual_shape = tuple(output.shape)
             
-            # Expected shape is (batch_size, out_features)
-            expected_shape = (batch_size, block.output)
-            
+
+            if input_tensor.ndim == 2:
+                # Expected shape is (batch_size, out_features)
+                expected_shape = (batch_size, block.output)
+            else:
+                # Expected shape is (batch_size, seq_len, out_features)
+                expected_shape = (batch_size, input_tensor.size(1), block.output)
+
             # Assert shapes match
             self.assertEqual(actual_shape, expected_shape, 
                             f"Output shape mismatch: got {actual_shape}, expected {expected_shape}")
@@ -223,7 +250,7 @@ class ResidualFCBlockTestBase(CustomModuleBaseTest):
         """Test that train and eval modes work correctly"""
         for _ in range(20):
             # Create a block
-            block = self._generate_random_residual_fc_block()
+            block = self._generate_random_residual_fc_block(norm_layer="batchnorm1d")
             
             # Test eval mode
             block.eval()
@@ -233,11 +260,11 @@ class ResidualFCBlockTestBase(CustomModuleBaseTest):
                 self.assertFalse(child.training, "Child module should be in eval mode")
             
             # Find BatchNorm1d modules
-            bn_modules = [m for m in block.modules() if isinstance(m, nn.BatchNorm1d)]
+            bn_modules = [m for m in block.modules() if isinstance(m, (nn.BatchNorm1d, nn.LayerNorm))]
             self.assertGreater(len(bn_modules), 0, "No BatchNorm1d modules found")
             
             # Create a small batch (size 1)
-            input_tensor = torch.randn(1, block.in_features)
+            input_tensor = self._get_valid_input(block, batch_size=1)
             
             # This should not raise an error in eval mode
             try:
@@ -253,7 +280,7 @@ class ResidualFCBlockTestBase(CustomModuleBaseTest):
                 self.assertTrue(child.training, "Child module should be in train mode")
             
             # Store running stats in train mode
-            train_input = torch.randn(2, block.in_features)
+            train_input = self._get_valid_input(block, batch_size=2)
             _ = block(train_input)  # Run with batch size > 1
             train_running_means = [bn.running_mean.clone() for bn in bn_modules]
             
@@ -261,7 +288,7 @@ class ResidualFCBlockTestBase(CustomModuleBaseTest):
             block.eval()
             
             # Run with different data
-            different_data = torch.randn(2, block.in_features)
+            different_data = self._get_valid_input(block, batch_size=2)
             _ = block(different_data)
             
             # In eval mode, running stats should not change
@@ -297,10 +324,10 @@ class ResidualFCBlockTestBase(CustomModuleBaseTest):
     def _test_batch_size_one_handling(self):
         """Test handling of batch size 1 (important for BatchNorm)"""
         # Create a block
-        block = self._generate_random_residual_fc_block()
+        block = self._generate_random_residual_fc_block(norm_layer="batchnorm1d")
         
         # Create input with batch size 1
-        input_tensor = torch.randn(1, block.in_features)
+        input_tensor = self._get_valid_input(block, batch_size=1)
         
         # Eval mode should work with batch size 1
         block.eval()
@@ -313,7 +340,7 @@ class ResidualFCBlockTestBase(CustomModuleBaseTest):
             _ = block(input_tensor)
         
         # Train mode with batch size > 1 should work
-        input_tensor = torch.randn(2, block.in_features)
+        input_tensor = self._get_valid_input(block, batch_size=2)
         output = block(input_tensor)
         self.assertEqual(output.shape, (2, block.output))
     
@@ -334,7 +361,7 @@ class ResidualFCBlockTestBase(CustomModuleBaseTest):
             block.eval() # make sure to set the block to eval mode for consistent output
 
             # Test forward pass
-            x = torch.randn(2, block.in_features, requires_grad=False)
+            x = self._get_valid_input(block, batch_size=2)
 
             ms, rs = block._get_main_stream(), block._get_residual_stream()
 
@@ -369,7 +396,7 @@ class ResidualFCBlockTestBase(CustomModuleBaseTest):
 
             block.eval() # make sure to set the block to eval mode for consistent output
             # Test forward pass
-            x = torch.randn(2, block.in_features)
+            x = self._get_valid_input(block, batch_size=2)
             output = block(x)
             
             # Manually compute the expected output
@@ -391,7 +418,7 @@ class ResidualFCBlockTestBase(CustomModuleBaseTest):
                 block.eval() # make sure to set the block to eval mode for consistent output
 
                 # Test forward pass
-                x = torch.randn(2, block.in_features, requires_grad=False)
+                x = self._get_valid_input(block, batch_size=2)
                 output = block(x)
                 
                 # Manually compute the expected output
@@ -428,7 +455,8 @@ class TestGenericResidualFCBlock(ResidualFCBlockTestBase):
                                          activation=None, 
                                          dropout=None, 
                                          force_residual=None,
-                                         matching_dimensions=None):
+                                         matching_dimensions=None,
+                                         norm_layer=None):
         """Generate a GenericResidualFCBlock for testing"""
         if num_layers is None:
             num_layers = ri(2, 5)
@@ -465,7 +493,10 @@ class TestGenericResidualFCBlock(ResidualFCBlockTestBase):
             
         if force_residual is None:
             force_residual = random.choice([True, False])
-            
+        
+        if norm_layer is None:
+            norm_layer = random.choice(["batchnorm1d", "layernorm"])
+
         return GenericResidualFCBlock(
             output=output,
             in_features=in_features,
@@ -605,7 +636,6 @@ class TestGenericResidualFCBlock(ResidualFCBlockTestBase):
             input_tensor = self._get_valid_input(block, batch_size=1)
             self._test_batch_size_one_in_eval_mode(block, input_tensor)
 
-    # Only keep this test active
     def test_to_device(self):
         for _ in range(5):
             block = self._generate_random_residual_fc_block()
@@ -622,7 +652,8 @@ class TestExponentialResidualFCBlock(ResidualFCBlockTestBase):
                                          activation=None, 
                                          dropout=None, 
                                          force_residual=None,
-                                         matching_dimensions=None):
+                                         matching_dimensions=None,
+                                         norm_layer=None):
         """Generate an ExponentialResidualFCBlock for testing"""
         if num_layers is None:
             num_layers = ri(2, 5)
@@ -650,6 +681,9 @@ class TestExponentialResidualFCBlock(ResidualFCBlockTestBase):
         if force_residual is None:
             force_residual = random.choice([True, False])
             
+        if norm_layer is None:
+            norm_layer = random.choice(["batchnorm1d", "layernorm"])
+
         return ExponentialResidualFCBlock(
             output=output,
             in_features=in_features,

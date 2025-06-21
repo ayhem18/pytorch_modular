@@ -1,6 +1,6 @@
-import unittest
 import torch
 import random
+import unittest
 
 from torch import nn
 from random import randint as ri
@@ -19,7 +19,7 @@ class TestBasicLinearBlock(CustomModuleBaseTest):
         self.activation_names = BasicLinearBlock._ACTIVATIONS.copy()
         self.num_iterations = 1000
 
-    def _generate_random_linear_block(self, is_final=None, add_activation=None, activation=None, dropout=None):
+    def _generate_random_linear_block(self, is_final=None, add_activation=None, activation=None, dropout=None, norm_layer=None):
         """
         Generate a random LinearBlock with configurable parameters
         """
@@ -41,7 +41,8 @@ class TestBasicLinearBlock(CustomModuleBaseTest):
         if dropout is False:
             dropout = None
 
-        norm_layer = random.choice(["batchnorm1d", "layernorm"])
+        if norm_layer is None:
+            norm_layer = random.choice(["batchnorm1d", "layernorm"])
 
         return BasicLinearBlock(
             in_features=in_features,
@@ -52,6 +53,32 @@ class TestBasicLinearBlock(CustomModuleBaseTest):
             add_activation=add_activation,
             norm_layer=norm_layer
         )
+
+    def _generate_random_input(self, block, batch_size=None, seq_len=None):
+        """
+        Generate a random input tensor for the given block.
+        For blocks with BatchNorm1d, input will be 2D (batch_size, in_features)
+        For blocks with LayerNorm, input can be either 2D or 3D (batch_size, seq_len, in_features)
+        """
+        if batch_size is None:
+            batch_size = ri(1, 16)
+        
+        # Find if the block has BatchNorm1d
+        has_batchnorm = any(isinstance(m, nn.BatchNorm1d) for m in block.modules())
+        
+        if has_batchnorm:
+            # For BatchNorm1d, we need 2D input
+            return torch.randn(batch_size, block.in_features)
+        else:
+            # For LayerNorm, we can use either 2D or 3D input
+            use_3d = random.choice([True, False]) if seq_len is None else True
+            
+            if use_3d:
+                if seq_len is None:
+                    seq_len = ri(5, 20)
+                return torch.randn(batch_size, seq_len, block.in_features)
+            else:
+                return torch.randn(batch_size, block.in_features)
 
     def test_non_final_block_structure(self):
         """Test that non-final blocks have the correct structure"""
@@ -210,25 +237,25 @@ class TestBasicLinearBlock(CustomModuleBaseTest):
             
             # Get the first Linear layer to determine input size
             linear_layer = next(module for module in block.modules() if isinstance(module, nn.Linear))
-            in_features = linear_layer.in_features
             out_features = linear_layer.out_features
             
             # Create batch of random size
             block.eval() 
-
             batch_size = ri(1, 16)
-            input_tensor = torch.randn(batch_size, in_features, requires_grad=False)
+            
+            # Generate appropriate input based on the normalization layer
+            input_tensor = self._generate_random_input(block, batch_size)
             
             # Get actual output shape
             output = block(input_tensor)
-            actual_shape = tuple(output.shape)
             
-            # Expected shape is (batch_size, out_features)
-            expected_shape = (batch_size, out_features)
-            
-            # Assert shapes match
-            self.assertEqual(actual_shape, expected_shape, 
-                            f"Output shape mismatch: got {actual_shape}, expected {expected_shape}")
+            # Check output shape based on input shape
+            if input_tensor.dim() == 2:
+                # For 2D input (batch_size, in_features)
+                self.assertEqual(output.shape, (batch_size, out_features))
+            else:
+                # For 3D input (batch_size, seq_len, in_features)
+                self.assertEqual(output.shape, (batch_size, input_tensor.size(1), out_features))
 
     def test_train_and_eval_modes(self):
         """Test that train and eval modes work correctly"""
@@ -244,13 +271,11 @@ class TestBasicLinearBlock(CustomModuleBaseTest):
                 self.assertFalse(child.training, "Child module should be in eval mode")
             
             # Create a small batch
-            linear_layer = next(module for module in block.modules() if isinstance(module, nn.Linear))
-            in_features = linear_layer.in_features
-            single_item_batch = torch.randn(1, in_features)
+            input_tensor = self._generate_random_input(block, batch_size=1)
             
             # This should not raise an error in eval mode
             try:
-                _ = block(single_item_batch)
+                _ = block(input_tensor)
             except Exception as e:
                 self.fail(f"Block in eval mode raised an error with batch size 1: {e}")
             
@@ -261,27 +286,26 @@ class TestBasicLinearBlock(CustomModuleBaseTest):
             for child in block.block.children():
                 self.assertTrue(child.training, "Child module should be in train mode")
 
-
-            try:
-                _ = block(single_item_batch)
-                self.fail(f"Block in train mode did not raise an error with batch size 1 when it should have")
-            except Exception as e:
-                pass
-
-            # Find BatchNorm1d or LayerNorm modules
+            # Find BatchNorm1d modules
             bn_modules = [m for m in block.modules() if isinstance(m, nn.BatchNorm1d)]
             
             # If there are batch norm modules (non-final blocks)
             if bn_modules:
+                # In train mode, a batch of size 1 should raise a ValueError for BatchNorm1d
+                if input_tensor.dim() == 2 and input_tensor.size(0) == 1:
+                    with self.assertRaises(ValueError):
+                        _ = block(input_tensor)
+                
                 # Store running stats in train mode
-                _ = block(torch.randn(2, in_features))  # Run with batch size > 1
+                input_tensor_larger = self._generate_random_input(block, batch_size=2)
+                _ = block(input_tensor_larger)  # Run with batch size > 1
                 train_running_means = [bn.running_mean.clone() for bn in bn_modules]
                 
                 # Set to eval mode
                 block.eval()
                 
                 # Run with different data
-                _ = block(torch.randn(2, in_features))
+                _ = block(input_tensor_larger)
                 
                 # In eval mode, running stats should not change
                 for i, bn in enumerate(bn_modules):
@@ -343,14 +367,9 @@ class TestBasicLinearBlock(CustomModuleBaseTest):
             # Create a block with or without batch norm
             block = self._generate_random_linear_block(is_final=is_final)
             
-            # Find a Linear layer to determine input features
-            linear_layer = next(module for module in block.modules() if isinstance(module, nn.Linear))
-            in_features = linear_layer.in_features
-            
             # Create input with batch size 1
-            input_tensor = torch.randn(1, in_features)
+            input_tensor = self._generate_random_input(block, batch_size=1)
             
-
             # For final blocks (no batch norm), should work in both modes
             if is_final:
                 block.train()
@@ -359,8 +378,9 @@ class TestBasicLinearBlock(CustomModuleBaseTest):
                 block.eval()
                 _ = block(input_tensor)  # Should not raise error
             else:
-                # check if the normalization layer is batch
-                norm_layer = [m for m in block.modules() if isinstance(m, (nn.BatchNorm1d, nn.LayerNorm))]
+                # check if the normalization layer is batch norm
+                norm_layers = [m for m in block.modules() if isinstance(m, (nn.BatchNorm1d, nn.LayerNorm))]
+                has_batchnorm = any(isinstance(m, nn.BatchNorm1d) for m in norm_layers)
 
                 # For non-final blocks (with batch norm)
                 # Eval mode should work with batch size 1
@@ -369,9 +389,40 @@ class TestBasicLinearBlock(CustomModuleBaseTest):
                 
                 block.train()
 
-                if isinstance(norm_layer[0], nn.BatchNorm1d):
+                # Only BatchNorm1d should have issues with batch size 1 in train mode
+                if has_batchnorm and input_tensor.dim() == 2:
                     with self.assertRaises(ValueError):
-                        block.forward(input_tensor) # having an error ensures that batch normalization indeed moved to the train mode.
+                        block.forward(input_tensor)  # having an error ensures that batch normalization indeed moved to the train mode.
+                else:
+                    # LayerNorm should work fine with batch size 1
+                    _ = block(input_tensor)
+
+    def test_3d_input_with_layernorm(self):
+        """Test that LayerNorm blocks can handle 3D inputs"""
+        for _ in range(self.num_iterations):
+            # Create a block with LayerNorm
+            block = self._generate_random_linear_block(is_final=False, norm_layer="layernorm")
+            
+            # Verify it has LayerNorm
+            has_layernorm = any(isinstance(m, nn.LayerNorm) for m in block.modules())
+            self.assertTrue(has_layernorm, "Block should have LayerNorm")
+            
+            # Create 3D input
+            batch_size = ri(1, 10)
+            seq_len = ri(5, 20)
+            input_tensor = torch.randn(batch_size, seq_len, block.in_features)
+            
+            # Forward pass should work
+            block.eval()
+            output = block(input_tensor)
+            
+            # Check output shape
+            self.assertEqual(output.shape, (batch_size, seq_len, block.out_features))
+            
+            # Train mode should also work
+            block.train()
+            output = block(input_tensor)
+            self.assertEqual(output.shape, (batch_size, seq_len, block.out_features))
 
     def test_eval_mode(self):
         for _ in range(self.num_iterations):
@@ -388,27 +439,28 @@ class TestBasicLinearBlock(CustomModuleBaseTest):
         # This shouldn't pass with BatchNorm, so we'll use final blocks
         for _ in range(self.num_iterations):
             block = self._generate_random_linear_block(is_final=True, dropout=None)
-            input_tensor = torch.randn(random.randint(1, 10), block.in_features)
+            input_tensor = self._generate_random_input(block)
             super()._test_consistent_output_without_dropout_bn(block, input_tensor)
 
 
     def test_consistent_output_in_eval_mode(self):
         for _ in range(self.num_iterations):
             block = self._generate_random_linear_block()
-            input_tensor = torch.randn(random.randint(1, 10), block.in_features)
+            input_tensor = self._generate_random_input(block)
             super()._test_consistent_output_in_eval_mode(block, input_tensor)
     
     def test_batch_size_one_in_train_mode(self):
         for _ in range(self.num_iterations):
-            block = self._generate_random_linear_block(is_final=False)  # Include BatchNorm
-            input_tensor = torch.randn(1, block.in_features)
+            # Use LayerNorm to avoid BatchNorm1d issues with batch size 1
+            block = self._generate_random_linear_block(is_final=False, norm_layer="layernorm")
+            input_tensor = self._generate_random_input(block, batch_size=1)
             super()._test_batch_size_one_in_train_mode(block, input_tensor)
 
 
     def test_batch_size_one_in_eval_mode(self):
         for _ in range(self.num_iterations):
             block = self._generate_random_linear_block()
-            input_tensor = torch.randn(1, block.in_features)
+            input_tensor = self._generate_random_input(block, batch_size=1)
             super()._test_batch_size_one_in_eval_mode(block, input_tensor)
 
 
