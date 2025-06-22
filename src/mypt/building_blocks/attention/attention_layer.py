@@ -7,14 +7,16 @@ import torch
 import numpy as np
 
 from torch import nn
-from typing import Iterator, Optional
+from typing import Optional
 
 from mypt.losses.auxiliary import MaskSoftmax
+from mypt.building_blocks.mixins.general import NonSequentialModuleMixin
 
 
-class SingleHeadAttentionLayer(nn.Module):
+class SingleHeadAttentionLayer(NonSequentialModuleMixin, nn.Module):
     def __init__(self, input_dimension: int, value_dim: int, key_dim: int) -> None:
-        super().__init__()
+        nn.Module.__init__(self)
+        NonSequentialModuleMixin.__init__(self, inner_components_fields=['W_q', 'W_k', 'W_v', 'W_o'])
 
         self.input_dimension = input_dimension
         self.value_dim = value_dim
@@ -25,7 +27,6 @@ class SingleHeadAttentionLayer(nn.Module):
         self.W_v = nn.Linear(input_dimension, value_dim) # v_i = W_v * x_i
         
         self.W_o = nn.Linear(value_dim, input_dimension) # head_i = W_o * v_i
-        self.sm = MaskSoftmax()
 
 
     # ------------------------------------------------------------------
@@ -89,7 +90,7 @@ class SingleHeadAttentionLayer(nn.Module):
             query_key_product: (B,S,S) raw scaled dot-product scores.
             final_mask:        (B,S,S) boolean mask where True=keep, False=mask.
         """
-        return self.sm(query_key_product, final_mask, dim=-1)
+        return MaskSoftmax().forward(query_key_product, final_mask, dim=-1)
 
     def _compute_new_v(self, weights: torch.Tensor, v: torch.Tensor) -> torch.Tensor:
         """
@@ -133,41 +134,6 @@ class SingleHeadAttentionLayer(nn.Module):
 
         return self.W_o.forward(output)
 
-    def __call__(self, x: torch.Tensor) -> torch.Tensor:
-        return self.forward(x)
+    def __call__(self, x: torch.Tensor, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+        return self.forward(x, mask)
 
-    def children(self) -> list[nn.Module]:
-        return [self.W_q, self.W_k, self.W_v, self.W_o]
-
-    def named_children(self) -> list[tuple[str, nn.Module]]:
-        return [("W_q", self.W_q), ("W_k", self.W_k), ("W_v", self.W_v), ("W_o", self.W_o)]
-
-
-    def modules(self) -> Iterator[nn.Module]:
-        # yield the actual module as per Pytorch conventions
-        yield self
-
-        for child in self.children():
-            yield from child.modules()
-
-
-    def train(self, mode: bool = True) -> "SingleHeadAttentionLayer":
-        """
-        """
-        super().train(mode)
-        for c in self.children():
-            c.train(mode)
-        return self
-
-    def eval(self) -> "SingleHeadAttentionLayer":
-        """
-        """
-        return self.train(False)
-    
-    def to(self, *args, **kwargs) -> "SingleHeadAttentionLayer":
-        """
-        """
-        for c in self.children():
-            c.to(*args, **kwargs)
-        return self
-    

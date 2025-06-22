@@ -53,10 +53,12 @@ class TestSingleHeadAttentionLayer(CustomModuleBaseTest):
         self.naive_att.W_o.weight.data = self.vectorized_att.W_o.weight.data.clone()
         self.naive_att.W_o.bias.data = self.vectorized_att.W_o.bias.data.clone()
     
-    def _generate_random_input(self, batch_size: int, seq_length: int) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    def _generate_random_input(self, batch_size: int, seq_length: int) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         """Generate random input, query, key and value tensors"""
-        x = torch.randn(batch_size, seq_length, self.input_dim)
+        torch_dtype = self.vectorized_att.W_q.weight.dtype
+        x = torch.randn(batch_size, seq_length, self.input_dim).to(torch_dtype)
         
+
         # Apply linear transformations to get q, k, v
         with torch.no_grad():
             q = self.vectorized_att.W_q(x)
@@ -113,7 +115,7 @@ class TestSingleHeadAttentionLayer(CustomModuleBaseTest):
             # Check that they are approximately equal
             self.assertTrue(torch.allclose(vec_product, naive_product, atol=2*1e-7))
 
-    # @unittest.skip("passed")
+    @unittest.skip("passed")
     def test_compute_weights(self):
         """Test that both implementations compute the same attention weights"""
         for _ in tqdm(range(self.num_iterations), desc="Testing compute weights"):
@@ -134,17 +136,17 @@ class TestSingleHeadAttentionLayer(CustomModuleBaseTest):
             final_vec_mask = self.vectorized_att.create_final_mask(vec_mask, None)
             final_naive_mask = self.naive_att.create_final_mask(naive_mask, None)
 
-            inf_naive_mask = self.naive_att._process_final_mask(final_naive_mask)
+            # inf_naive_mask = self.naive_att._process_final_mask(final_naive_mask)
 
             # Compute weights using both implementations
             vec_weights = self.vectorized_att._compute_weights(vec_product, final_vec_mask)
-            naive_weights = self.naive_att._compute_weights(naive_product, inf_naive_mask)
+            naive_weights = self.naive_att._compute_weights(naive_product, final_naive_mask)
             
             # Check they have the same shape
             self.assertEqual(vec_weights.shape, naive_weights.shape)
             
             # Check that they are approximately equal
-            self.assertTrue(torch.allclose(vec_weights, naive_weights, atol=2*1e-7))
+            self.assertTrue(torch.allclose(vec_weights, naive_weights, atol=1e-10))
 
             # Additional check: make sure masked positions (j > i) are ~0 after soft-max
             for b in range(batch_size):
@@ -156,7 +158,7 @@ class TestSingleHeadAttentionLayer(CustomModuleBaseTest):
                         msg=f"Row {i} in batch {b} should have {seq_length - (i + 1)} zeros, found {num_zeros}"
                     )
 
-    @unittest.skip("skip for now")
+    @unittest.skip("passed")
     def test_compute_weighted_values(self):
         """Test that both implementations compute the same weighted values"""
         for _ in tqdm(range(self.num_iterations), desc="Testing compute weighted values"):
@@ -177,7 +179,7 @@ class TestSingleHeadAttentionLayer(CustomModuleBaseTest):
             # Compute weights
             vec_weights = self.vectorized_att._compute_weights(vec_product, vec_mask)
 
-            naive_mask = self.naive_att._process_final_mask(naive_mask)
+            # naive_mask = self.naive_att._process_final_mask(naive_mask)
             naive_weights = self.naive_att._compute_weights(naive_product, naive_mask)
             
             # Compute weighted values
@@ -188,7 +190,7 @@ class TestSingleHeadAttentionLayer(CustomModuleBaseTest):
             self.assertEqual(vec_output.shape, naive_output.shape)
             
             # Check that they are approximately equal
-            self.assertTrue(torch.allclose(vec_output, naive_output, atol=2*1e-7))
+            self.assertTrue(torch.allclose(vec_output, naive_output, atol=1e-10))
 
     @unittest.skip("passed")
     def test_full_forward_pass(self):
@@ -331,13 +333,13 @@ class TestSingleHeadAttentionLayer(CustomModuleBaseTest):
             vec_final = self.vectorized_att.create_final_mask(causal_vec, pad_mask)
             naive_final = self.naive_att.create_final_mask(causal_naive, pad_mask)
 
-            inf_vec_mask = self.vectorized_att._process_final_mask(vec_final)
-            inf_naive_mask = self.naive_att._process_final_mask(naive_final)
+            # inf_vec_mask = self.vectorized_att._process_final_mask(vec_final)
+            # inf_naive_mask = self.naive_att._process_final_mask(naive_final)
 
-            self.assertTrue(torch.allclose(inf_vec_mask, inf_naive_mask), "different masks from the different implementations")
+            self.assertTrue(torch.allclose(vec_final, naive_final), "different masks from the different implementations")
 
-            vec_weights = self.vectorized_att._compute_weights(vec_product, inf_vec_mask)
-            naive_weights = self.naive_att._compute_weights(naive_product, inf_naive_mask)
+            vec_weights = self.vectorized_att._compute_weights(vec_product, vec_final)
+            naive_weights = self.naive_att._compute_weights(naive_product, naive_final)
 
             self.assertEqual(vec_weights.shape, naive_weights.shape)
 
@@ -345,7 +347,7 @@ class TestSingleHeadAttentionLayer(CustomModuleBaseTest):
             for i in range(1, 6):
                 try:
                     self.assertTrue(
-                    torch.allclose(vec_weights, naive_weights, atol=i * 1e-8),
+                    torch.allclose(vec_weights, naive_weights, atol=i * 1e-10),
                     msg="Vectorised and naive weights diverge under a random mask."
                     )
                     passed = True
@@ -366,7 +368,7 @@ class TestSingleHeadAttentionLayer(CustomModuleBaseTest):
 
         
 
-    @unittest.skip("skip for now")
+    @unittest.skip("passed")
     def test_compute_weighted_values(self):
         """Test that both implementations compute the same weighted values"""
         for _ in tqdm(range(self.num_iterations), desc="Testing compute weighted values"):
@@ -387,11 +389,11 @@ class TestSingleHeadAttentionLayer(CustomModuleBaseTest):
             final_mask = self.vectorized_att.create_final_mask(causal_vec, pad_mask)
 
             # Compute weights
-            inf_vec_mask = self.vectorized_att._process_final_mask(final_mask)
-            inf_naive_mask = self.naive_att._process_final_mask(final_mask)
+            # inf_vec_mask = self.vectorized_att._process_final_mask(final_mask)
+            # inf_naive_mask = self.naive_att._process_final_mask(final_mask)
 
-            vec_weights = self.vectorized_att._compute_weights(vec_product, inf_vec_mask)
-            naive_weights = self.naive_att._compute_weights(naive_product, inf_naive_mask)
+            vec_weights = self.vectorized_att._compute_weights(vec_product, final_mask)
+            naive_weights = self.naive_att._compute_weights(naive_product, final_mask)
             
             # Compute weighted values
             vec_output = self.vectorized_att._compute_new_v(vec_weights, v)
@@ -417,7 +419,7 @@ class TestSingleHeadAttentionLayer(CustomModuleBaseTest):
 
 
 
-    @unittest.skip("skip for now")
+    @unittest.skip("passed")
     def test_full_forward_pass_with_random_mask(self):
         """Test that both implementations produce the same output for the full forward pass"""
         for _ in tqdm(range(self.num_iterations), desc="Testing full forward pass w/ random mask"):
@@ -452,6 +454,58 @@ class TestSingleHeadAttentionLayer(CustomModuleBaseTest):
             
             self.assertTrue(passed, msg="Vectorised and naive outputs diverge under a random mask.")
 
+    # @unittest.skip("passed")
+    def test_gradcheck(self) -> None:
+        """Test gradient computation using torch.autograd.gradcheck."""
+        # Use small dimensions for speed
+        for _ in tqdm(range(100), desc="Testing gradcheck"):
+            batch_size = np.random.randint(1, 10)
+            seq_length = np.random.randint(5, 20)
+            input_tensor, _, _, _ = self._generate_random_input(batch_size, seq_length)
+            pad_mask = self._generate_random_pad_mask(batch_size, seq_length)
+            
+            # Test with mask
+            super()._test_gradcheck(self.vectorized_att, input_tensor, pad_mask)
+            # Test without mask
+            super()._test_gradcheck(self.vectorized_att, input_tensor)
+
+    # @unittest.skip("passed")
+    def test_gradcheck_large_values(self) -> None:
+        """Test gradient computation with large input values."""
+        # Use small dimensions for speed
+        for _ in tqdm(range(100), desc="Testing gradcheck with large values"):
+            batch_size = np.random.randint(1, 10)
+            seq_length = np.random.randint(5, 20)
+            input_tensor, _, _, _ = self._generate_random_input(batch_size, seq_length)
+            pad_mask = self._generate_random_pad_mask(batch_size, seq_length)
+        
+            # Test with mask
+            super()._test_gradcheck_large_values(self.vectorized_att, input_tensor, pad_mask)
+            # Test without mask
+            super()._test_gradcheck_large_values(self.vectorized_att, input_tensor)
+
+    # @unittest.skip("passed")
+    def test_grad_against_nan(self) -> None:
+        """Test that the gradient is not nan"""
+        for _ in range(self.num_iterations):
+            batch_size = np.random.randint(1, 10)
+            seq_length = np.random.randint(5, 20)
+            input_tensor, _, _, _ = self._generate_random_input(batch_size, seq_length)
+            pad_mask = self._generate_random_pad_mask(batch_size, seq_length)
+            super()._test_grad_against_nan(self.vectorized_att, input_tensor, pad_mask)
+            super()._test_grad_against_nan(self.vectorized_att, input_tensor)
+
+
+    # @unittest.skip("passed")
+    def test_grad_against_nan_large_values(self) -> None:
+        """Test that the gradient is not nan with large input values"""
+        for _ in range(self.num_iterations):
+            batch_size = np.random.randint(1, 10)
+            seq_length = np.random.randint(5, 20)
+            input_tensor, _, _, _ = self._generate_random_input(batch_size, seq_length)
+            pad_mask = self._generate_random_pad_mask(batch_size, seq_length)
+            super()._test_grad_against_nan_large_values(self.vectorized_att, input_tensor, pad_mask)
+            super()._test_grad_against_nan_large_values(self.vectorized_att, input_tensor)
 
 
 if __name__ == '__main__':

@@ -138,31 +138,4 @@ class MultiHeadAttentionLayer(NonSequentialModuleMixin, nn.Module):
     def __call__(self, x: torch.Tensor, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
         return self.forward(x, mask)
 
-    # def children(self) -> list[nn.Module]:
-    #     return [self.W_q, self.W_k, self.W_v, self.W_o] 
-
-
-    # def named_children(self) -> list[tuple[str, nn.Module]]:
-    #     return [("W_q", self.W_q), ("W_k", self.W_k), ("W_v", self.W_v), ("W_o", self.W_o)] 
-    
-
-    # def train(self, mode: bool = True) -> "MultiHeadAttentionLayer":    
-    #     """
-    #     """
-    #     super().train(mode)
-    #     for c in self.children():
-    #         c.train(mode)
-    #     return self
-    
-    # def eval(self) -> "MultiHeadAttentionLayer":    
-    #     """
-    #     """
-    #     return self.train(False)
-    
-    # def to(self, *args, **kwargs) -> "MultiHeadAttentionLayer":
-    #     """
-    #     """
-    #     for c in self.children():
-    #         c.to(*args, **kwargs)
-    #     return self
     

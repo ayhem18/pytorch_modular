@@ -55,9 +55,9 @@ class NaiveMHA(nn.Module):
         col = pad_bool.unsqueeze(1).unsqueeze(1).expand(b, self.num_heads, s, s)
         return causal_mask & row & col
 
-    def _process_final_mask(self, final_mask: torch.Tensor) -> torch.Tensor:
-        float_mask = final_mask.type(torch.float32)
-        return float_mask.masked_fill(~final_mask, float("-inf")).masked_fill(final_mask, 1)
+    # def _process_final_mask(self, final_mask: torch.Tensor) -> torch.Tensor:
+    #     float_mask = final_mask.type(torch.float32)
+    #     return float_mask.masked_fill(~final_mask, float("-inf")).masked_fill(final_mask, 1)
     
     def _key_query_product(self, q: torch.Tensor, k: torch.Tensor) -> torch.Tensor:
         """
@@ -101,23 +101,42 @@ class NaiveMHA(nn.Module):
         Returns:
             Attention weights tensor of shape (B, H, S, S)
         """        
-        batch_size, num_heads, sequence_length, _ = query_key_product.shape
+        # batch_size, num_heads, sequence_length, _ = query_key_product.shape
+        
+        # weights = torch.zeros_like(query_key_product)
+        
+        # for b in range(batch_size):
+        #     for h in range(num_heads):
+        #         for i in range(sequence_length):
+        #             row_scores = query_key_product[b, h, i]
+        #             row_mask = final_mask[b, h, i]
+
+        #             masked_scores = row_scores[row_mask]
+
+        #             if masked_scores.numel() > 0:
+        #                 softmax_scores = F.softmax(masked_scores, dim=0)
+        #                 weights[b, h, i, row_mask] = softmax_scores
+        # return weights
+
+
+        batch_size, sequence_length, _ = query_key_product.shape
         
         weights = torch.zeros_like(query_key_product)
-        
+
         for b in range(batch_size):
-            for h in range(num_heads):
-                for i in range(sequence_length):
-                    row_scores = query_key_product[b, h, i]
-                    row_mask = final_mask[b, h, i]
+            for i in range(sequence_length):
+                row_scores = query_key_product[b, i]
+                row_mask = final_mask[b, i]
+                
+                masked_scores = row_scores[row_mask]
+                
+                if masked_scores.numel() > 0:
+                    softmax_scores = F.softmax(masked_scores, dim=0)
+                    weights[b, i, row_mask] = softmax_scores
 
-                    masked_scores = row_scores[row_mask]
-
-                    if masked_scores.numel() > 0:
-                        softmax_scores = F.softmax(masked_scores, dim=0)
-                        weights[b, h, i, row_mask] = softmax_scores
         return weights
-    
+
+
     def _compute_new_v(self, weights: torch.Tensor, v: torch.Tensor) -> torch.Tensor:
         """
         Compute weighted sum of values without vectorization.
@@ -174,8 +193,8 @@ class NaiveMHA(nn.Module):
             qk_product = self._key_query_product(q_head, k_head)
             
             # Apply masking and compute weights
-            attn_weights = self._compute_weights(qk_product.unsqueeze(1), final_mask[:, h:h+1]).squeeze(1)
-            
+            attn_weights = self._compute_weights(qk_product, final_mask[:, h])
+
             # Compute weighted sum of values
             head_output = self._compute_new_v(attn_weights, v_head)
             

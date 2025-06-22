@@ -1,5 +1,6 @@
 import torch
 import unittest
+from torch.autograd import gradcheck
 from typing import Any, List, Tuple, Union
 
 
@@ -222,35 +223,77 @@ class CustomModuleBaseTest(unittest.TestCase):
             self.fail(f"Calling the module on a tensor moved to cpu should not raise an error. Got: {e}")
 
 
-    # TODO: better understand the clone behavior
-    # NOTE: this test is not used for now...
-    def _test_clone_method(self, block: torch.nn.Module) -> None:
-        """Test the clone() method if it exists"""
-        if not hasattr(block, 'clone'):
-            return  # Skip if clone method doesn't exist
+    def _test_gradcheck(self, block: torch.nn.Module, input_tensor: torch.Tensor, *args, **kwargs) -> None:
+        """Test gradient computation using torch.autograd.gradcheck."""
+        # gradcheck needs double precision and the block to be in eval mode for reproducibility
+        block_double = block.to(torch.double).eval()
+        input_tensor_double = input_tensor.to(torch.double)
         
-        # Clone the module
-        cloned_block = block.clone()
+        # Convert args and kwargs to double as well if they are tensors
+        args_double = [arg.to(torch.double) if isinstance(arg, torch.Tensor) else arg for arg in args]
+        kwargs_double = {k: v.to(torch.double) if isinstance(v, torch.Tensor) else v for k, v in kwargs.items()}
+
+        input_tensor_double.requires_grad = True
         
-        # Check that it's a different object
-        self.assertIsNot(cloned_block, block, "clone() should return a new object")
+        # gradcheck expects a tuple of inputs. We are only checking gradients wrt input_tensor.
+        test_passed = gradcheck(lambda inp: block_double(inp, *args_double, **kwargs_double), (input_tensor_double,), atol=1e-8)
+        self.assertTrue(test_passed, "gradcheck failed for the module.")
+
+
+    def _test_gradcheck_large_values(self, block: torch.nn.Module, input_tensor: torch.Tensor, *args, **kwargs) -> None:
+        """Test gradient computation with large input values."""
+        # gradcheck needs double precision and the block to be in eval mode for reproducibility
+        block_double = block.to(torch.double).eval()
+        input_tensor_double = input_tensor.to(torch.double)
+
+        # Convert args and kwargs to double as well if they are tensors
+        args_double = [arg.to(torch.double) if isinstance(arg, torch.Tensor) else arg for arg in args]
+        kwargs_double = {k: v.to(torch.double) if isinstance(v, torch.Tensor) else v for k, v in kwargs.items()}
+
+        input_tensor_double = input_tensor_double * 1e4
+        input_tensor_double.requires_grad = True
+
+        # Using a higher tolerance for large values as gradients can be very large.
+        test_passed = gradcheck(lambda inp: block_double(inp, *args_double, **kwargs_double), (input_tensor_double,))
+        self.assertTrue(test_passed, "gradcheck failed for the module with large input values.")
+
+
+    def _test_grad_against_nan(self, block: torch.nn.Module, input_tensor: torch.Tensor, *args, **kwargs) -> None:
+        """Test that the gradient is not nan"""
+        block_double = block.to(torch.double).train()
+        input_tensor_double = input_tensor.to(torch.double)
+        input_tensor_double.requires_grad = True
+
+
+        args_double = [arg.to(torch.double) if isinstance(arg, torch.Tensor) else arg for arg in args]
+        kwargs_double = {k: v.to(torch.double) if isinstance(v, torch.Tensor) else v for k, v in kwargs.items()}
+
+        output = block_double(input_tensor_double, *args_double, **kwargs_double)
+
+        output.sum().backward()
+
+        self.assertFalse(torch.isnan(input_tensor_double.grad).any(), "Nan values in the gradient")
+
+        for param in block_double.parameters():
+            self.assertFalse(torch.isnan(param.grad).any(), "Nan values in the gradient")
         
-        # Check that they have the same class
-        self.assertIs(cloned_block.__class__, block.__class__, 
-                     "clone() should return an object of the same class")
-        
-        # Check that they have the same number of parameters
-        orig_params = list(block.parameters())
-        cloned_params = list(cloned_block.parameters())
-        self.assertEqual(len(orig_params), len(cloned_params),
-                        "Original and cloned modules should have the same number of parameters")
-        
-        # Check that parameters have the same shape but are different objects
-        for p1, p2 in zip(orig_params, cloned_params):
-            self.assertEqual(p1.shape, p2.shape, 
-                            "Corresponding parameters should have the same shape")
-            self.assertIsNot(p1, p2, "Parameters should be different objects")
-            # Values should be initially the same
-            self.assertTrue(torch.allclose(p1, p2),
-                           "Parameters should have the same values after cloning")
-    
+
+    def _test_grad_against_nan_large_values(self, block: torch.nn.Module, input_tensor: torch.Tensor, *args, **kwargs) -> None:
+        """Test that the gradient is not nan"""
+        block_double = block.to(torch.double).eval()
+        input_tensor_double = input_tensor.to(torch.double)
+
+        input_tensor_double = input_tensor_double * 1e4
+        input_tensor_double.requires_grad = True
+
+        args_double = [arg.to(torch.double) if isinstance(arg, torch.Tensor) else arg for arg in args]
+        kwargs_double = {k: v.to(torch.double) if isinstance(v, torch.Tensor) else v for k, v in kwargs.items()}
+
+        output = block_double(input_tensor_double, *args_double, **kwargs_double)
+
+        output.sum().backward()
+
+        self.assertFalse(torch.isnan(input_tensor_double.grad).any(), "Nan values in the gradient with large input values") 
+
+        for param in block_double.parameters():
+            self.assertFalse(torch.isnan(param.grad).any(), "Nan values in the gradient with large input values")
