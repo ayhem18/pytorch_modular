@@ -6,6 +6,7 @@ Specifically: exhaustive randomised checks for the `MaskSoftmax` module.
 
 import torch
 import unittest
+from tqdm import tqdm
 
 import numpy as np
 import torch.nn.functional as F
@@ -24,10 +25,115 @@ class TestMaskSoftmax(unittest.TestCase):
         self.num_trials = 1000
         pu.seed_everything(0)
 
+    def _compute_naive_masked_softmax_last_dim_2d(self, x: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+        """Naive masked softmax on the last dimension of a 2D tensor."""
+        B, _ = x.shape
+        expected = torch.zeros_like(x)
+        for i in range(B):
+            row_x = x[i]
+            row_mask = mask[i]
+            
+            masked_vals = row_x[row_mask]
+            if masked_vals.numel() > 0:
+                softmax_vals = F.softmax(masked_vals, dim=0)
+                expected[i, row_mask] = softmax_vals
+        return expected
+
+    def _compute_naive_masked_softmax_last_dim_3d(self, x: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+        """Naive masked softmax on the last dimension of a 3D tensor."""
+        B, S, _ = x.shape
+        expected = torch.zeros_like(x)
+        for b in range(B):
+            for s in range(S):
+                slice_x = x[b, s]
+                slice_mask = mask[b, s]
+                
+                masked_vals = slice_x[slice_mask]
+                if masked_vals.numel() > 0:
+                    softmax_vals = F.softmax(masked_vals, dim=0)
+                    expected[b, s, slice_mask] = softmax_vals
+        return expected
+
+    def test_masked_softmax_vs_naive_2d(self):
+        """Compare MaskSoftmax with a naive loop-based 2D implementation for all dimensions."""
+        num_iterations = 10_000
+        for _ in tqdm(range(num_iterations), desc="Testing MaskSoftmax vs naive 2D"):
+            # 1. create a random 2d tensor and mask
+            B = np.random.randint(2, 8)
+            S = np.random.randint(2, 16)
+            x = torch.randn(B, S)
+            mask = torch.rand(B, S) > 0.3 # keep ~70%
+
+            # Test dim=-1 (rows)
+            # Ensure at least one True per row
+            for b in range(B):
+                if not mask[b].any(): mask[b, np.random.randint(0, S)] = True
+            
+            output = self.sm(x, mask, dim=-1)
+            expected = self._compute_naive_masked_softmax_last_dim_2d(x, mask)
+            self.assertTrue(torch.allclose(output, expected, atol=1e-12))
+            
+            # Test dim=0 (columns)
+            # Ensure at least one True per column
+            mask = mask.T # reuse same random mask, but check columns now
+            for s in range(S):
+                if not mask[s].any(): mask[s, np.random.randint(0, B)] = True
+            mask = mask.T # transpose back
+
+            output_dim0 = self.sm(x, mask, dim=0)
+            expected_dim0 = self._compute_naive_masked_softmax_last_dim_2d(x.T, mask.T).T
+            self.assertTrue(torch.allclose(output_dim0, expected_dim0, atol=1e-12))
+
+    def test_masked_softmax_vs_naive_3d(self):
+        """Compare MaskSoftmax with a naive loop-based 3D implementation for all dimensions."""
+        num_iterations = 10_000
+        for _ in tqdm(range(num_iterations), desc="Testing MaskSoftmax vs naive 3D"):
+            # 1. create a random 3d tensor and mask
+            B = np.random.randint(2, 8)
+            S = np.random.randint(2, 16)
+            D = np.random.randint(2, 12)
+            x = torch.randn(B, S, D)
+            
+            # Test dim=-1 (dim 2)
+            mask = torch.rand(B, S, D) > 0.3
+            for b in range(B):
+                for s in range(S):
+                    if not mask[b, s].any(): mask[b, s, np.random.randint(0, D)] = True
+            
+            output = self.sm(x, mask, dim=-1)
+            expected = self._compute_naive_masked_softmax_last_dim_3d(x, mask)
+            self.assertTrue(torch.allclose(output, expected, atol=1e-12))
+
+            # Test dim=1
+            mask = torch.rand(B, S, D) > 0.3
+            for b in range(B):
+                for d in range(D):
+                    if not mask[b, :, d].any(): mask[b, np.random.randint(0, S), d] = True
+            
+            output_dim1 = self.sm(x, mask, dim=1)
+            x_permuted_d1 = x.permute(0, 2, 1)
+            mask_permuted_d1 = mask.permute(0, 2, 1)
+            expected_permuted_d1 = self._compute_naive_masked_softmax_last_dim_3d(x_permuted_d1, mask_permuted_d1)
+            expected_dim1 = expected_permuted_d1.permute(0, 2, 1)
+            self.assertTrue(torch.allclose(output_dim1, expected_dim1, atol=1e-12))
+
+            # Test dim=0
+            mask = torch.rand(B, S, D) > 0.3
+            for s in range(S):
+                for d in range(D):
+                    if not mask[:, s, d].any(): mask[np.random.randint(0, B), s, d] = True
+
+            output_dim0 = self.sm(x, mask, dim=0)
+            x_permuted_d0 = x.permute(1, 2, 0)
+            mask_permuted_d0 = mask.permute(1, 2, 0)
+            expected_permuted_d0 = self._compute_naive_masked_softmax_last_dim_3d(x_permuted_d0, mask_permuted_d0)
+            expected_dim0 = expected_permuted_d0.permute(2, 0, 1)
+            self.assertTrue(torch.allclose(output_dim0, expected_dim0, atol=1e-12))
+
     # --------------------------------------------------------------
     # 1. All-ones mask ≈ torch.softmax (3d)
     # --------------------------------------------------------------
-    # @unittest.skip("passed")
+    @unittest.skip("passed")
     def test_all_ones_mask_3d(self):
         for _ in range(self.num_trials):
             # Random 3-D tensor (B,S,D) with D>=2 for meaningful softmax dim
@@ -43,7 +149,7 @@ class TestMaskSoftmax(unittest.TestCase):
                 self.assertTrue(torch.allclose(out, expected, atol=1e-12))
 
     # large logits
-    # @unittest.skip("passed")
+    @unittest.skip("passed")
     def test_all_ones_mask_3d_large_logits(self):
         for _ in range(self.num_trials):
             B, S, D = (np.random.randint(2, 8) for _ in range(3))
@@ -56,7 +162,7 @@ class TestMaskSoftmax(unittest.TestCase):
                 self.assertTrue(torch.allclose(out, expected, atol=1e-12))
 
     # negative dim indices
-    # @unittest.skip("passed")  
+    @unittest.skip("passed")  
     def test_all_ones_mask_3d_negative_dims(self):
         for _ in range(self.num_trials):
             B, S, D = (np.random.randint(2, 8) for _ in range(3))
@@ -68,7 +174,7 @@ class TestMaskSoftmax(unittest.TestCase):
                 self.assertTrue(torch.allclose(out_pos, out_neg, atol=1e-12))
 
     # broadcasting semantics
-    # @unittest.skip("passed")
+    @unittest.skip("passed")
     def test_all_ones_mask_3d_broadcasting_semantics(self):
         for _ in range(self.num_trials):
             B, S, D = (np.random.randint(2, 8) for _ in range(3))
@@ -84,7 +190,7 @@ class TestMaskSoftmax(unittest.TestCase):
             self.assertTrue(torch.allclose(out_a, out_b, atol=1e-12))    
 
     # singleton dimension
-    # @unittest.skip("passed")
+    @unittest.skip("passed")
     def test_all_ones_mask_3d_singleton_dimension(self):
         for _ in range(self.num_trials):
             # iterate through each dimension: setting it to 1 and checking that the output is the same as the original
@@ -99,7 +205,7 @@ class TestMaskSoftmax(unittest.TestCase):
                 expected = F.softmax(x, dim=d)
                 self.assertTrue(torch.allclose(out, expected, atol=1e-12))
 
-    # @unittest.skip("passed")
+    @unittest.skip("passed")
     def test_gradient_parity_all_ones_mask_3d(self):
         for _ in range(self.num_trials):
             B, S, D = (np.random.randint(2, 8) for _ in range(3))
@@ -123,7 +229,7 @@ class TestMaskSoftmax(unittest.TestCase):
             # it fails for atol = 1e-7
             self.assertTrue(torch.allclose(grad1, grad2, atol=9e-6))
 
-    # @unittest.skip("passed")
+    @unittest.skip("passed")
     def test_gradient_parity_all_ones_mask_3d_large_logits(self):
         for _ in range(self.num_trials):
             B, S, D = (np.random.randint(2, 8) for _ in range(3))
@@ -150,11 +256,12 @@ class TestMaskSoftmax(unittest.TestCase):
             self.assertTrue(torch.allclose(grad1, grad2, atol=9e-6))
 
 
+
     # --------------------------------------------------------------
     # 2. All-ones mask ≈ torch.softmax (2d)
     # --------------------------------------------------------------
 
-    # @unittest.skip("passed")
+    @unittest.skip("passed")
     def test_all_ones_mask_2d(self):
         for _ in range(self.num_trials):
             # Random 2-D tensor (B,S) with S>=2 for meaningful softmax dim
@@ -169,7 +276,7 @@ class TestMaskSoftmax(unittest.TestCase):
                 expected = F.softmax(x, dim=d)
                 self.assertTrue(torch.allclose(out, expected, atol=1e-8))
 
-    # @unittest.skip("passed")
+    @unittest.skip("passed")
     def test_all_ones_mask_2d_large_logits(self):
         for _ in range(self.num_trials):
             B, S = (np.random.randint(2, 8) for _ in range(2))
@@ -181,7 +288,7 @@ class TestMaskSoftmax(unittest.TestCase):
                 self.assertTrue(torch.isfinite(out).all())
                 self.assertTrue(torch.allclose(out, expected, atol=1e-12))
 
-    # @unittest.skip("passed")
+    @unittest.skip("passed")
     def test_all_ones_mask_2d_negative_dims(self):
         for _ in range(self.num_trials):
             B, S = (np.random.randint(2, 8) for _ in range(2))
@@ -192,7 +299,7 @@ class TestMaskSoftmax(unittest.TestCase):
                 out_neg = self.sm(x, mask, dim=-2 + d)
                 self.assertTrue(torch.allclose(out_pos, out_neg, atol=1e-12))
 
-    # @unittest.skip("passed")
+    @unittest.skip("passed")
     def test_all_ones_mask_2d_broadcasting_semantics(self):
         for _ in range(self.num_trials):
             B, S = (np.random.randint(2, 8) for _ in range(2))
@@ -203,7 +310,7 @@ class TestMaskSoftmax(unittest.TestCase):
             out_b = self.sm(x, mask_b, dim=-1)
             self.assertTrue(torch.allclose(out_a, out_b, atol=1e-12))
 
-    # @unittest.skip("passed")
+    @unittest.skip("passed")
     def test_all_ones_mask_2d_singleton_dimension(self):
         for _ in range(self.num_trials):
             org_dims = [np.random.randint(2, 8) for _ in range(2)]
@@ -218,7 +325,7 @@ class TestMaskSoftmax(unittest.TestCase):
 
 
 
-    # @unittest.skip("passed")
+    @unittest.skip("passed")
     def test_gradient_parity_all_ones_mask_2d(self):
         for _ in range(self.num_trials):
             B, S = (np.random.randint(2, 8) for _ in range(2))
@@ -243,7 +350,7 @@ class TestMaskSoftmax(unittest.TestCase):
             # it fails for atol = 1e-7
             self.assertTrue(torch.allclose(grad1, grad2, atol=1e-7))
 
-    # @unittest.skip("passed")
+    @unittest.skip("passed")
     def test_gradient_parity_all_ones_mask_2d_large_logits(self):
         for _ in range(self.num_trials):
             B, S = (np.random.randint(2, 8) for _ in range(2))
@@ -274,7 +381,7 @@ class TestMaskSoftmax(unittest.TestCase):
     # 3. All-ones mask ≈ torch.softmax (1d)
     # --------------------------------------------------------------
 
-    # @unittest.skip("passed")
+    @unittest.skip("passed")
     def test_all_ones_mask_1d(self):
         for _ in range(self.num_trials):
             S = np.random.randint(2, 16)
@@ -284,7 +391,7 @@ class TestMaskSoftmax(unittest.TestCase):
             expected = F.softmax(x, dim=0)
             self.assertTrue(torch.allclose(out, expected, atol=1e-8))
 
-    # @unittest.skip("passed")
+    @unittest.skip("passed")
     def test_all_ones_mask_1d_large_logits(self):
         for _ in range(self.num_trials):
             S = np.random.randint(2, 16)
@@ -295,7 +402,7 @@ class TestMaskSoftmax(unittest.TestCase):
             self.assertTrue(torch.isfinite(out).all())
             self.assertTrue(torch.allclose(out, expected, atol=1e-12))
 
-    # @unittest.skip("passed")  
+    @unittest.skip("passed")  
     def test_all_ones_mask_1d_negative_dims(self):
         for _ in range(self.num_trials):
             S = np.random.randint(2, 16)
@@ -305,7 +412,7 @@ class TestMaskSoftmax(unittest.TestCase):
             out_neg = self.sm(x, mask, dim=-1)
             self.assertTrue(torch.allclose(out_pos, out_neg, atol=1e-12))
 
-    # @unittest.skip("passed")
+    @unittest.skip("passed")
     def test_all_ones_mask_1d_singleton_dimension(self):
         for _ in range(self.num_trials):
             x = torch.randn(1)
@@ -314,7 +421,7 @@ class TestMaskSoftmax(unittest.TestCase):
             expected = F.softmax(x, dim=0)
             self.assertTrue(torch.allclose(out, expected, atol=1e-12))
 
-    # @unittest.skip("passed")
+    @unittest.skip("passed")
     def test_gradient_parity_all_ones_mask_1d(self):
         for _ in range(self.num_trials):
             S = np.random.randint(2, 16)
@@ -332,7 +439,7 @@ class TestMaskSoftmax(unittest.TestCase):
             grad2 = x2.grad.detach().clone()
             self.assertTrue(torch.allclose(grad1, grad2, atol=9e-6))
 
-    # @unittest.skip("passed")
+    @unittest.skip("passed")
     def test_gradient_parity_all_ones_mask_1d_large_logits(self):
         for _ in range(self.num_trials):
             S = np.random.randint(2, 16)
@@ -357,7 +464,7 @@ class TestMaskSoftmax(unittest.TestCase):
     # --------------------------------------------------------------
     # 4. All-zeros mask returns all zeros
     # --------------------------------------------------------------
-    # @unittest.skip("passed")
+    @unittest.skip("passed")
     def test_all_zeros_mask_returns_zero_2d(self):
         for _ in range(self.num_trials):
             B = np.random.randint(2, 8)
@@ -368,7 +475,7 @@ class TestMaskSoftmax(unittest.TestCase):
                 out = self.sm(x, mask, dim=d)
                 self.assertTrue(torch.allclose(out, torch.zeros_like(x), atol=1e-12))
 
-    # @unittest.skip("passed")
+    @unittest.skip("passed")
     def test_all_zeros_mask_returns_zero_2d_large_logits(self):
         for _ in range(self.num_trials):
             B, S = (np.random.randint(2, 8) for _ in range(2))
@@ -378,7 +485,7 @@ class TestMaskSoftmax(unittest.TestCase):
                 out = self.sm(x, mask, dim=d)
                 self.assertTrue(torch.allclose(out, torch.zeros_like(x), atol=1e-12))
 
-    # @unittest.skip("passed")
+    @unittest.skip("passed")
     def test_all_zeros_mask_returns_zero_2d_negative_dims(self):
         for _ in range(self.num_trials):
             B, S = (np.random.randint(2, 8) for _ in range(2))
@@ -390,7 +497,7 @@ class TestMaskSoftmax(unittest.TestCase):
                 self.assertTrue(torch.allclose(out_pos, out_neg, atol=1e-12))
 
 
-    # @unittest.skip("passed")
+    @unittest.skip("passed")
     def test_all_zeros_mask_returns_zero_2d_broadcasting_semantics(self):
         for _ in range(self.num_trials):
             B, S = (np.random.randint(2, 8) for _ in range(2))
@@ -402,7 +509,7 @@ class TestMaskSoftmax(unittest.TestCase):
             self.assertTrue(torch.allclose(out_a, out_b, atol=1e-12))
 
 
-    # @unittest.skip("passed")
+    @unittest.skip("passed")
     def test_all_zeros_mask_returns_zero_2d_singleton_dimension(self):
         for _ in range(self.num_trials):
             org_dims = [np.random.randint(2, 8) for _ in range(2)]
@@ -414,7 +521,7 @@ class TestMaskSoftmax(unittest.TestCase):
                 out = self.sm(x, mask, dim=d)
                 self.assertTrue(torch.allclose(out, torch.zeros_like(x), atol=1e-12))
 
-    # @unittest.skip("passed")
+    @unittest.skip("passed")
     def test_gradient_all_zeros_mask_2d_is_zero(self):
         for _ in range(self.num_trials):
             B, S = (np.random.randint(2, 8) for _ in range(2))
@@ -427,7 +534,7 @@ class TestMaskSoftmax(unittest.TestCase):
             self.assertTrue(torch.allclose(grad, torch.zeros_like(grad), atol=1e-12))
 
 
-    # @unittest.skip("passed")
+    @unittest.skip("passed")
     def test_all_zeros_mask_returns_zero_1d(self):
         for _ in range(self.num_trials):
             S = np.random.randint(2, 16)
@@ -436,7 +543,7 @@ class TestMaskSoftmax(unittest.TestCase):
             out = self.sm(x, mask, dim=0)
             self.assertTrue(torch.allclose(out, torch.zeros_like(x), atol=1e-12))
 
-    # @unittest.skip("passed")
+    @unittest.skip("passed")
     def test_all_zeros_mask_returns_zero_1d_large_logits(self):
         for _ in range(self.num_trials):
             S = np.random.randint(2, 16)
@@ -445,7 +552,7 @@ class TestMaskSoftmax(unittest.TestCase):
             out = self.sm(x, mask, dim=0)
             self.assertTrue(torch.allclose(out, torch.zeros_like(x), atol=1e-12))
 
-    # @unittest.skip("passed")
+    @unittest.skip("passed")
     def test_gradient_all_zeros_mask_1d_is_zero(self):
         for _ in range(self.num_trials):
             S = np.random.randint(2, 16)
@@ -461,7 +568,7 @@ class TestMaskSoftmax(unittest.TestCase):
     # --------------------------------------------------------------
     # 5. Random mask ⇒ (i) masked positions prob 0, (ii) rows sum to 1
     # --------------------------------------------------------------
-    # @unittest.skip("passed")
+    @unittest.skip("passed")
     def test_random_mask_properties(self):
         for _ in range(self.num_trials):
             B = np.random.randint(2, 5)
@@ -480,7 +587,7 @@ class TestMaskSoftmax(unittest.TestCase):
             row_sums = out.sum(dim=-1)
             self.assertTrue(torch.allclose(row_sums, torch.ones_like(row_sums), atol=1e-12))
 
-    # @unittest.skip("passed")
+    @unittest.skip("passed")
     def test_random_mask_properties_large_logits(self):
         for _ in range(self.num_trials):
             B, S = (np.random.randint(2, 5) for _ in range(2))
@@ -494,7 +601,7 @@ class TestMaskSoftmax(unittest.TestCase):
             row_sums = out.sum(dim=-1)
             self.assertTrue(torch.allclose(row_sums, torch.ones_like(row_sums), atol=1e-12))
 
-    # @unittest.skip("passed")
+    @unittest.skip("passed")
     def test_gradcheck_random_mask(self):
         for _ in range(self.num_trials):
             B, S = (np.random.randint(2, 5) for _ in range(2))
@@ -508,7 +615,7 @@ class TestMaskSoftmax(unittest.TestCase):
             
             self.assertTrue(gradcheck(lambda inp: self.sm(inp, mask, dim=-1), (x,), atol=1e-8))
 
-    # @unittest.skip("passed")
+    @unittest.skip("passed")  
     def test_gradcheck_random_mask_large_logits(self):
         for _ in range(self.num_trials):
             B, S = (np.random.randint(2, 5) for _ in range(2))
@@ -525,7 +632,7 @@ class TestMaskSoftmax(unittest.TestCase):
     # 6. Uniform logits w/ random mask ⇒ equal probabilities 1/k
     # --------------------------------------------------------------
     # @unittest.skip("passed")
-    def test_uniform_logits_random_mask_uniform_output(self):
+    def test_uniform_logits_random_mask_uniform_output_1d(self):
         for _ in range(self.num_trials):
             S = np.random.randint(2, 30)
             logits = torch.full((S,), np.random.randn())  # constant value across entries
@@ -540,7 +647,7 @@ class TestMaskSoftmax(unittest.TestCase):
             self.assertTrue(torch.allclose(out, expected, atol=1e-8))
 
     # @unittest.skip("passed")
-    def test_uniform_logits_random_mask_uniform_output_large_logits(self):
+    def test_uniform_logits_random_mask_uniform_output_1d_large_logits(self):
         for _ in range(self.num_trials):
             S = np.random.randint(2, 30)
             logits = torch.full((S,), (np.random.rand() * 2 - 1) * 1e4) # large uniform value
@@ -553,7 +660,46 @@ class TestMaskSoftmax(unittest.TestCase):
             self.assertTrue(torch.isfinite(out).all())
             self.assertTrue(torch.allclose(out, expected, atol=1e-8))
 
-    # @unittest.skip("passed")
+    def test_uniform_logits_random_mask_uniform_output_2d(self):
+        for _ in range(self.num_trials):
+            B, S = (np.random.randint(2, 30) for _ in range(2))
+            # all the values are the same across the rows
+            logits = torch.cat([torch.full((1, S), np.random.randn()) for _ in range(B)], dim=0)
+            mask = torch.rand(B, S) > 0.5
+
+            # make sure there is at least one True per row
+            for b in range(B):
+                if not mask[b].any():
+                    mask[b, 0] = True
+
+            out = self.sm(logits, mask, dim=-1)
+            k = mask.sum(dim=-1, keepdim=True)
+        
+            expected = (torch.ones_like(logits) / k) * mask.float()
+            self.assertTrue(torch.allclose(out, expected, atol=1e-10)) 
+
+
+    def test_uniform_logits_random_mask_uniform_output_2d_large_logits(self):
+        for _ in range(self.num_trials):
+            B, S = (np.random.randint(2, 30) for _ in range(2))
+            # all the values are the same across the rows
+            logits = torch.cat([torch.full((1, S), np.random.randn()) for _ in range(B)], dim=0)
+
+            mask = torch.rand(B, S) > 0.5
+
+            # make sure there is at least one True per row
+            for b in range(B):
+                if not mask[b].any():
+                    mask[b, 0] = True
+            
+            out = self.sm(logits, mask, dim=-1)
+            k = mask.sum(dim=-1, keepdim=True)
+            expected = (torch.ones_like(logits) / k) * mask.float()
+            self.assertTrue(torch.allclose(out, expected, atol=1e-10)) 
+
+
+
+    @unittest.skip("passed")
     def test_gradcheck_uniform_logits_random_mask(self):
         for _ in range(self.num_trials):
             S = np.random.randint(2, 30)
@@ -566,7 +712,7 @@ class TestMaskSoftmax(unittest.TestCase):
     # -----------------------------------------------------------
     # 7. The mask contains only one True value at a certain dimension -> the output of the softmax on (said dim) is a one-hot vector
     # -----------------------------------------------------------
-    # @unittest.skip("passed")
+    @unittest.skip("passed")
     def test_one_hot_mask_produces_one_hot_output_3d(self):
         for _ in range(self.num_trials):
             B, S, D = (np.random.randint(2, 8) for _ in range(3))
@@ -589,7 +735,7 @@ class TestMaskSoftmax(unittest.TestCase):
                 expected[mask] = 1.0
                 self.assertTrue(torch.allclose(out, expected, atol=1e-12))
 
-    # @unittest.skip("passed")
+    @unittest.skip("passed")
     def test_one_hot_mask_produces_one_hot_output_3d_large_logits(self):
         for _ in range(self.num_trials):
             B, S, D = (np.random.randint(2, 8) for _ in range(3))
@@ -612,7 +758,7 @@ class TestMaskSoftmax(unittest.TestCase):
                 self.assertTrue(torch.isfinite(out).all())
                 self.assertTrue(torch.allclose(out, expected, atol=1e-12))
 
-    # @unittest.skip("passed")
+    @unittest.skip("passed")
     def test_one_hot_mask_produces_one_hot_output_3d_negative_dims(self):
         for _ in range(self.num_trials):
             B, S, D = (np.random.randint(2, 8) for _ in range(3))
@@ -633,7 +779,7 @@ class TestMaskSoftmax(unittest.TestCase):
                 out_neg = self.sm(x, mask, dim=-3 + d)
                 self.assertTrue(torch.allclose(out_pos, out_neg, atol=1e-12))
     
-    # @unittest.skip("passed")
+    @unittest.skip("passed")
     def test_gradient_one_hot_mask_is_zero_3d(self):
         for _ in range(self.num_trials):
             B, S, D = (np.random.randint(2, 8) for _ in range(3))

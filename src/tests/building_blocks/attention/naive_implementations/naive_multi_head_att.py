@@ -2,6 +2,7 @@ import torch
 from torch import nn
 from typing import List, Optional
 import numpy as np
+import torch.nn.functional as F
 
 from tests.building_blocks.attention.naive_implementations.naive_single_head_att import NaiveSHA
 
@@ -91,32 +92,30 @@ class NaiveMHA(nn.Module):
     
     def _compute_weights(self, query_key_product: torch.Tensor, final_mask: torch.Tensor) -> torch.Tensor:
         """
-        Apply mask and compute attention weights without vectorization.
+        Apply the boolean attention mask and compute softmax weights with explicit loops.
         
         Args:
-            query_key_product: Tensor [batch_size, seq_len, seq_len]
-            final_mask: Attention mask [batch_size, seq_len, seq_len]
+            query_key_product: Tensor of shape (B, H, S, S)
+            final_mask: Boolean attention mask of shape (B, H, S, S), where True means keep.
             
         Returns:
-            Attention weights [batch_size, seq_len, seq_len]
+            Attention weights tensor of shape (B, H, S, S)
         """        
-        if query_key_product.shape != final_mask.shape:
-            raise ValueError(f"query_key_product and final_mask must have the same shape, but got {query_key_product.shape} and {final_mask.shape}")
+        batch_size, num_heads, sequence_length, _ = query_key_product.shape
         
-        batch_size, _, _ = query_key_product.shape
-        
-        # Initialize the output tensor
         weights = torch.zeros_like(query_key_product)
         
-        # Apply mask and compute softmax for each row in each batch
         for b in range(batch_size):
-            sign_mask = torch.sign(query_key_product[b])
-            sign_mask += (sign_mask == 0).type(torch.float32)
-            masked_scores = query_key_product[b] * sign_mask * final_mask[b]
-            row = torch.softmax(masked_scores, dim=-1)
-            row = row.masked_fill(torch.isnan(row), 0)
-            weights[b] = row
+            for h in range(num_heads):
+                for i in range(sequence_length):
+                    row_scores = query_key_product[b, h, i]
+                    row_mask = final_mask[b, h, i]
 
+                    masked_scores = row_scores[row_mask]
+
+                    if masked_scores.numel() > 0:
+                        softmax_scores = F.softmax(masked_scores, dim=0)
+                        weights[b, h, i, row_mask] = softmax_scores
         return weights
     
     def _compute_new_v(self, weights: torch.Tensor, v: torch.Tensor) -> torch.Tensor:
@@ -160,8 +159,7 @@ class NaiveMHA(nn.Module):
         
         # Create attention mask
         causal_mask = self._causal_attention_mask(batch_size, seq_len).to(x.device)
-        final_mask_bool = self.create_final_mask(causal_mask, mask.to(x.device) if mask is not None else None)
-        final_mask = self._process_final_mask(final_mask_bool)
+        final_mask = self.create_final_mask(causal_mask, mask.to(x.device) if mask is not None else None)
         
         # Process each head separately and collect outputs
         head_outputs = [None for _ in range(self.num_heads)]
@@ -176,7 +174,7 @@ class NaiveMHA(nn.Module):
             qk_product = self._key_query_product(q_head, k_head)
             
             # Apply masking and compute weights
-            attn_weights = self._compute_weights(qk_product, final_mask[:, h])
+            attn_weights = self._compute_weights(qk_product.unsqueeze(1), final_mask[:, h:h+1]).squeeze(1)
             
             # Compute weighted sum of values
             head_output = self._compute_new_v(attn_weights, v_head)

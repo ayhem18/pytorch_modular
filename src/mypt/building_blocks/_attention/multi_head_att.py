@@ -9,7 +9,6 @@ from torch import nn
 from typing import Optional
 
 from mypt.building_blocks.mixins.general import NonSequentialModuleMixin
-from mypt.losses.auxiliary import MaskSoftmax
 
 
 class MultiHeadAttentionLayer(NonSequentialModuleMixin, nn.Module):
@@ -33,7 +32,6 @@ class MultiHeadAttentionLayer(NonSequentialModuleMixin, nn.Module):
         self.W_v = nn.Linear(d_model, value_dim * num_heads)
 
         self.W_o = nn.Linear(value_dim * num_heads, d_model) 
-        self.sm = MaskSoftmax()
 
     # --------------------------------------------------------------
     # Mask helpers (aligned with SingleHeadAttentionLayer)
@@ -61,6 +59,11 @@ class MultiHeadAttentionLayer(NonSequentialModuleMixin, nn.Module):
         col = pad_bool.unsqueeze(1).unsqueeze(1).expand(b, self.num_heads, s, s)
         return causal_mask & row & col
 
+    def _process_final_mask(self, final_mask: torch.Tensor) -> torch.Tensor:
+        """Convert boolean mask to float mask (-inf / 1) for multiplication."""
+        float_mask = final_mask.type(torch.float32)
+        return float_mask.masked_fill(~final_mask, float("-inf")).masked_fill(final_mask, 1)
+
     def _key_query_product(self, q: torch.Tensor, k: torch.Tensor) -> torch.Tensor:
         """
         """
@@ -77,12 +80,13 @@ class MultiHeadAttentionLayer(NonSequentialModuleMixin, nn.Module):
 
 
     def _compute_weights(self, query_key_product: torch.Tensor, final_mask: torch.Tensor) -> torch.Tensor:
-        """Apply the boolean *final_mask* to the scores and return soft-max weights.
-        Args:
-            query_key_product: (B,H,S,S) raw scaled dot-product scores.
-            final_mask:        (B,H,S,S) boolean mask where True=keep.
-        """
-        return self.sm(query_key_product, final_mask, dim=-1)
+        """Compute softmax weights using float mask (-inf/1)."""
+        sign_mask = torch.sign(query_key_product)
+        sign_mask += (sign_mask == 0).type(torch.float32)
+        weights = torch.softmax(query_key_product * sign_mask * final_mask, dim=-1)
+        # Replace NaNs with 0 (rows fully masked)
+        weights = weights.masked_fill(torch.isnan(weights), 0)
+        return weights
 
 
     def _compute_new_v(self, weights: torch.Tensor, v: torch.Tensor) -> torch.Tensor:
@@ -117,7 +121,8 @@ class MultiHeadAttentionLayer(NonSequentialModuleMixin, nn.Module):
         query_key_product = self._key_query_product(q, k)
 
         causal_mask = self._causal_attention_mask(batch_size, sequence_length).to(q.device)
-        final_mask = self.create_final_mask(causal_mask, mask.to(q.device) if mask is not None else None)
+        final_mask_bool = self.create_final_mask(causal_mask, mask.to(q.device) if mask is not None else None)
+        final_mask = self._process_final_mask(final_mask_bool)
 
         weights = self._compute_weights(query_key_product, final_mask)
 
