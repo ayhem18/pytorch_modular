@@ -33,7 +33,6 @@ class MultiHeadAttentionLayer(NonSequentialModuleMixin, nn.Module):
         self.W_v = nn.Linear(d_model, value_dim * num_heads)
 
         self.W_o = nn.Linear(value_dim * num_heads, d_model) 
-        self.sm = MaskSoftmax()
 
     # --------------------------------------------------------------
     # Mask helpers (aligned with SingleHeadAttentionLayer)
@@ -82,7 +81,7 @@ class MultiHeadAttentionLayer(NonSequentialModuleMixin, nn.Module):
             query_key_product: (B,H,S,S) raw scaled dot-product scores.
             final_mask:        (B,H,S,S) boolean mask where True=keep.
         """
-        return self.sm(query_key_product, final_mask, dim=-1)
+        return MaskSoftmax()(query_key_product, final_mask, dim=-1)
 
 
     def _compute_new_v(self, weights: torch.Tensor, v: torch.Tensor) -> torch.Tensor:

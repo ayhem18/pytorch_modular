@@ -1,13 +1,16 @@
 import torch
 import unittest
 import numpy as np
+from tqdm import tqdm
+from typing import Optional
+
 
 from tests.custom_base_test import CustomModuleBaseTest
 from mypt.building_blocks.transformers.transformer_block import TransformerBlock
 
 
 class TestTransformerBlock(CustomModuleBaseTest):
-    def setUp(self) -> None:  # noqa: D401
+    def setUp(self) -> None: 
         # Default parameters
         self.d_model = 32
         self.num_heads = 4
@@ -19,8 +22,10 @@ class TestTransformerBlock(CustomModuleBaseTest):
         self.num_iterations = 100
 
     # --- helper methods ---
-    def _get_valid_input(self, batch: int = 4, seq_len: int = 10) -> torch.Tensor:
-        return torch.randn(batch, seq_len, self.d_model)
+    def _get_valid_input(self, batch: int = 4, seq_len: int = 10, d_model: Optional[int] = None) -> torch.Tensor:
+        if d_model is None:
+            d_model = self.d_model
+        return torch.randn(batch, seq_len, d_model)
     
     def _generate_random_block(self) -> TransformerBlock:
         """Generate a random transformer block with valid parameters."""
@@ -138,6 +143,48 @@ class TestTransformerBlock(CustomModuleBaseTest):
             seq_length = np.random.randint(5, 20)
             input_tensor = torch.randn(batch_size, seq_length, block.d_model)
             super()._test_to_device(block, input_tensor)
+
+
+    def test_gradcheck(self) -> None:
+        """Test gradient computation using torch.autograd.gradcheck."""
+        # Use small dimensions for speed
+        for _ in tqdm(range(10), desc="Testing gradcheck"):
+            b, s = (np.random.randint(2, 10) for _ in range(2))
+            random_block = self._generate_random_block()
+            input_tensor = self._get_valid_input(b, s, random_block.d_model)
+            super()._test_gradcheck(random_block, input_tensor)
+
+
+    def test_gradcheck_large_values(self) -> None:
+        """Test gradient computation with large input values."""
+        # Use small dimensions for speed
+        for _ in tqdm(range(10), desc="Testing gradcheck with large values"):
+            b, s = (np.random.randint(2, 10) for _ in range(2))
+            random_block = self._generate_random_block()
+            input_tensor = self._get_valid_input(b, s, random_block.d_model)
+            super()._test_gradcheck_large_values(random_block, input_tensor)
+    
+
+    def test_grad_against_nan(self) -> None:
+        """Test that the gradient is not nan"""
+        for _ in range(self.num_iterations):
+            batch_size = np.random.randint(1, 10)
+            seq_length = np.random.randint(5, 20)
+            random_block = self._generate_random_block()
+            input_tensor = self._get_valid_input(batch_size, seq_length, random_block.d_model)
+            super()._test_grad_against_nan(random_block, input_tensor)
+
+
+    def test_grad_against_nan_large_values(self) -> None:
+        """Test that the gradient is not nan with large input values"""
+        for _ in range(self.num_iterations):
+            batch_size = np.random.randint(1, 10)
+            seq_length = np.random.randint(5, 20)
+            random_block = self._generate_random_block()
+            input_tensor = self._get_valid_input(batch_size, seq_length, random_block.d_model)
+            super()._test_grad_against_nan_large_values(random_block, input_tensor)
+    
+
 
 
 if __name__ == '__main__':

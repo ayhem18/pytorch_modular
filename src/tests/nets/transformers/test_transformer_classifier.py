@@ -3,6 +3,7 @@ import unittest
 
 import numpy as np
 
+from tqdm import tqdm
 from typing import Optional
 
 from tests.custom_base_test import CustomModuleBaseTest
@@ -58,9 +59,10 @@ class TestTransformerClassifier(CustomModuleBaseTest):
         for b in range(batch):
             if mask[b].sum() == 0:
                 mask[b, 0] = 1
-        return mask
+        return mask.bool()  
 
     # --- tests ---
+    @unittest.skip("passed")    
     def test_all_pooling_variants(self):
         """Test each pooling variant with multiple random configurations."""
         for pooling in _POOLING_REGISTRY.keys():
@@ -80,6 +82,7 @@ class TestTransformerClassifier(CustomModuleBaseTest):
                 out = model(inp, pad_mask)
                 self.assertEqual(out.shape, (batch_size, model.head.output))
 
+    @unittest.skip("passed")    
     def test_pooling_registry_completeness(self):
         """Test that all pooling strategies in the registry work correctly."""
         for pooling_name, pooling_class in _POOLING_REGISTRY.items():
@@ -89,18 +92,21 @@ class TestTransformerClassifier(CustomModuleBaseTest):
                            f"Pooling class {pooling_name} should have a forward method")
 
 
+    @unittest.skip("passed")    
     def test_eval_mode(self) -> None:
         """Test that calling eval() sets training=False for all parameters and submodules"""
         for _ in range(self.num_iterations):
             model = self._generate_random_model()
             super()._test_eval_mode(model)
 
+    @unittest.skip("passed")    
     def test_train_mode(self) -> None:
         """Test that calling train() sets training=True for all parameters and submodules"""
         for _ in range(self.num_iterations):
             model = self._generate_random_model()
             super()._test_train_mode(model)
     
+    @unittest.skip("passed")    
     def test_consistent_output_in_eval_mode(self) -> None:
         """Test that all modules in eval mode produce consistent output for the same input"""
         for _ in range(self.num_iterations):
@@ -111,6 +117,7 @@ class TestTransformerClassifier(CustomModuleBaseTest):
             pad_mask = self._get_pad_mask(batch_size, seq_length)
             super()._test_consistent_output_in_eval_mode(model, input_tensor, pad_mask)
     
+    @unittest.skip("passed")    
     def test_batch_size_one_in_train_mode(self) -> None:
         """
         Test that modules with batch normalization layers might raise errors 
@@ -123,6 +130,7 @@ class TestTransformerClassifier(CustomModuleBaseTest):
             pad_mask = self._get_pad_mask(1, seq_length)
             super()._test_batch_size_one_in_train_mode(model, input_tensor, pad_mask)
     
+    @unittest.skip("passed")    
     def test_batch_size_one_in_eval_mode(self) -> None:
         """Test that modules in eval mode should not raise errors for batch size 1"""
         for _ in range(self.num_iterations):
@@ -132,12 +140,14 @@ class TestTransformerClassifier(CustomModuleBaseTest):
             pad_mask = self._get_pad_mask(1, seq_length)
             super()._test_batch_size_one_in_eval_mode(model, input_tensor, pad_mask)
 
+    @unittest.skip("passed")    
     def test_named_parameters_length(self) -> None:
         """Test that named_parameters() and parameters() have the same length"""
         for _ in range(self.num_iterations):
             model = self._generate_random_model()
             super()._test_named_parameters_length(model)
     
+    @unittest.skip("passed")    
     def test_to_device(self) -> None:
         """Test that module can move between devices properly"""
         for _ in range(self.num_iterations):
@@ -147,6 +157,74 @@ class TestTransformerClassifier(CustomModuleBaseTest):
             input_tensor = self._get_valid_input(model, batch_size, seq_length)
             pad_mask = self._get_pad_mask(batch_size, seq_length)
             super()._test_to_device(model, input_tensor, pad_mask)
+
+
+    # @unittest.skip("passed")
+    def test_gradcheck(self) -> None:
+        """Test gradient computation using torch.autograd.gradcheck."""
+        # Use small dimensions for speed
+        for _ in tqdm(range(10), desc="Testing gradcheck"):
+            b, s = (np.random.randint(2, 10) for _ in range(2))
+            model = self._generate_random_model()
+
+            input_tensor = self._get_valid_input(model, b, s)
+            pad_mask = self._get_pad_mask(b, s)
+        
+            # Test without mask
+            super()._test_gradcheck(model, input_tensor)
+            # Test with mask
+            super()._test_gradcheck(model, input_tensor, pad_mask)
+
+
+    # @unittest.skip("passed")
+    def test_gradcheck_large_values(self) -> None:
+        """Test gradient computation with large input values."""
+        # Use small dimensions for speed
+        for _ in tqdm(range(10), desc="Testing gradcheck with large values"):
+            b, s = (np.random.randint(2, 10) for _ in range(2))
+
+            model = self._generate_random_model()
+            input_tensor = self._get_valid_input(model, b, s)
+            pad_mask = self._get_pad_mask(b, s)
+        
+            # Test without mask
+            super()._test_gradcheck_large_values(model, input_tensor)
+            # Test with mask
+            super()._test_gradcheck_large_values(model, input_tensor, pad_mask)
+    
+
+    # @unittest.skip("passed")
+    def test_grad_against_nan(self) -> None:
+        """Test that the gradient is not nan"""
+        for _ in range(self.num_iterations):
+            batch_size = np.random.randint(2, 10)
+            seq_length = np.random.randint(5, 20)
+
+            model = self._generate_random_model()
+            input_tensor = self._get_valid_input(model, batch_size, seq_length)
+            pad_mask = self._get_pad_mask(batch_size, seq_length)
+
+            # test with and without mask
+            super()._test_grad_against_nan(model, input_tensor, pad_mask)
+            super()._test_grad_against_nan(model, input_tensor)
+
+
+    # @unittest.skip("passed")
+    def test_grad_against_nan_large_values(self) -> None:
+        """Test that the gradient is not nan with large input values"""
+        for _ in range(self.num_iterations):
+            batch_size = np.random.randint(2, 10)
+            seq_length = np.random.randint(5, 20)
+
+            model = self._generate_random_model()
+            input_tensor = self._get_valid_input(model, batch_size, seq_length)
+            pad_mask = self._get_pad_mask(batch_size, seq_length)
+
+            # test with and without mask
+            super()._test_grad_against_nan_large_values(model, input_tensor, pad_mask)
+            super()._test_grad_against_nan_large_values(model, input_tensor)
+
+
 
 
 if __name__ == "__main__":

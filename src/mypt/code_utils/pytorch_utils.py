@@ -83,9 +83,9 @@ def seed_everything(seed: int = 69):
     # For more details, read https://pytorch.org/docs/stable/generated/torch.set_float32_matmul_precision.html#torch.set_float32_matmul_precision
 
     # check if the device is gpu
-    # if 'cuda' in get_default_device():
-    #     # it does not seem like a bad option
-    #     torch.set_float32_matmul_precision('medium')
+    if 'cuda' in get_default_device():
+        # it does not seem like a bad option
+        torch.set_float32_matmul_precision('medium')
 
 
 def set_worker_seed(_, seed: int = 69):

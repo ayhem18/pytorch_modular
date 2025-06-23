@@ -58,9 +58,11 @@ class LastTokenPool(_BasePooling):
         if pad_mask is None:
             return x[:, -1]
         # find the last non-masked token for each sequence
-        idx = pad_mask.sum(dim=1) - 1  
+        idx = (pad_mask.sum(dim=1) - 1).long()  
         # return the value of the last non-masked token for each sequence (passing [:] wouldn't work here.)
-        return x[torch.arange(x.shape[0]), idx]
+
+        # any tensor used for indices should be cast to long !!!
+        return x[torch.arange(x.shape[0], dtype=torch.long), idx]
 
 
 _POOLING_REGISTRY: Dict[str, Callable] = {
@@ -88,7 +90,7 @@ class TransformerClassifier(NonSequentialModuleMixin, nn.Module):
         dropout: float = 0.1,
     ) -> None: 
         nn.Module.__init__(self)
-        NonSequentialModuleMixin.__init__(self, inner_components_fields=['encoder', 'pool', 'head', 'pos_emb'])
+        NonSequentialModuleMixin.__init__(self, inner_components_fields=['pos_emb', 'encoder', 'pool', 'head'])
 
         if pooling not in _POOLING_REGISTRY:
             raise ValueError(f"Unknown pooling strategy '{pooling}'.")

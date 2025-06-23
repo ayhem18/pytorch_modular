@@ -297,3 +297,4 @@ class CustomModuleBaseTest(unittest.TestCase):
 
         for param in block_double.parameters():
             self.assertFalse(torch.isnan(param.grad).any(), "Nan values in the gradient with large input values")
+            
