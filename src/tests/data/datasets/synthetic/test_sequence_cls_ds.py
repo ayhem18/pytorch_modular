@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 import unittest
 from tqdm import tqdm
@@ -157,12 +158,17 @@ class TestSyntheticSequenceClsDataset(CustomModuleBaseTest):
     def _test_percentile_property_for_seed(self, seed: int):
         """Helper to test the percentile property for a dataset created with a given seed."""
         
+        max_len = np.random.randint(10, 30)
+
+        max_mean = np.random.randint(max(max_len * 2 + 10, 50), max(max_len * 2 + 15, 51))
+
         dataset = SyntheticSequenceClsDataset(
-            max_len=self.max_len,
+            max_len=max_len,
             num_samples=100,  # Small dataset
             dim=self.dim,
             seed=seed,
-            all_same_length=True # Use variable length for a more robust test
+            max_mean=max_mean,
+            all_same_length=False # Use variable length for a more robust test
         )
 
         class_1_ratios = []

@@ -1,5 +1,6 @@
 import torch
 import random
+import warnings
 import numpy as np
 
 from typing import Tuple, List
@@ -53,6 +54,9 @@ class SyntheticSequenceClsDataset(Dataset):
             raise ValueError("num_samples must be positive")
         if max_mean < 2 * max_len:
             raise ValueError("max_mean must be at least twice max_len for clear separation.")
+
+        if max_mean < 50:
+            warnings.warn("max_mean values less than 50 do not always pass the seperation tests... I recommend at least 50, higher values are better.")
 
         self.max_len = max_len
         self.num_samples = num_samples

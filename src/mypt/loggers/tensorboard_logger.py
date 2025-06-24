@@ -54,11 +54,9 @@ class TensorBoardLogger(BaseLogger):
     def log_histogram(self, tag: str, values: Any, step: int):
         self.writer.add_histogram(tag, values, global_step=step)
 
-    def log_config(self, config: Dict):
+    def log_config(self, config: Dict, config_file_name: str):
         """Saves configuration to a JSON file in the log directory."""
-        config_path = os.path.join(self.log_dir, 'config.json')
-        with open(config_path, 'w') as f:
-            json.dump(config, f, indent=4)
+        super().log_config(config, config_file_name)
 
     def close(self):
         self.writer.close() 
