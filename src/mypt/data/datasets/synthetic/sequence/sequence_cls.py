@@ -51,6 +51,8 @@ class SyntheticSequenceClsDataset(Dataset):
             raise ValueError("dim must be positive")
         if num_samples < 1:
             raise ValueError("num_samples must be positive")
+        if max_mean < 2 * max_len:
+            raise ValueError("max_mean must be at least twice max_len for clear separation.")
 
         self.max_len = max_len
         self.num_samples = num_samples
@@ -95,8 +97,10 @@ class SyntheticSequenceClsDataset(Dataset):
             # inclusive range [1, max_len]
             length = self._py_rng.randint(1, self.max_len)
 
-        # Draw *length* base means from a uniform range and sort ascending
-        base_means = self._np_rng.uniform(-self.max_mean, self.max_mean, size=length)
+        # Draw *length* distinct integer means from [-max_mean, max_mean]
+        mean_population = range(-int(self.max_mean), int(self.max_mean) + 1)
+        base_means = self._py_rng.sample(mean_population, k=length)
+        base_means = np.array(base_means)
 
         # Decide order: ascending (+1) or descending (0)
         if self._py_rng.random() < 0.5:

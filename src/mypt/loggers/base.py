@@ -1,4 +1,4 @@
-import os, json
+import os, json, pickle
 from typing import Any, Dict
 from abc import ABC, abstractmethod
 
@@ -54,6 +54,29 @@ class BaseLogger(ABC):
         with open(config_path, 'w') as f:
             json.dump(config, f, indent=4)
 
+
+    def save(self, object: Any, file_name: str):
+        """Saves an object to a file."""
+
+        # if the object is a dictionary, save it as a json file
+        # otherwise, save it with pickle 
+
+        if isinstance(object, dict):
+            file_name = f"{file_name}{('.json' if not file_name.endswith('.json') else '')}"
+
+            # save it as a json file
+            file_path = os.path.join(self.log_dir, file_name)
+            with open(file_path, 'w') as f:
+                json.dump(object, f, indent=4)
+
+            return
+        
+        # the object is not a dictionary; save it with pickle        
+        file_name = f"{file_name}{('.obj' if not file_name.endswith('.obj') else '')}"
+        file_path = os.path.join(self.log_dir, file_name)
+        with open(file_path, 'wb') as f:
+            pickle.dump(object, f)
+        
 
     @abstractmethod
     def close(self):
