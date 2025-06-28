@@ -2,17 +2,19 @@
 This module is my attempt to efficiently implement the multi-head attention layer: Using a single linear layer to compute the query, key and value matrics.
 """
 
+
+import abc
 import torch
 import numpy as np
 
 from torch import nn
 from typing import Optional
 
-from mypt.building_blocks.mixins.general import NonSequentialModuleMixin
 from mypt.losses.auxiliary import MaskSoftmax
+from mypt.building_blocks.mixins.general import NonSequentialModuleMixin
 
 
-class MultiHeadAttentionLayer(NonSequentialModuleMixin, nn.Module):
+class AbstractMHAttentionLayer(NonSequentialModuleMixin, nn.Module, abc.ABC):
     def __init__(self, d_model: int, num_heads: int, value_dim: int, key_dim: int) -> None:
         nn.Module.__init__(self)
         NonSequentialModuleMixin.__init__(self, inner_components_fields=['W_q', 'W_k', 'W_v', 'W_o'])
@@ -33,16 +35,13 @@ class MultiHeadAttentionLayer(NonSequentialModuleMixin, nn.Module):
         self.W_v = nn.Linear(d_model, value_dim * num_heads)
 
         self.W_o = nn.Linear(value_dim * num_heads, d_model) 
+        
+    
 
-    # --------------------------------------------------------------
-    # Mask helpers (aligned with SingleHeadAttentionLayer)
-    # --------------------------------------------------------------
-
-    def _causal_attention_mask(self, batch_size: int, sequence_length: int) -> torch.Tensor:
-        """Boolean lower-triangular mask broadcast over heads.
-        Shape: (B, 1, S, S) so it can be broadcast against (B,H,S,S)."""
-        causal = torch.tril(torch.ones(sequence_length, sequence_length, dtype=torch.bool))
-        return causal.unsqueeze(0).unsqueeze(1).expand(batch_size, self.num_heads, -1, -1)
+    @abc.abstractmethod
+    def _default_mask(self, batch_size: int, sequence_length: int) -> torch.tensor:
+        pass
+        
 
     def create_final_mask(self, causal_mask: torch.Tensor, pad_mask: Optional[torch.Tensor] = None) -> torch.Tensor:
         """Combine causal and optional padding mask.
@@ -72,8 +71,6 @@ class MultiHeadAttentionLayer(NonSequentialModuleMixin, nn.Module):
             raise ValueError(f"The shape of the query_key_product tensor is expected to be (batch_size, num_heads, sequence_length, sequence_length), but got {query_key_product.shape}")
 
         return query_key_product
-
-
 
     def _compute_weights(self, query_key_product: torch.Tensor, final_mask: torch.Tensor) -> torch.Tensor:
         """Apply the boolean *final_mask* to the scores and return soft-max weights.
@@ -115,8 +112,10 @@ class MultiHeadAttentionLayer(NonSequentialModuleMixin, nn.Module):
 
         query_key_product = self._key_query_product(q, k)
 
-        causal_mask = self._causal_attention_mask(batch_size, sequence_length).to(q.device)
-        final_mask = self.create_final_mask(causal_mask, mask.to(q.device) if mask is not None else None)
+        # the defaul mask would be a causal mask for the CausalAttentionLayer and an all-ones mask for the BidirectionalAttentionLayer
+        default_mask = self._default_mask(batch_size, sequence_length).to(q.device)
+
+        final_mask = self.create_final_mask(default_mask, mask.to(q.device) if mask is not None else None)
 
         weights = self._compute_weights(query_key_product, final_mask)
 
@@ -136,5 +135,28 @@ class MultiHeadAttentionLayer(NonSequentialModuleMixin, nn.Module):
 
     def __call__(self, x: torch.Tensor, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
         return self.forward(x, mask)
+
+
+
+class CausalMultiHeadAttentionLayer(AbstractMHAttentionLayer):
+
+    def __init__(self, d_model: int, num_heads: int, value_dim: int, key_dim: int) -> None:
+        super().__init__(d_model, num_heads, value_dim, key_dim)
+
+    def _default_mask(self, batch_size: int, sequence_length: int) -> torch.Tensor:
+        """Boolean lower-triangular mask broadcast over heads.
+        Shape: (B, 1, S, S) so it can be broadcast against (B,H,S,S)."""
+        causal = torch.tril(torch.ones(sequence_length, sequence_length, dtype=torch.bool))
+        return causal.unsqueeze(0).unsqueeze(1).expand(batch_size, self.num_heads, -1, -1)
+
+
+class BidirectionalMultiHeadAttentionLayer(AbstractMHAttentionLayer):
+
+    def __init__(self, d_model: int, num_heads: int, value_dim: int, key_dim: int) -> None:
+        super().__init__(d_model, num_heads, value_dim, key_dim)
+
+    def _default_mask(self, batch_size: int, sequence_length: int) -> torch.Tensor:
+        return torch.ones(batch_size, self.num_heads, sequence_length, sequence_length, dtype=torch.bool)
+
 
     

@@ -1,12 +1,13 @@
+import abc
 import torch
-from torch import nn
-from typing import List, Optional
 import numpy as np
 import torch.nn.functional as F
 
-from tests.building_blocks.attention.naive_implementations.naive_single_head_att import NaiveSHA
+from torch import nn
+from typing import Optional
 
-class NaiveMHA(nn.Module):
+
+class AbstractNaiveMHA(nn.Module, abc.ABC):
     def __init__(self, d_model: int, num_heads: int, value_dim: int, key_dim: int) -> None:
         """
         Naive implementation of Multi-Head Attention for testing purposes.
@@ -34,17 +35,12 @@ class NaiveMHA(nn.Module):
         
         # Output projection
         self.W_o = nn.Linear(value_dim * num_heads, d_model)
-    
-    # --------------------------------------------------------------
-    # Mask helpers
-    # --------------------------------------------------------------
 
-    def _causal_attention_mask(self, batch_size: int, sequence_length: int) -> torch.Tensor:
-        causal = torch.zeros(sequence_length, sequence_length, dtype=torch.bool)
-        for i in range(sequence_length):
-            for j in range(sequence_length):
-                causal[i, j] = j <= i
-        return causal.unsqueeze(0).unsqueeze(1).expand(batch_size, self.num_heads, -1, -1)
+
+    @abc.abstractmethod
+    def _default_mask(self, batch_size: int, sequence_length: int) -> torch.Tensor:
+        pass
+
 
     def create_final_mask(self, causal_mask: torch.Tensor, pad_mask: Optional[torch.Tensor] = None) -> torch.Tensor:
         if pad_mask is None:
@@ -55,10 +51,7 @@ class NaiveMHA(nn.Module):
         col = pad_bool.unsqueeze(1).unsqueeze(1).expand(b, self.num_heads, s, s)
         return causal_mask & row & col
 
-    # def _process_final_mask(self, final_mask: torch.Tensor) -> torch.Tensor:
-    #     float_mask = final_mask.type(torch.float32)
-    #     return float_mask.masked_fill(~final_mask, float("-inf")).masked_fill(final_mask, 1)
-    
+
     def _key_query_product(self, q: torch.Tensor, k: torch.Tensor) -> torch.Tensor:
         """
         Compute query-key product for a single head without vectorization.
@@ -101,22 +94,6 @@ class NaiveMHA(nn.Module):
         Returns:
             Attention weights tensor of shape (B, H, S, S)
         """        
-        # batch_size, num_heads, sequence_length, _ = query_key_product.shape
-        
-        # weights = torch.zeros_like(query_key_product)
-        
-        # for b in range(batch_size):
-        #     for h in range(num_heads):
-        #         for i in range(sequence_length):
-        #             row_scores = query_key_product[b, h, i]
-        #             row_mask = final_mask[b, h, i]
-
-        #             masked_scores = row_scores[row_mask]
-
-        #             if masked_scores.numel() > 0:
-        #                 softmax_scores = F.softmax(masked_scores, dim=0)
-        #                 weights[b, h, i, row_mask] = softmax_scores
-        # return weights
 
 
         batch_size, sequence_length, _ = query_key_product.shape
@@ -177,7 +154,7 @@ class NaiveMHA(nn.Module):
         batch_size, seq_len, _ = x.shape
         
         # Create attention mask
-        causal_mask = self._causal_attention_mask(batch_size, seq_len).to(x.device)
+        causal_mask = self._default_mask(batch_size, seq_len).to(x.device)
         final_mask = self.create_final_mask(causal_mask, mask.to(x.device) if mask is not None else None)
         
         # Process each head separately and collect outputs
@@ -243,4 +220,21 @@ class NaiveMHA(nn.Module):
         # For W_o
         self.W_o.weight.data = vectorized_mha.W_o.weight.clone()
         self.W_o.bias.data = vectorized_mha.W_o.bias.clone()
+
+
+
+
+class CausalNaiveMHA(AbstractNaiveMHA):
+    
+    def _default_mask(self, batch_size: int, sequence_length: int) -> torch.Tensor:
+        causal = torch.zeros(sequence_length, sequence_length, dtype=torch.bool)
+        for i in range(sequence_length):
+            for j in range(sequence_length):
+                causal[i, j] = j <= i
+        return causal.unsqueeze(0).unsqueeze(1).expand(batch_size, self.num_heads, -1, -1)
+
+
+class BidirectionalNaiveMHA(AbstractNaiveMHA):
+    def _default_mask(self, batch_size: int, sequence_length: int) -> torch.Tensor:
+        return torch.ones(batch_size, self.num_heads, sequence_length, sequence_length, dtype=torch.bool) # all-ones mask
 

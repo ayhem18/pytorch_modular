@@ -1,3 +1,4 @@
+import abc
 import torch
 import unittest
 import numpy as np
@@ -5,39 +6,17 @@ import numpy as np
 from tqdm import tqdm
 
 from tests.custom_base_test import CustomModuleBaseTest
-from mypt.building_blocks.attention.multi_head_att import MultiHeadAttentionLayer
-from tests.building_blocks.attention.naive_implementations.naive_multi_head_att import NaiveMHA
+from mypt.building_blocks.attention.multi_head_att import CausalMultiHeadAttentionLayer, BidirectionalMultiHeadAttentionLayer
+from tests.building_blocks.attention.naive_implementations.naive_multi_head_att import CausalNaiveMHA, BidirectionalNaiveMHA
 
 
-class TestMultiHeadAttentionLayer(CustomModuleBaseTest):
-    def setUp(self):
-        # Define common dimensions for testing
-        self.d_model = 32
-        self.num_heads = 4
-        self.key_dim = 8 
-        self.value_dim = 8  
-        
-        # Number of test iterations
-        self.num_iterations = 1000
-        
-        # Create both implementations
-        self.vectorized_att = MultiHeadAttentionLayer(
-            d_model=self.d_model,
-            num_heads=self.num_heads,
-            value_dim=self.value_dim,
-            key_dim=self.key_dim
-        )
-        
-        self.naive_att = NaiveMHA(
-            d_model=self.d_model,
-            num_heads=self.num_heads,
-            value_dim=self.value_dim,
-            key_dim=self.key_dim
-        )
-        
-        # Set both to the same random weights
-        self._sync_weights()
-        
+
+class TestMultiHeadAttentionLayer(CustomModuleBaseTest, abc.ABC):
+
+    @abc.abstractmethod
+    def setUp(self):    
+        pass
+
     def _sync_weights(self):
         """Synchronize weights between vectorized and naive implementations"""
         self.naive_att.sync_weights_from_vectorized(self.vectorized_att)
@@ -59,23 +38,21 @@ class TestMultiHeadAttentionLayer(CustomModuleBaseTest):
                 pad_mask[b, 0] = 1
         return pad_mask
     
-    @unittest.skip("passed")
-    def test_causal_mask_creation(self):
+    def _test_causal_mask_creation(self):
         """Both implementations create identical causal boolean masks."""
         for _ in tqdm(range(self.num_iterations), desc="Testing causal mask creation"):
             seq_length = np.random.randint(5, 20)
             batch_size = np.random.randint(1, 5)
 
-            vec_mask = self.vectorized_att._causal_attention_mask(batch_size, seq_length)
-            naive_mask = self.naive_att._causal_attention_mask(batch_size, seq_length)
+            vec_mask = self.vectorized_att._default_mask(batch_size, seq_length)
+            naive_mask = self.naive_att._default_mask(batch_size, seq_length)           
 
             self.assertTrue(torch.equal(vec_mask, naive_mask))
 
             for b in range(batch_size):
                 self.assertTrue(torch.equal(vec_mask[b], vec_mask[0]))
 
-    @unittest.skip("passed")
-    def test_query_key_product(self):
+    def _test_query_key_product(self):
         """Test that both implementations compute the same query-key product"""
         for _ in tqdm(range(self.num_iterations), desc="Testing query-key product"):
             # Generate random batch size and sequence length
@@ -124,8 +101,7 @@ class TestMultiHeadAttentionLayer(CustomModuleBaseTest):
 
 
 
-    @unittest.skip("passed")
-    def test_compute_weights(self):
+    def _test_compute_weights(self):
         """Test that both implementations compute the same attention weights"""
         for _ in tqdm(range(self.num_iterations), desc="Testing compute weights"):
             # Generate random batch size and sequence length
@@ -145,7 +121,7 @@ class TestMultiHeadAttentionLayer(CustomModuleBaseTest):
                 vec_product = self.vectorized_att._key_query_product(q_vec, k_vec)
                 
                 # Create mask
-                vec_mask = self.vectorized_att._causal_attention_mask(batch_size, seq_length)
+                vec_mask = self.vectorized_att._default_mask(batch_size, seq_length)
                 vec_mask = self.vectorized_att.create_final_mask(vec_mask, None)
                 # vec_mask = self.vectorized_att._process_final_mask(vec_mask)
                 
@@ -156,7 +132,7 @@ class TestMultiHeadAttentionLayer(CustomModuleBaseTest):
                     q_naive_list[h] = self.naive_att.W_q_list[h].forward(x)
                     k_naive_list[h] = self.naive_att.W_k_list[h].forward(x)
                 
-                naive_mask = self.naive_att._causal_attention_mask(batch_size, seq_length)
+                naive_mask = self.naive_att._default_mask(batch_size, seq_length)
                 naive_mask = self.naive_att.create_final_mask(naive_mask, None)
                 # naive_mask = self.naive_att._process_final_mask (naive_mask)
 
@@ -194,8 +170,7 @@ class TestMultiHeadAttentionLayer(CustomModuleBaseTest):
                             self.assertTrue(torch.all(vec_weights[b, :, i, j] < 1e-9), msg="the weight should be 0 for masked positions")
 
 
-    @unittest.skip("passed")
-    def test_compute_weighted_values(self):
+    def _test_compute_weighted_values(self):
         """Test that both implementations compute the same weighted values"""
         for _ in tqdm(range(self.num_iterations), desc="Testing compute weighted values"):
             # Generate random batch size and sequence length
@@ -218,7 +193,7 @@ class TestMultiHeadAttentionLayer(CustomModuleBaseTest):
                 
                 vec_product = self.vectorized_att._key_query_product(q_vec, k_vec)
                 
-                vec_mask = self.vectorized_att._causal_attention_mask(batch_size, seq_length)
+                vec_mask = self.vectorized_att._default_mask(batch_size, seq_length)
                 vec_mask = self.vectorized_att.create_final_mask(vec_mask, None)
                 
                 vec_weights = self.vectorized_att._compute_weights(vec_product, vec_mask)
@@ -233,7 +208,7 @@ class TestMultiHeadAttentionLayer(CustomModuleBaseTest):
                     k_naive_list[h] = self.naive_att.W_k_list[h].forward(x)
                     v_naive_list[h] = self.naive_att.W_v_list[h].forward(x)
                 
-                naive_mask = self.naive_att._causal_attention_mask(batch_size, seq_length)
+                naive_mask = self.naive_att._default_mask(batch_size, seq_length)
                 naive_mask = self.naive_att.create_final_mask(naive_mask, None)
                 # naive_mask = self.naive_att._process_final_mask(naive_mask)
             
@@ -264,8 +239,7 @@ class TestMultiHeadAttentionLayer(CustomModuleBaseTest):
                 self.assertTrue(validated, msg="Vectorised and naive outputs diverge")
 
 
-    @unittest.skip("passed")
-    def test_full_forward_pass(self):
+    def _test_full_forward_pass(self):
         """Test that both implementations produce the same output for the full forward pass"""
         for _ in tqdm(range(self.num_iterations), desc="Testing full forward pass"):
             # Generate random batch size and sequence length
@@ -299,8 +273,7 @@ class TestMultiHeadAttentionLayer(CustomModuleBaseTest):
     # ------------------------------------------------------------------
     # Tests with RANDOM padding masks
     # ------------------------------------------------------------------
-    @unittest.skip("passed")
-    def test_create_final_mask_with_pad(self):
+    def _test_create_final_mask_with_pad(self):
         """final_mask from both implementations agrees and respects causal+pad."""
         for _ in tqdm(range(self.num_iterations), desc="Testing final mask creation w/ pad"):
             batch_size = np.random.randint(1, 5)
@@ -308,8 +281,8 @@ class TestMultiHeadAttentionLayer(CustomModuleBaseTest):
 
             pad_mask = self._generate_random_pad_mask(batch_size, seq_length)
 
-            causal_vec = self.vectorized_att._causal_attention_mask(batch_size, seq_length)
-            causal_naive = self.naive_att._causal_attention_mask(batch_size, seq_length)
+            causal_vec = self.vectorized_att._default_mask(batch_size, seq_length)
+            causal_naive = self.naive_att._default_mask(batch_size, seq_length)
 
             vec_final = self.vectorized_att.create_final_mask(causal_vec, pad_mask)
             naive_final = self.naive_att.create_final_mask(causal_naive, pad_mask)
@@ -324,8 +297,8 @@ class TestMultiHeadAttentionLayer(CustomModuleBaseTest):
                             self.assertFalse(torch.any(vec_final[b, :, i, j]))
                         else:
                             self.assertTrue(torch.all(vec_final[b, :, i, j]))
-    @unittest.skip("passed")
-    def test_compute_weights_with_random_pad(self):
+
+    def _test_compute_weights_with_random_pad(self):
         """Compare weights under random padding mask."""
         for _ in tqdm(range(self.num_iterations), desc="Testing weights w/ pad mask"):
             batch_size = np.random.randint(1, 5)
@@ -340,7 +313,7 @@ class TestMultiHeadAttentionLayer(CustomModuleBaseTest):
                 k_vec = self.vectorized_att.W_k(x).view(batch_size, seq_length, self.num_heads, self.key_dim).permute(0,2,1,3)
                 scores_vec = self.vectorized_att._key_query_product(q_vec, k_vec)
 
-                causal = self.vectorized_att._causal_attention_mask(batch_size, seq_length)
+                causal = self.vectorized_att._default_mask(batch_size, seq_length)
                 final_bool = self.vectorized_att.create_final_mask(causal, pad_mask)
                 #   final_float = self.vectorized_att._process_final_mask(final_bool)
 
@@ -364,8 +337,7 @@ class TestMultiHeadAttentionLayer(CustomModuleBaseTest):
                             self.assertTrue(torch.all(weights_vec[b, :, i, j] < 1e-9), msg="the weight should be 0 for masked positions")
 
 
-    @unittest.skip("passed")
-    def test_full_forward_with_pad(self):
+    def _test_full_forward_with_pad(self):
         """Compare full forward outputs with pad mask."""
         for _ in tqdm(range(self.num_iterations), desc="Testing forward w/ pad mask"):
             batch_size = np.random.randint(1, 5)
@@ -384,18 +356,15 @@ class TestMultiHeadAttentionLayer(CustomModuleBaseTest):
 
 
     # add the tests from the CustomModuleBaseTest
-    @unittest.skip("passed")
-    def test_eval_mode(self) -> None:
+    def _test_eval_mode(self) -> None:
         """Test that calling eval() sets training=False for all parameters and submodules"""
         super()._test_eval_mode(self.vectorized_att)
 
-    @unittest.skip("passed")
-    def test_train_mode(self) -> None:
+    def _test_train_mode(self) -> None:
         """Test that calling train() sets training=True for all parameters and submodules"""
         super()._test_train_mode(self.vectorized_att)   
 
-    @unittest.skip("passed")
-    def test_consistent_output_without_dropout_bn(self) -> None:
+    def _test_consistent_output_without_dropout_bn(self) -> None:
         """
         Test that modules without dropout or batch normalization 
         produce consistent output for the same input
@@ -404,15 +373,13 @@ class TestMultiHeadAttentionLayer(CustomModuleBaseTest):
             input_tensor = self._generate_random_input(10, 10)
             super()._test_consistent_output_without_dropout_bn(self.vectorized_att, input_tensor)
 
-    @unittest.skip("passed")
-    def test_consistent_output_in_eval_mode(self) -> None:
+    def _test_consistent_output_in_eval_mode(self) -> None:
         """Test that all modules in eval mode produce consistent output for the same input"""
         for _ in range(self.num_iterations):
             input_tensor = self._generate_random_input(10, 10)
             super()._test_consistent_output_in_eval_mode(self.vectorized_att, input_tensor)
 
-    @unittest.skip("passed")
-    def test_batch_size_one_in_train_mode(self) -> None:
+    def _test_batch_size_one_in_train_mode(self) -> None:
         """
         Test that modules with batch normalization layers might raise errors 
         with batch size 1 in train mode
@@ -422,27 +389,24 @@ class TestMultiHeadAttentionLayer(CustomModuleBaseTest):
             super()._test_batch_size_one_in_train_mode(self.vectorized_att, input_tensor)
 
 
-    @unittest.skip("passed")
-    def test_batch_size_one_in_eval_mode(self) -> None:
+    def _test_batch_size_one_in_eval_mode(self) -> None:
         """Test that modules in eval mode should not raise errors for batch size 1"""
         for _ in range(self.num_iterations):
             input_tensor = self._generate_random_input(1, 10)
             super()._test_batch_size_one_in_eval_mode(self.vectorized_att, input_tensor) 
 
-    @unittest.skip("passed")
-    def test_named_parameters_length(self) -> None:
+    def _test_named_parameters_length(self) -> None:
         """Test that named_parameters() and parameters() have the same length"""
         super()._test_named_parameters_length(self.vectorized_att)
 
-    @unittest.skip("passed")
-    def test_to_device(self) -> None:
+    def _test_to_device(self) -> None:
         """Test that module can move between devices properly"""
         for _ in range(self.num_iterations):
             input_tensor = self._generate_random_input(10, 10)
             super()._test_to_device(self.vectorized_att, input_tensor) 
 
-    # @unittest.skip("passed")
-    def test_gradcheck(self) -> None:
+    @unittest.skip("passed")
+    def _test_gradcheck(self) -> None:
         """Test gradient computation using torch.autograd.gradcheck."""
         # Use small dimensions for speed
         for _ in tqdm(range(100), desc="Testing gradcheck"):
@@ -455,8 +419,8 @@ class TestMultiHeadAttentionLayer(CustomModuleBaseTest):
             # Test with mask
             super()._test_gradcheck(self.vectorized_att, input_tensor, pad_mask)
 
-    # @unittest.skip("passed")
-    def test_gradcheck_large_values(self) -> None:
+    @unittest.skip("passed")
+    def _test_gradcheck_large_values(self) -> None:
         """Test gradient computation with large input values."""
         # Use small dimensions for speed
         for _ in tqdm(range(100), desc="Testing gradcheck with large values"):
@@ -469,8 +433,8 @@ class TestMultiHeadAttentionLayer(CustomModuleBaseTest):
             # Test with mask
             super()._test_gradcheck_large_values(self.vectorized_att, input_tensor, pad_mask)
     
-
-    def test_grad_against_nan(self) -> None:
+    @unittest.skip("passed")
+    def _test_grad_against_nan(self) -> None:
         """Test that the gradient is not nan"""
         for _ in range(self.num_iterations):
             batch_size = np.random.randint(1, 10)
@@ -480,7 +444,8 @@ class TestMultiHeadAttentionLayer(CustomModuleBaseTest):
             super()._test_grad_against_nan(self.vectorized_att, input_tensor, pad_mask)
             super()._test_grad_against_nan(self.vectorized_att, input_tensor)
 
-    def test_grad_against_nan_large_values(self) -> None:
+    @unittest.skip("passed")
+    def _test_grad_against_nan_large_values(self) -> None:
         """Test that the gradient is not nan with large input values"""
         for _ in range(self.num_iterations):
             batch_size = np.random.randint(1, 10)
@@ -489,6 +454,192 @@ class TestMultiHeadAttentionLayer(CustomModuleBaseTest):
             pad_mask = self._generate_random_pad_mask(batch_size, seq_length)
             super()._test_grad_against_nan_large_values(self.vectorized_att, input_tensor, pad_mask)
             super()._test_grad_against_nan_large_values(self.vectorized_att, input_tensor)
+
+
+class TestCausalMultiHeadAttentionLayer(TestMultiHeadAttentionLayer):
+    def setUp(self):
+        # Define common dimensions for testing
+        self.d_model = 32
+        self.num_heads = 4
+        self.key_dim = 8 
+        self.value_dim = 8  
+        
+        # Number of test iterations
+        self.num_iterations = 1000
+        
+        # Create both implementations
+        self.vectorized_att = CausalMultiHeadAttentionLayer(
+            d_model=self.d_model,
+            num_heads=self.num_heads,
+            value_dim=self.value_dim,
+            key_dim=self.key_dim
+        )
+        
+        self.naive_att = CausalNaiveMHA(
+            d_model=self.d_model,
+            num_heads=self.num_heads,
+            value_dim=self.value_dim,
+            key_dim=self.key_dim
+        )
+        
+        # Set both to the same random weights
+        self._sync_weights() 
+
+
+    def test_causal_mask_creation(self):
+        self._test_causal_mask_creation()
+
+    def test_query_key_product(self):
+        self._test_query_key_product()
+
+    def test_compute_weights(self):     
+        self._test_compute_weights()
+
+    def test_compute_weighted_values(self):
+        self._test_compute_weighted_values()
+
+    def test_full_forward_pass(self):
+        self._test_full_forward_pass()
+        
+    def test_create_final_mask_with_pad(self):
+        self._test_create_final_mask_with_pad()
+
+    def test_compute_weights_with_random_pad(self):
+        self._test_compute_weights_with_random_pad()
+
+    def test_full_forward_with_pad(self):
+        self._test_full_forward_with_pad()  
+
+    def test_eval_mode(self):
+        self._test_eval_mode()
+
+    def test_train_mode(self):
+        self._test_train_mode()
+
+
+    def test_consistent_output_without_dropout_bn(self):
+        self._test_consistent_output_without_dropout_bn()
+
+    def test_consistent_output_in_eval_mode(self):
+        self._test_consistent_output_in_eval_mode()
+
+    def test_batch_size_one_in_train_mode(self):
+        self._test_batch_size_one_in_train_mode()
+
+    def test_batch_size_one_in_eval_mode(self):
+        self._test_batch_size_one_in_eval_mode()
+
+    def test_named_parameters_length(self): 
+        self._test_named_parameters_length()
+
+    def test_to_device(self):
+        self._test_to_device()
+
+    def test_gradcheck(self):
+        self._test_gradcheck()  
+
+    def test_gradcheck_large_values(self):
+        self._test_gradcheck_large_values()
+
+    def test_grad_against_nan(self):
+        self._test_grad_against_nan()   
+
+    def test_grad_against_nan_large_values(self):
+        self._test_grad_against_nan_large_values()
+
+
+class TestBidirectionalMultiHeadAttentionLayer(TestMultiHeadAttentionLayer):
+
+    def setUp(self):
+        self.d_model = 32
+        self.num_heads = 4
+        self.key_dim = 8 
+        self.value_dim = 8
+
+        self.num_iterations = 1000
+        
+        self.vectorized_att = BidirectionalMultiHeadAttentionLayer(
+            d_model=self.d_model,
+            num_heads=self.num_heads,
+            value_dim=self.value_dim,
+            key_dim=self.key_dim    
+        )
+        
+        self.naive_att = BidirectionalNaiveMHA(
+            d_model=self.d_model,
+            num_heads=self.num_heads,
+            value_dim=self.value_dim,
+            key_dim=self.key_dim
+        )
+
+        self._sync_weights() 
+
+
+    def test_causal_mask_creation(self):
+        self._test_causal_mask_creation()
+
+    def test_query_key_product(self):
+        self._test_query_key_product()
+
+    def test_compute_weights(self):     
+        self._test_compute_weights()
+
+    def test_compute_weighted_values(self):
+        self._test_compute_weighted_values()
+
+    def test_full_forward_pass(self):
+        self._test_full_forward_pass()
+
+    def test_create_final_mask_with_pad(self):
+        self._test_create_final_mask_with_pad()
+
+    def test_compute_weights_with_random_pad(self):
+        self._test_compute_weights_with_random_pad()
+
+    def test_full_forward_with_pad(self):
+        self._test_full_forward_with_pad()  
+
+    def test_eval_mode(self):
+        self._test_eval_mode()
+
+    def test_train_mode(self):
+        self._test_train_mode()
+
+    def test_consistent_output_without_dropout_bn(self):
+        self._test_consistent_output_without_dropout_bn()
+
+    def test_consistent_output_in_eval_mode(self):
+        self._test_consistent_output_in_eval_mode()
+
+    def test_batch_size_one_in_train_mode(self):    
+        self._test_batch_size_one_in_train_mode()
+
+    def test_batch_size_one_in_eval_mode(self):
+        self._test_batch_size_one_in_eval_mode()
+
+    def test_named_parameters_length(self):     
+        self._test_named_parameters_length()
+
+    def test_to_device(self):
+        self._test_to_device()
+
+
+    @unittest.skip("passed")
+    def test_gradcheck(self):       
+        self._test_gradcheck()
+
+    @unittest.skip("passed")
+    def test_gradcheck_large_values(self):
+        self._test_gradcheck_large_values()
+
+    @unittest.skip("passed")
+    def test_grad_against_nan(self):
+        self._test_grad_against_nan()
+
+    @unittest.skip("passed")
+    def test_grad_against_nan_large_values(self):
+        self._test_grad_against_nan_large_values()
+
 
 if __name__ == '__main__':
     import mypt.code_utils.pytorch_utils as pu
