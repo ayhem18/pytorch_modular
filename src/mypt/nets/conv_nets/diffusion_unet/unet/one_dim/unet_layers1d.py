@@ -29,7 +29,7 @@ class UnetDownLayer1D(AbstractDownLayer):
         norm2_params: Optional[dict] = None,
         activation: Optional[Union[str, Callable]] = None,
         activation_params: Optional[dict] = None,
-        film_activation: Union[str, Callable] = "relu",
+        film_activation: Union[str, Callable] = "silu",
         film_activation_params: dict = {},
         force_residual: bool = True,
         downsample_type: str = 'con'):
@@ -110,7 +110,7 @@ class UnetUpLayer1D(AbstractUpLayer):
         norm2_params: Optional[dict] = None,
         activation: Optional[Union[str, Callable]] = None,
         activation_params: Optional[dict] = None,
-        film_activation: Union[str, Callable] = "relu",
+        film_activation: Union[str, Callable] = "silu",
         film_activation_params: dict = {},
         force_residual: bool = True,
         upsample_type: str = 'con'):

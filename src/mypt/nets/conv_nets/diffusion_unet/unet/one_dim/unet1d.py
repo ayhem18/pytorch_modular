@@ -39,8 +39,6 @@ class UNet1DCond(AbstractUNetCond):
         self._is_built: bool = False
     
     
-        self._is_built: bool = False
-    
     def build_down_block(
         self,
         num_down_layers: int,
@@ -55,7 +53,7 @@ class UNet1DCond(AbstractUNetCond):
         norm2_params: Optional[dict] = None,
         activation: Optional[Union[str, Callable]] = None,
         activation_params: Optional[dict] = None,
-        film_activation: Union[str, Callable] = "relu",
+        film_activation: Union[str, Callable] = "silu", # updated after inspecting the diffusers library.
         film_activation_params: dict = {},
         force_residual: bool = False,
     ):
@@ -118,7 +116,7 @@ class UNet1DCond(AbstractUNetCond):
         norm2_params: Optional[dict] = None,
         activation: Optional[Union[str, Callable]] = None,
         activation_params: Optional[dict] = None,
-        film_activation: Union[str, Callable] = "relu",
+        film_activation: Union[str, Callable] = "silu", # updated after inspecting the diffusers library.
         film_activation_params: dict = {},
         force_residual: bool = False,
     ):
@@ -178,7 +176,7 @@ class UNet1DCond(AbstractUNetCond):
         norm2_params: Optional[dict] = None,
         activation: Optional[Union[str, Callable]] = None,
         activation_params: Optional[dict] = None,
-        film_activation: Union[str, Callable] = "relu",
+        film_activation: Union[str, Callable] = "silu", # updated after inspecting the diffusers library.
         film_activation_params: dict = {},
         force_residual: bool = False,
     ):

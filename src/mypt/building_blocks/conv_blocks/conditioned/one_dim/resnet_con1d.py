@@ -115,13 +115,13 @@ class CondOneDimWResBlock(AbstractCondResnetBlock):
             Output tensor after passing through the main stream
         """
         # First FiLM -> Conv -> Dropout sequence
-        out = self._components['film1'](x, condition)
-        out = self._components['conv1'](out)
-        out = self._components['dropout'](out)
+        out = self._components['film1'].forward(x, condition)
+        out = self._components['conv1'].forward(out)
+        out = self._components['dropout'].forward(out)
         
         # Second FiLM -> Conv sequence
-        out = self._components['film2'](out, condition)
-        out = self._components['conv2'](out)
+        out = self._components['film2'].forward(out, condition)
+        out = self._components['conv2'].forward(out)
         
         return out
 

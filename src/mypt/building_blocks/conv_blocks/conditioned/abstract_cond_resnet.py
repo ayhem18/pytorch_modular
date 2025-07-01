@@ -33,34 +33,54 @@ class AbstractCondResnetBlock(NonSequentialModuleMixin, GeneralResidualMixin, nn
     }
 
     def __validate_normalization_function(self, 
-                                          norm: Union[nn.Module, str],
+                                          norm: Optional[Union[nn.Module, str]] = None,
                                           norm_params: Optional[dict] = None) -> Tuple[nn.Module, dict]:
         # TODO: MAKE SURE TO UPDATE THIS METHOD AS MORE NORMALIZATION FUNCTIONS ARE ADDED TO THE _normalization_functions DICTIONARY !!!
 
         if isinstance(norm, str):
-            try:
-                norm = _normalization_functions.get(norm)
-            except KeyError:
-                raise NotImplementedError(f"Normalization type {norm} is not currently supported !!!")
-
-        norm = norm or nn.BatchNorm2d # the default normalization is batchnorm 
-        norm_params = norm_params or {}
-
-        if isinstance(norm, str):
             if norm not in self._WIDE_RESNET_BLOCK_NORMALIZATION_FUNCTIONS:
                 raise NotImplementedError(f"Normalization type {norm} is not currently supported !!!")
+            # convert norm to a callable object
+            norm = _normalization_functions.get(norm)
+
+        norm = norm or nn.GroupNorm # the default normalization is groupnorm 
+        norm_params = norm_params or {}
 
         return norm, norm_params
 
-    def __set_norm_params(self, film_block: int, norm: Union[nn.Module, str], norm_params: Optional[dict]) -> Tuple[nn.Module, dict]:
+
+    def __set_num_groups(self, norm_group_params: dict, num_channels: int) -> int:
+        """
+        Set the number of groups for the GroupNorm layer.
+        """
+
+    
+        if "num_groups" in norm_group_params:
+            return norm_group_params["num_groups"]
+
+        if num_channels % 2 == 1:
+            return 1
+        
+        max_power_2 = 1
+
+        while num_channels % (2 ** max_power_2) != 0 and max_power_2 < 5:
+            max_power_2 += 1
+
+        return min(2 ** max_power_2, num_channels // 4)
+
+    def __set_norm_params(self, 
+                          film_block: int, 
+                          norm: Union[nn.Module, str], 
+                          norm_params: Optional[dict]) -> Tuple[nn.Module, dict]:
+        
         norm, norm_params = self.__validate_normalization_function(norm, norm_params)
 
         channels = self._in_channels if film_block == 1 else self._out_channels
 
         # at this point, norm is a Callable 
         if norm == nn.GroupNorm:
-            norm_params["num_groups"] = norm_params.get("num_groups", 1)
-            norm_params["num_channels"] = norm_params.get("num_channels", channels) 
+            norm_params["num_channels"] = channels
+            norm_params["num_groups"] = self.__set_num_groups(norm_params, channels)
         
         elif norm == nn.BatchNorm2d:
             norm_params["num_features"] = norm_params.get("num_features", channels)
@@ -121,7 +141,7 @@ class AbstractCondResnetBlock(NonSequentialModuleMixin, GeneralResidualMixin, nn
         film_activation: Union[str, Callable] = "relu",
         film_activation_params: dict = {},
 
-        # whether to use a convolutional layer as the shortcut connection
+        # whether to have a convolutional layer as a shortcut connection when the input and output shapes are identical
         force_residual: bool = False, 
 
         extra_components_fields: Optional[List[str]] = None,
@@ -139,7 +159,7 @@ class AbstractCondResnetBlock(NonSequentialModuleMixin, GeneralResidualMixin, nn
             inner_components_fields=[
                 "_components",  
                 "_shortcut"
-            ] + (extra_components_fields or []) # do not add any fields if the 'extra_components_fields' is None
+            ] + (extra_components_fields or []) 
         )
         
         # Store parameters

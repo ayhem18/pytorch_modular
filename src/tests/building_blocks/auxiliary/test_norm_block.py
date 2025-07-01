@@ -19,7 +19,7 @@ class TestNormBlock(CustomModuleBaseTest):
         """
         Initialize the test case parameters
         """
-        self.dim_analyser = DimensionsAnalyser()
+        self.dim_analyser = DimensionsAnalyser()    
         
     def _generate_random_norm_act_block(self) -> Tuple[NormActBlock, Dict]:
         """
@@ -30,7 +30,7 @@ class TestNormBlock(CustomModuleBaseTest):
         norm_type = random.choice(['batchnorm1d', 'batchnorm2d', 'groupnorm'])
                 
         # Random activation function
-        activation_type = random.choice(['relu', 'leaky_relu', 'gelu', 'tanh', 'sigmoid'])
+        activation_type = random.choice(['relu', 'leaky_relu', 'gelu', 'tanh', 'sigmoid', 'silu'])
 
         # Random number of features for normalization
         num_features = random.randint(1, 128)
@@ -58,7 +58,7 @@ class TestNormBlock(CustomModuleBaseTest):
             num_channels = num_features * random.randint(2, 100)
             num_features = num_channels
             norm_params = {'num_groups': num_groups, 'num_channels': num_channels}
-        
+
         # Set up activation parameters
         if activation_type == 'leaky_relu':
             activation_params = {'negative_slope': 0.01}

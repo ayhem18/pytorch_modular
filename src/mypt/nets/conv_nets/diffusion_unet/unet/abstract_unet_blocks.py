@@ -52,7 +52,7 @@ class AbstractUnetDownBlock(ModuleListMixin, torch.nn.Module, ABC):
         norm2_params: Optional[dict] = None,
         activation: Optional[Union[str, Callable]] = None,
         activation_params: Optional[dict] = None,
-        film_activation: Union[str, Callable] = "relu",
+        film_activation: Union[str, Callable] = "silu",
         film_activation_params: dict = {},
         force_residual: bool = False,
         *args, **kwargs
@@ -192,7 +192,7 @@ class AbstractUnetUpBlock(ModuleListMixin, torch.nn.Module, ABC):
         norm2_params: Optional[dict] = None,
         activation: Optional[Union[str, Callable]] = None,
         activation_params: Optional[dict] = None,
-        film_activation: Union[str, Callable] = "relu",
+        film_activation: Union[str, Callable] = "silu",
         film_activation_params: dict = {},
         force_residual: bool = False,
     ):
@@ -338,7 +338,7 @@ class AbstractUnetMidBlock(SequentialModuleListMixin, torch.nn.Module, ABC):
         norm2_params: Optional[dict] = None,
         activation: Optional[Union[str, Callable]] = None,
         activation_params: Optional[dict] = None,
-        film_activation: Union[str, Callable] = "relu",
+        film_activation: Union[str, Callable] = "silu",
         film_activation_params: dict = {},
         force_residual: bool = False,
     ):

@@ -21,6 +21,7 @@ _activation_functions = {
     "softshrink": nn.Softshrink,
     "softsign": nn.Softsign,
     "tanhshrink": nn.Tanhshrink,
+    "silu": nn.SiLU,
 }
 
 
