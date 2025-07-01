@@ -1,5 +1,7 @@
 import os
 import json
+import torch
+import numpy as np
 import pandas as pd
 
 from typing import Dict, Any, List, Union
@@ -19,7 +21,7 @@ class TensorBoardLogger(BaseLogger):
         for tag, value in values.items():
             self.log_scalar(tag, value, step)
     
-    def log_image(self, tag: str, image: Any, step: int, dataformats='CHW'):
+    def log_image(self, tag: str, image: Any, step: int):
         """
         Logs an image.
         Args:
@@ -28,6 +30,14 @@ class TensorBoardLogger(BaseLogger):
             step (int): The step at which to log the image.
             dataformats (str): Image data format specification. Default is 'CHW'.
         """
+        # set the dataformats based on the type of the image
+        if isinstance(image, torch.Tensor):
+            dataformats = 'CHW'
+        elif isinstance(image, np.ndarray):
+            dataformats = 'HWC'
+        else:
+            raise TypeError(f"Image must be a torch.Tensor or np.ndarray, got {type(image)}")
+
         self.writer.add_image(tag, image, step, dataformats=dataformats)
         
     def log_table(self, tag: str, data: Union[pd.DataFrame, List[List]], step: int):
