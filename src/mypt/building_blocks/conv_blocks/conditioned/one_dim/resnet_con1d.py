@@ -125,6 +125,12 @@ class CondOneDimWResBlock(AbstractCondResnetBlock):
         
         return out
 
+    def _forward_residual_stream(self, x: torch.Tensor, *args) -> torch.Tensor:
+        if self._shortcut is None:
+            return x
+
+        return self._shortcut.forward(x)
+
 
 class UpCondOneDimWResBlock(AbstractCondUpWResBlock):
     """

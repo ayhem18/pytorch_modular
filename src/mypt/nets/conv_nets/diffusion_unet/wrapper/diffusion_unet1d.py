@@ -158,7 +158,7 @@ class DiffusionUNetOneDim(NonSequentialModuleMixin, torch.nn.Module):
 
         self.unet = UNet1DCond(
             in_channels=input_channels,
-            out_channels=self.output_channels,
+            out_channels=self.unet_output_channels, # make sure to set correct number channels !!! 
             cond_dimension=cond_dimension,
         )
 
@@ -168,11 +168,16 @@ class DiffusionUNetOneDim(NonSequentialModuleMixin, torch.nn.Module):
 
     def forward(self, x, time_step, *args):
         """Forward pass for the 1D diffusion UNet."""
-        x = self.conv_in(x)
-
+        # prepare the condition input
         condition = self.conditions_processor(time_step, *args)
 
+        # pass the input through the conv_in layer
+        x = self.conv_in(x)
+
+        # pass the input and the condition through the unet
         x = self.unet(x, condition)
+
+        # pass the output through the conv_out layer
         x = self.conv_out(x)
         return x
 

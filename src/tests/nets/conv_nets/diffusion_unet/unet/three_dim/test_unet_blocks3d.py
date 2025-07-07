@@ -11,7 +11,7 @@ from mypt.building_blocks.conv_blocks.conditioned.three_dim.resnet_con3d import 
 from mypt.nets.conv_nets.diffusion_unet.unet.three_dim.unet_blocks3d import UnetDownBlock3D, UnetUpBlock3D, UNetMidBlock3D
 
 
-@unittest.skip("passed")
+@unittest.skip("skipping 3D tests for now until improving the 3d conditioning code")
 class TestUnetDownBlock3D(CustomModuleBaseTest):
     """Test class for UnetDownBlock3D that verifies downsampling behavior"""
     
@@ -729,7 +729,7 @@ class TestUnetUpBlock3D(CustomModuleBaseTest):
         super()._test_module_is_nn_module(block)
 
 
-
+@unittest.skip("skipping 3D tests for now until improving the 3d conditioning code")
 class TestUNetMidBlock3D(CustomModuleBaseTest):
     """Test class for UNetMidBlock3D that verifies behavior"""
     

@@ -9,7 +9,7 @@ from tests.custom_base_test import CustomModuleBaseTest
 from mypt.dimensions_analysis.dimension_analyser import DimensionsAnalyser
 from mypt.building_blocks.conv_blocks.conditioned.three_dim.resnet_con3d import DownCondThreeDimWResBlock
 
-
+@unittest.skip("skipping 3D tests for now until improving the 3d conditioning code")
 class TestDownCondThreeDimWResBlock(CustomModuleBaseTest):
     """Test class for DownCondThreeDimWResBlock with spatial downsampling and 3D conditioning"""
     

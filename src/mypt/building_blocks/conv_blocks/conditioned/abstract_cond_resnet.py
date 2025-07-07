@@ -48,7 +48,6 @@ class AbstractCondResnetBlock(NonSequentialModuleMixin, GeneralResidualMixin, nn
 
         return norm, norm_params
 
-
     def __set_num_groups(self, norm_group_params: dict, num_channels: int) -> int:
         """
         Set the number of groups for the GroupNorm layer.
@@ -92,7 +91,6 @@ class AbstractCondResnetBlock(NonSequentialModuleMixin, GeneralResidualMixin, nn
         
         return norm, norm_params 
     
-
     def __set_residual_stream(self) -> Tuple[str, str]:
         # can be a one-liner, but let's focus on clarify for now
         if not self._force_residual and (self._stride == 1 and self._in_channels == self._out_channels):
@@ -227,6 +225,11 @@ class AbstractCondResnetBlock(NonSequentialModuleMixin, GeneralResidualMixin, nn
 
     @abstractmethod
     def _forward_main_stream(self, x: torch.Tensor, condition: torch.Tensor) -> torch.Tensor:
+        # this must be overriden by the subsequent classes
+        pass
+
+    @abstractmethod
+    def _forward_residual_stream(self, x: torch.Tensor, condition: torch.Tensor) -> torch.Tensor:
         # this must be overriden by the subsequent classes
         pass
 

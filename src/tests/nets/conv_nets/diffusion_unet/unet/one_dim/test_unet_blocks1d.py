@@ -10,7 +10,6 @@ from mypt.dimensions_analysis.dimension_analyser import DimensionsAnalyser
 from mypt.nets.conv_nets.diffusion_unet.unet.one_dim.unet_blocks1d import UnetDownBlock1D, UnetUpBlock1D, UNetMidBlock1D
 
 
-@unittest.skip("Skipping UnetDownBlock1D tests")
 class TestUnetDownBlock1D(CustomModuleBaseTest):
     """Test class for UnetDownBlock1D that verifies downsampling behavior"""
     
@@ -314,7 +313,6 @@ class TestUnetDownBlock1D(CustomModuleBaseTest):
             super()._test_to_device(block, x, condition)
 
 
-@unittest.skip("Skipping UnetUpBlock1D tests")
 class TestUnetUpBlock1D(CustomModuleBaseTest):
     """Test class for UnetUpBlock1D that verifies upsampling behavior"""
     

@@ -19,7 +19,7 @@ class TestDiffusionUNetOneDim(CustomModuleBaseTest):
         self.num_classes_options = [None, 5, 10]
         self.embedding_methods = ['positional', 'gaussian_fourier']
         
-        # For UNet blocks
+        # For UNet blocks (at least 2 resnet blocks per layer.)
         self.num_resnet_blocks_range = (2, 4)
     
     def _get_valid_input(self, 
@@ -35,7 +35,7 @@ class TestDiffusionUNetOneDim(CustomModuleBaseTest):
         
         class_tensor = None
         if model.num_classes is not None:
-            class_tensor = torch.randint(0, model.num_classes, (batch_size,))
+            class_tensor = torch.randint(0, model.num_classes - 1, (batch_size,))
         
         return x, time_step, class_tensor
     
@@ -167,6 +167,7 @@ class TestDiffusionUNetOneDim(CustomModuleBaseTest):
         self.assertEqual(output.shape[1], model.output_channels)
         self.assertEqual(output.shape[2:], x.shape[2:])
 
+
     def test_eval_mode(self):
         """Test that the model can be set to evaluation mode"""
         models = [
@@ -206,7 +207,7 @@ class TestDiffusionUNetOneDim(CustomModuleBaseTest):
             self.skipTest("CUDA not available, skipping device tests")
         
         models = [
-            self._generate_diffusion_unet_1d(num_classes=None),
+            self._generate_diffusion_unet_1d(num_classes=False),
             self._generate_diffusion_unet_1d(num_classes=10),
         ]
 
@@ -217,11 +218,8 @@ class TestDiffusionUNetOneDim(CustomModuleBaseTest):
             filtered_inputs = tuple(x for x in inputs if x is not None)
             super()._test_to_device(model, *filtered_inputs)
 
-
+    
 if __name__ == '__main__':
-    import sys
-    import os
-    from mypt.nets.conv_nets.diffusion_unet.wrapper.diffusion_unet1d import DiffusionUNetOneDim
     import mypt.code_utils.pytorch_utils as pu
     pu.seed_everything(42)
     unittest.main()

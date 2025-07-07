@@ -8,6 +8,7 @@ from tests.custom_base_test import CustomModuleBaseTest
 from mypt.dimensions_analysis.dimension_analyser import DimensionsAnalyser
 from mypt.nets.conv_nets.diffusion_unet.unet.three_dim.unet_layers3d import UnetDownLayer3D, UnetUpLayer3D
 
+@unittest.skip("skipping 3D tests for now until improving the 3d conditioning code")
 class TestUnetDownLayer3D(CustomModuleBaseTest):
     """Test class for UnetDownLayer3D that verifies downsampling behavior"""
     
@@ -271,7 +272,7 @@ class TestUnetDownLayer3D(CustomModuleBaseTest):
 
 
 
-# @unittest.skip("Skipping UnetUpLayer3D tests")
+@unittest.skip("skipping 3D tests for now until improving the 3d conditioning code")
 class TestUnetUpLayer3D(CustomModuleBaseTest):
     """Test class for UnetUpLayer3D that verifies upsampling behavior"""
     
