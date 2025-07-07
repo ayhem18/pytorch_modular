@@ -28,7 +28,7 @@ class TestConditionalWResBlock3D(CustomModuleBaseTest):
         
         # For normalization and activation
         self.norm_types = ['batchnorm2d', 'groupnorm']
-        self.activation_types = ['relu', 'leaky_relu', 'gelu']
+        self.activation_types = ['relu', 'leaky_relu', 'gelu', 'silu']
     
     def _get_valid_input(self, block=None, batch_size=2, height=32, width=32) -> Tuple[torch.Tensor, torch.Tensor]:
         """Generate a random input tensor and condition tensor with the correct shape"""

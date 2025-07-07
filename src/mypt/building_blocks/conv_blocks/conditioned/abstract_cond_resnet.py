@@ -29,7 +29,7 @@ class AbstractCondResnetBlock(NonSequentialModuleMixin, GeneralResidualMixin, nn
 
     _WIDE_RESNET_BLOCK_NORMALIZATION_FUNCTIONS = {
         "groupnorm": nn.GroupNorm,
-        "batchnorm": nn.BatchNorm2d,
+        "batchnorm2d": nn.BatchNorm2d,
     }
 
     def __validate_normalization_function(self, 
@@ -66,6 +66,11 @@ class AbstractCondResnetBlock(NonSequentialModuleMixin, GeneralResidualMixin, nn
         while num_channels % (2 ** max_power_2) != 0 and max_power_2 < 5:
             max_power_2 += 1
 
+
+        if num_channels <= 4:
+            # if num_channels is less than 4, then it is either 4 or 2. return 2 either way (if it is 2 num_channels // 4 produces 0 which is not a valid value)
+            return 2
+        
         return min(2 ** max_power_2, num_channels // 4)
 
     def __set_norm_params(self, 

@@ -3,7 +3,6 @@ A wrapper to around the UNet1D class to train a diffusion model on 1D conditions
 """
 
 import torch
-
 from typing import Optional
 
 
@@ -123,12 +122,16 @@ class DiffusionUNetOneDim(NonSequentialModuleMixin, torch.nn.Module):
 
 
     def _set_conv_out(self) -> torch.nn.Sequential:
-        # this code is inspired by the diffusers library.
-        num_groups_out = min(self.unet_output_channels // 4, 32)
+        input_channels_power2 = 0
+        while self.unet_output_channels % (2 ** input_channels_power2) != 0 and input_channels_power2 < 5:
+            input_channels_power2 += 1
+
+        num_groups_out = min(2 ** (input_channels_power2), self.unet_output_channels // 4)
+
         return torch.nn.Sequential(
             torch.nn.GroupNorm(num_channels=self.unet_output_channels, num_groups=num_groups_out, eps=1e-5, affine=True),
             torch.nn.SiLU(),
-            torch.nn.Conv1d(self.unet_output_channels, self.output_channels, kernel_size=3, padding=1)
+            torch.nn.Conv2d(self.unet_output_channels, self.output_channels, kernel_size=3, padding=1)
         )
 
 
@@ -143,7 +146,7 @@ class DiffusionUNetOneDim(NonSequentialModuleMixin, torch.nn.Module):
                  **kwargs):
         torch.nn.Module.__init__(self, *args, **kwargs)
 
-        NonSequentialModuleMixin.__init__(self, ["unet", "embedding_encoding", "conditions_processor", "conv_in", "conv_out"])
+        NonSequentialModuleMixin.__init__(self, ["unet", "conditions_processor", "conv_in", "conv_out"])
 
         self.input_channels = input_channels
         self.unet_output_channels = input_channels * 4 # the number of channels at the output of the inner unet
@@ -159,9 +162,17 @@ class DiffusionUNetOneDim(NonSequentialModuleMixin, torch.nn.Module):
             cond_dimension=cond_dimension,
         )
 
-        self.conv_in = torch.nn.Conv1d(self.input_channels, self.input_channels, kernel_size=3, padding=1)
+        self.conv_in = torch.nn.Conv2d(self.input_channels, self.input_channels, kernel_size=3, padding=1)
         self.conv_out = self._set_conv_out()        
         self._set_conditions_processor(num_classes=num_classes)
 
+    def forward(self, x, time_step, *args):
+        """Forward pass for the 1D diffusion UNet."""
+        x = self.conv_in(x)
 
+        condition = self.conditions_processor(time_step, *args)
+
+        x = self.unet(x, condition)
+        x = self.conv_out(x)
+        return x
 

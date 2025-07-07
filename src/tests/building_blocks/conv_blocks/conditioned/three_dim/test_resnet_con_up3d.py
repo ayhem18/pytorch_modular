@@ -28,7 +28,7 @@ class TestUpCondThreeDimWResBlock(CustomModuleBaseTest):
         
         # For normalization and activation
         self.norm_types = ['batchnorm2d', 'groupnorm']
-        self.activation_types = ['relu', 'leaky_relu', 'gelu']
+        self.activation_types = ['relu', 'leaky_relu', 'gelu', 'silu']
     
     def _get_valid_input(self, 
                          block: Optional[UpCondThreeDimWResBlock] = None, 
