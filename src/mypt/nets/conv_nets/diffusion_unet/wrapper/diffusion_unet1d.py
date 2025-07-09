@@ -3,7 +3,8 @@ A wrapper to around the UNet1D class to train a diffusion model on 1D conditions
 """
 
 import torch
-from typing import Optional
+from torch import nn
+from typing import Callable, List, Optional, Union
 
 
 from mypt.building_blocks.linear_blocks.fc_blocks import GenericFCBlock
@@ -180,4 +181,113 @@ class DiffusionUNetOneDim(NonSequentialModuleMixin, torch.nn.Module):
         # pass the output through the conv_out layer
         x = self.conv_out(x)
         return x
+
+
+    def __call__(self, x, time_step, *args):
+        return self.forward(x, time_step, *args)
+
+
+    def build_down_block(
+        self,
+        num_down_layers: int,
+        num_resnet_blocks: int,
+        out_channels: List[int],
+        downsample_types: Union[str, List[str]] = "conv",
+        inner_dim: int = 256,
+        dropout_rate: float = 0.0,
+        norm1: Optional[nn.Module] = None,
+        norm1_params: Optional[dict] = None,
+        norm2: Optional[nn.Module] = None,
+        norm2_params: Optional[dict] = None,
+        activation: Optional[Union[str, Callable]] = None,
+        activation_params: Optional[dict] = None,
+        film_activation: Union[str, Callable] = "relu",
+        film_activation_params: dict = {},
+        force_residual: bool = False,
+    ):
+        """Build the downsampling block in the UNet architecture."""
+        
+        # Call the underlying UNet implementation
+        self.unet.build_down_block(
+            num_down_layers=num_down_layers,
+            num_resnet_blocks=num_resnet_blocks,
+            out_channels=out_channels,
+            downsample_types=downsample_types,
+            inner_dim=inner_dim,
+            dropout_rate=dropout_rate,
+            norm1=norm1,
+            norm1_params=norm1_params,
+            norm2=norm2,
+            norm2_params=norm2_params,
+            activation=activation,
+            activation_params=activation_params,
+            film_activation=film_activation,
+            film_activation_params=film_activation_params,
+            force_residual=force_residual,
+        )
+
+    def build_middle_block(
+        self,
+        num_resnet_blocks: int,
+        inner_dim: int = 256,
+        dropout_rate: float = 0.0,
+        norm1: Optional[nn.Module] = None,
+        norm1_params: Optional[dict] = None,
+        norm2: Optional[nn.Module] = None,
+        norm2_params: Optional[dict] = None,
+        activation: Optional[Union[str, Callable]] = None,
+        activation_params: Optional[dict] = None,
+        film_activation: Union[str, Callable] = "relu",
+        film_activation_params: dict = {},
+        force_residual: bool = False,
+    ):
+        """Build the middle block in the UNet architecture."""
+        self.unet.build_middle_block(
+            num_resnet_blocks=num_resnet_blocks,
+            inner_dim=inner_dim,
+            dropout_rate=dropout_rate,
+            norm1=norm1,
+            norm1_params=norm1_params,
+            norm2=norm2,
+            norm2_params=norm2_params,
+            activation=activation,
+            activation_params=activation_params,
+            film_activation=film_activation,
+            film_activation_params=film_activation_params,
+            force_residual=force_residual,
+        )
+
+    def build_up_block(
+        self,
+        num_resnet_blocks: int,
+        upsample_types: Union[str, List[str]] = "transpose_conv",
+        inner_dim: int = 256,
+        dropout_rate: float = 0.0,
+        norm1: Optional[nn.Module] = None,
+        norm1_params: Optional[dict] = None,
+        norm2: Optional[nn.Module] = None,
+        norm2_params: Optional[dict] = None,
+        activation: Optional[Union[str, Callable]] = None,
+        activation_params: Optional[dict] = None,
+        film_activation: Union[str, Callable] = "relu",
+        film_activation_params: dict = {},
+        force_residual: bool = False,
+    ):
+        """Build the upsampling block in the UNet architecture."""
+        
+        self.unet.build_up_block(
+            num_resnet_blocks=num_resnet_blocks,
+            upsample_types=upsample_types,
+            inner_dim=inner_dim,
+            dropout_rate=dropout_rate,
+            norm1=norm1,
+            norm1_params=norm1_params,
+            norm2=norm2,
+            norm2_params=norm2_params,
+            activation=activation,
+            activation_params=activation_params,
+            film_activation=film_activation,
+            film_activation_params=film_activation_params,
+            force_residual=force_residual,
+        )
 

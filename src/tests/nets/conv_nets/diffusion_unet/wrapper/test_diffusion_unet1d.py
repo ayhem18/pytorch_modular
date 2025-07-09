@@ -72,9 +72,9 @@ class TestDiffusionUNetOneDim(CustomModuleBaseTest):
             'force_residual': True
         }
         
-        model.unet.build_down_block(**down_params)
-        model.unet.build_middle_block(**mid_params)
-        model.unet.build_up_block(**up_params)
+        model.build_down_block(**down_params)
+        model.build_middle_block(**mid_params)
+        model.build_up_block(**up_params)
         
         return model
     
