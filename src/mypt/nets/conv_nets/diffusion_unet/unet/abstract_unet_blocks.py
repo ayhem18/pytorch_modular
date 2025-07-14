@@ -115,12 +115,13 @@ class AbstractUnetDownBlock(ModuleListMixin, torch.nn.Module, ABC):
             - Final output tensor 
             - List of skip connection tensors for each layer
         """
-        skip_connections = [None for _ in self.down_layers]
+        skip_connections = [torch.tensor(0) for _ in self.down_layers]
         
         for i, layer in enumerate(self.down_layers):
             x = layer(x, condition)
             skip_connections[i] = x
         
+        # the last skip connection is the same as the output of the last down layer
         return x, skip_connections
     
     def __call__(self, x: torch.Tensor, condition: torch.Tensor) -> Tuple[torch.Tensor, List[torch.Tensor]]:
@@ -183,6 +184,8 @@ class AbstractUnetUpBlock(ModuleListMixin, torch.nn.Module, ABC):
         in_channels: int,
         cond_dimension: int,
         out_channels: Union[List[int], List[List[int]]],
+        skip_connections_channels: List[int],
+        reverse_skip_connections: bool = True,
         upsample_types: Union[str, List[str]] = "transpose_conv",
         inner_dim: int = 256,
         dropout_rate: float = 0.0,
@@ -203,7 +206,7 @@ class AbstractUnetUpBlock(ModuleListMixin, torch.nn.Module, ABC):
         if len(out_channels) != num_up_layers:
             raise ValueError(f"Expected out_channels to have {num_up_layers} elements, but got {len(out_channels)}")
         
-        # convert the out_channels into a list of list if it's not already
+        # convert the out_channels into a list of lists if it's not already
         out_channels = [c if isinstance(c, list) else [c] * num_resnet_blocks for c in out_channels]
 
         # Convert upsample_types to list if it's a string
@@ -212,6 +215,12 @@ class AbstractUnetUpBlock(ModuleListMixin, torch.nn.Module, ABC):
         elif len(upsample_types) != num_up_layers:
             raise ValueError(f"Expected upsample_types to have {num_up_layers} elements, but got {len(upsample_types)}")
         
+        # validate the skip_connections_channels
+        if len(skip_connections_channels) != num_up_layers:
+            raise ValueError(f"Expected skip_connections_channels to have {num_up_layers} elements, but got {len(skip_connections_channels)}")
+
+        self.skip_connections_channels = skip_connections_channels if reverse_skip_connections else skip_connections_channels[::-1]
+
         # Store parameters
         self.num_up_layers = num_up_layers
         self.in_channels = in_channels
@@ -236,7 +245,7 @@ class AbstractUnetUpBlock(ModuleListMixin, torch.nn.Module, ABC):
             "force_residual": force_residual,
         }
 
-        self.up_layers: torch.nn.ModuleList[AbstractUpLayer] = None
+        self.up_layers: torch.nn.ModuleList[AbstractUpLayer] = nn.ModuleList()
 
 
     @abstractmethod
@@ -263,11 +272,23 @@ class AbstractUnetUpBlock(ModuleListMixin, torch.nn.Module, ABC):
         if reverse_skip_connections:
             skip_outputs = skip_outputs[::-1]
 
-        for i, layer in enumerate(self.up_layers):
-            if skip_outputs[i].shape != x.shape:
-                raise ValueError(f"Expected skip_outputs[{i}] to have shape {x.shape}, but got {skip_outputs[i].shape}")
+        # TODO: use concatentation instead of simple addition
 
-            layer_input = x + skip_outputs[i]
+        # x: at this point is the output of the middle block
+        # skip outputs:
+
+        # x = self.up_layers[0](x, condition) 
+
+        # for i in range(1, len(self.up_layers)):
+        #     # skip connections correspond to up layers (starting from the second one)
+        #     layer_input = torch.cat([x, skip_outputs[i - 1]], dim=1)
+        #     x = self.up_layers[i](layer_input, condition)
+
+        for i, layer in enumerate(self.up_layers):            
+            # if skip_outputs[i].shape != x.shape:
+            #     raise ValueError(f"Expected skip_outputs[{i}] to have shape {x.shape}, but got {skip_outputs[i].shape}")
+            # the input of the up layer is the concatenation of the input tensor and the skip connection tensor
+            layer_input = torch.cat([x, skip_outputs[i]], dim=1)
             x = layer(layer_input, condition)
         
         return x

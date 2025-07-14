@@ -110,7 +110,7 @@ class AbstractUpLayer(SequentialModuleListMixin, torch.nn.Module, ABC):
     def __init__(
         self,
         in_channels: int,
-        out_channels: int,
+        out_channels: Union[int, List[int]],
         cond_dimension: int,
         num_resnet_blocks: int,
         *args, **kwargs

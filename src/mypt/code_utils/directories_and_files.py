@@ -23,15 +23,15 @@ DEFAULT_ERROR_MESSAGE = 'MAKE SURE THE passed path satisfies the condition passe
 IMAGE_EXTENSIONS = ['.png', '.jpeg', '.jpg']
 
 
-def process_path(save_path: Optional[Union[str, Path]],
+def process_path(save_path: Union[str, Path],
                       dir_ok: bool = True,
                       file_ok: bool = True,
                       must_exist: bool = False,
-                      condition: Callable = None,
-                      error_message: str = DEFAULT_ERROR_MESSAGE) -> Union[str, Path, None]:
+                      condition: Optional[Callable] = None,
+                      error_message: str = DEFAULT_ERROR_MESSAGE) -> Path:
 
     if save_path is None:
-        return None
+        raise ValueError("the save_path cannot be None")
 
     # first make the save_path absolute
     save_path = abs_path(save_path)
@@ -71,7 +71,7 @@ def process_path(save_path: Optional[Union[str, Path]],
         elif not condition_output:
             raise ValueError(error_message)
                 
-    return save_path
+    return Path(save_path)
 
 
 def default_file_name(hour_ok: bool = True,

@@ -82,6 +82,8 @@ class UnetUpBlock1D(AbstractUnetUpBlock):
                  in_channels: int,
                  cond_dimension: int,
                  out_channels: Union[int, List[int]],
+                 skip_connections_channels: List[int],
+                 reverse_skip_connections: bool = True,
                  upsample_types: Union[str, List[str]] = "transpose_conv",  
                  inner_dim: int = 256,
                  dropout_rate: float = 0.0,
@@ -102,6 +104,8 @@ class UnetUpBlock1D(AbstractUnetUpBlock):
             in_channels,
             cond_dimension,
             out_channels,
+            skip_connections_channels,
+            reverse_skip_connections,
             upsample_types,
             inner_dim,
             dropout_rate,
@@ -117,23 +121,27 @@ class UnetUpBlock1D(AbstractUnetUpBlock):
             *args, **kwargs
         )
 
-        # Create the up layers
-        up_layers = [None for _ in range(num_up_layers)]
 
-        for i in range(num_up_layers):
-            up_layers[i] = UnetUpLayer1D(
-                in_channels=self.in_channels if i == 0 else self.out_channels[i-1][0],
+        # the number of input channels is computed as follows: 
+        # if it is the first up layer, then it is the same as self.in_channels
+        # otherwise, the i-th layer will receive both the ouput of the previous layer concatenated with the corresponding skip connection
+        up_in_channels = [self.in_channels + self.skip_connections_channels[0]] + [o_channels[-1] + s_channels for o_channels, s_channels in zip(self.out_channels[1:], self.skip_connections_channels)]
+
+        up_layers = [
+            UnetUpLayer1D(
+                in_channels=up_in_channels[i],
                 out_channels=self.out_channels[i],
                 upsample_type=self.upsample_types[i],
                 **self._layer_params
             )
+            for i in range(num_up_layers)
+        ]
 
         self.up_layers = nn.ModuleList(up_layers)
 
 
     def forward(self, x: torch.Tensor, skip_outputs: List[torch.Tensor], condition: torch.Tensor, reverse_skip_connections: bool = True) -> torch.Tensor:
         return super().forward(x, skip_outputs, condition, reverse_skip_connections)
-
 
 
 class UNetMidBlock1D(AbstractUnetMidBlock):
@@ -177,7 +185,7 @@ class UNetMidBlock1D(AbstractUnetMidBlock):
         )
 
         # Create the mid blocks directly as a sequence of ConditionalWResBlock
-        mid_blocks = [None for _ in range(num_resnet_blocks)]
+        mid_blocks: List[Optional[CondOneDimWResBlock]] = [None for _ in range(num_resnet_blocks)]
 
         for i in range(num_resnet_blocks):
             mid_blocks[i] = CondOneDimWResBlock(

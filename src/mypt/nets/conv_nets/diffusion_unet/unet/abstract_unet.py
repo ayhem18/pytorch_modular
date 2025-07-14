@@ -31,18 +31,18 @@ class AbstractUNetCond(NonSequentialModuleMixin, nn.Module, ABC):
         self.cond_dimension = cond_dimension # the dimension of the conditioning input
 
         # the number of downsampling layers 
-        self.num_down_layers: int = None # the number of downsampling layers 
+        self.num_down_layers: Optional[int] = None # the number of downsampling layers 
 
         # the out channels of the unetDownBlock 
-        self.down_block_out_channels: Union[List[int], List[List[int]]] = None
+        self.down_block_out_channels: Optional[Union[List[int], List[List[int]]]] = None
         # the number of resnet blocks in the unetDownBlock 
-        self.down_block_num_resnet_blocks: int = None
+        self.down_block_num_resnet_blocks: Optional[int] = None
         
         # the number of middle resnet blocks in the middle block 
-        self.middle_block_num_resnet_blocks: int = None 
+        self.middle_block_num_resnet_blocks: Optional[int] = None 
 
         # the number of resnet blocks in the unetUpBlock 
-        self.up_block_num_resnet_blocks: int = None
+        self.up_block_num_resnet_blocks: Optional[int] = None   
 
         # Initialize components as None
         self._down_block = None

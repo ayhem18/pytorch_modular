@@ -31,9 +31,9 @@ class UNet1DCond(AbstractUNetCond):
         super().__init__(in_channels, out_channels, cond_dimension, *args, **kwargs)
         
         # Initialize components as None
-        self._down_block: UnetDownBlock1D = None
-        self._middle_block: UNetMidBlock1D = None
-        self._up_block: UnetUpBlock1D = None
+        self._down_block: Optional[UnetDownBlock1D] = None
+        self._middle_block: Optional[UNetMidBlock1D] = None
+        self._up_block: Optional[UnetUpBlock1D] = None
 
 
         self._is_built: bool = False
@@ -204,7 +204,13 @@ class UNet1DCond(AbstractUNetCond):
         # the last output channel of the down block is the same as the input channel of the up block 
         # so block_down_output_channels[::-1][1:] is the list of output channels of the up block  
         # and the last output channel must match the entire architecture output channel saved in self.final_out_channels
-        up_out_channels = self.down_block_out_channels[::-1][1:] + [self.final_out_channels]
+
+        common_block_channels = self.down_block_out_channels[::-1][1:]
+        # the skip connections channels are the output channels of the down block in reverse order
+        skip_connections_channels = [self.down_block_out_channels[-1]] + common_block_channels 
+
+        # the up block output channels are the skip connections channels plus the final output channel
+        up_out_channels = common_block_channels + [self.final_out_channels]
 
         # Build the up block
         self._up_block = UnetUpBlock1D(
@@ -212,7 +218,10 @@ class UNet1DCond(AbstractUNetCond):
             num_resnet_blocks=num_resnet_blocks,
             in_channels=self.down_block_out_channels[-1], # the number of input channels is the same as the number of output channels of the last downsampling layer 
             out_channels=up_out_channels,
+            skip_connections_channels=skip_connections_channels, # the skip connections channels are the output channels of the down block in reverse order
+            reverse_skip_connections=False, # the skip connections are passed in reverse order
             upsample_types=upsample_types,
+
             cond_dimension=self.cond_dimension,
 
             inner_dim=inner_dim,
@@ -248,13 +257,13 @@ class UNet1DCond(AbstractUNetCond):
         self._verify_input(x)   
 
         # Downsampling path - returns features and skip connections
-        x, skip_connections = self._down_block(x, condition)
+        x, skip_connections = self._down_block.forward(x, condition)
         
         # Middle block - processes features at the bottleneck
-        x = self._middle_block(x, condition)
+        x = self._middle_block.forward(x, condition)
         
         # Upsampling path - uses skip connections
-        x = self._up_block(x, skip_connections, condition)
+        x = self._up_block.forward(x, skip_connections, condition)
         
         return x
 
