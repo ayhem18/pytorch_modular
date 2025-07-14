@@ -245,7 +245,6 @@ class TestUnetDownLayer1D(CustomModuleBaseTest):
         super()._test_module_is_nn_module(block)
 
 
-# @unittest.skip("Skipping UnetUpLayer1D tests")
 class TestUnetUpLayer1D(CustomModuleBaseTest):
     """Test class for UnetUpLayer1D that verifies upsampling behavior"""
     
@@ -492,4 +491,6 @@ class TestUnetUpLayer1D(CustomModuleBaseTest):
 
 
 if __name__ == '__main__':
+    import mypt.code_utils.pytorch_utils as pu 
+    pu.seed_everything(42)
     unittest.main()

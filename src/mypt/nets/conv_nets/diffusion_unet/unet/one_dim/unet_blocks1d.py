@@ -17,7 +17,7 @@ class UnetDownBlock1D(AbstractUnetDownBlock):
                  num_resnet_blocks: int,
                  in_channels: int,
                  cond_dimension: int,
-                 out_channels: Union[int, List[int]],
+                 out_channels: Union[List[int], List[List[int]]],
                  downsample_types: Union[str, List[str]] = "conv",  
                  inner_dim: int = 256,
                  dropout_rate: float = 0.0,
@@ -53,17 +53,16 @@ class UnetDownBlock1D(AbstractUnetDownBlock):
             *args, **kwargs
         )
 
-        # Create the down layers
-        down_layers = [None for _ in range(num_down_layers)]
+        down_layers = [
+            UnetDownLayer1D(
+                            in_channels=self.in_channels if i == 0 else self.out_channels[i-1][-1],
+                            out_channels=self.out_channels[i],
+                            downsample_type=self.downsample_types[i],
+                            **self._layer_params
+                        )   
+            for i in range(num_down_layers)
+        ]
 
-        for i in range(num_down_layers):
-            down_layers[i] = UnetDownLayer1D(
-                in_channels=self.in_channels if i == 0 else self.out_channels[i-1][0],
-                out_channels=self.out_channels[i],
-                downsample_type=self.downsample_types[i],
-                **self._layer_params
-            )   
-        # set the self.down_layers field
         self.down_layers = nn.ModuleList(down_layers)
 
 
@@ -81,7 +80,7 @@ class UnetUpBlock1D(AbstractUnetUpBlock):
                  num_resnet_blocks: int,
                  in_channels: int,
                  cond_dimension: int,
-                 out_channels: Union[int, List[int]],
+                 out_channels: Union[List[int], List[List[int]]],
                  skip_connections_channels: List[int],
                  reverse_skip_connections: bool = True,
                  upsample_types: Union[str, List[str]] = "transpose_conv",  
@@ -122,14 +121,9 @@ class UnetUpBlock1D(AbstractUnetUpBlock):
         )
 
 
-        # the number of input channels is computed as follows: 
-        # if it is the first up layer, then it is the same as self.in_channels
-        # otherwise, the i-th layer will receive both the ouput of the previous layer concatenated with the corresponding skip connection
-        up_in_channels = [self.in_channels + self.skip_connections_channels[0]] + [o_channels[-1] + s_channels for o_channels, s_channels in zip(self.out_channels[1:], self.skip_connections_channels)]
-
         up_layers = [
             UnetUpLayer1D(
-                in_channels=up_in_channels[i],
+                in_channels=self.up_sample_in_channels[i],
                 out_channels=self.out_channels[i],
                 upsample_type=self.upsample_types[i],
                 **self._layer_params
@@ -184,17 +178,16 @@ class UNetMidBlock1D(AbstractUnetMidBlock):
             *args, **kwargs
         )
 
-        # Create the mid blocks directly as a sequence of ConditionalWResBlock
-        mid_blocks: List[Optional[CondOneDimWResBlock]] = [None for _ in range(num_resnet_blocks)]
-
-        for i in range(num_resnet_blocks):
-            mid_blocks[i] = CondOneDimWResBlock(
+        mid_blocks = [
+            CondOneDimWResBlock(
                 in_channels=self.in_channels if i == 0 else self.out_channels,
                 out_channels=self.out_channels,
                 cond_dimension=self.cond_dimension,
                 stride=1, # the blocks should not change the spatial dimensions
                 **self._block_params
             )
+            for i in range(num_resnet_blocks)
+        ]
 
         self._mid_blocks = nn.ModuleList(mid_blocks)
 

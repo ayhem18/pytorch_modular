@@ -223,7 +223,7 @@ class TestUNet1DCond(CustomModuleBaseTest):
             self.assertEqual(len(model._up_block.up_layers), num_down_layers)
             
             # Check the first up layer's in_channels
-            self.assertEqual(model._up_block.up_layers[0].in_channels, out_channels[-1])
+            self.assertEqual(model._up_block.up_layers[0].in_channels, out_channels[-1] + model._up_block.skip_connections_channels[0])
             
             # Check the output channels of the last up layer
             # the layer.out_channels is a list (modified inside the UnetUpLayer1D)
