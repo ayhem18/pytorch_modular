@@ -17,8 +17,8 @@ class PositionalEncoding(nn.Module):
         super().__init__()
 
         # the embedding will always be made even
-        self.dim_embedding = dim_embedding + int(dim_embedding % 2 == 1)
-        self.max_period = max_period
+        self._dim_embedding = dim_embedding + int(dim_embedding % 2 == 1)
+        self._max_period = max_period
 
         # according to the paper, for a timestampt 't' and a dimension 'i' : 
         # (here it seems reasonable to assume that i goes from 0 to dim_embedding // 2)
@@ -28,12 +28,12 @@ class PositionalEncoding(nn.Module):
         # the input is a tensor of shape (batch_size,)
         # so we need to create a tensor of shape (dim_embedding,) where all even elements are equal to 1 / max_period^(2i)
 
-        self.sin_positions = (torch.arange(0, self.dim_embedding, 2) / self.dim_embedding)
-        self.cos_positions = (torch.arange(1, self.dim_embedding, 2) / self.dim_embedding)
+        self._sin_positions = (torch.arange(0, self._dim_embedding, 2) / self._dim_embedding)
+        self._cos_positions = (torch.arange(1, self._dim_embedding, 2) / self._dim_embedding)
 
         # for numerical stability express 1 / max_period ^ (2i/dim_embedding) as exp(-log(max_period) * (2i/dim_embedding))        
-        self.sin_positions = torch.exp(self.sin_positions * - torch.log(torch.tensor(self.max_period)))[None, :]
-        self.cos_positions = torch.exp(self.cos_positions * - torch.log(torch.tensor(self.max_period)))[None, :]
+        self._sin_positions = torch.exp(self._sin_positions * - torch.log(torch.tensor(self._max_period)))[None, :]
+        self._cos_positions = torch.exp(self._cos_positions * - torch.log(torch.tensor(self._max_period)))[None, :]
 
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -48,13 +48,19 @@ class PositionalEncoding(nn.Module):
             x = x[:, None] # this converts the input from shape (batch_size,) to shape (batch_size, 1)
         
         # create a pe_table of shape (batch_size, dim_embedding)
-        pe_table = torch.zeros(x.shape[0], self.dim_embedding, device=x.device)
+        pe_table = torch.zeros(x.shape[0], self._dim_embedding, device=x.device)
 
         # set the values of the table
-        pe_table[:, 0::2] = torch.sin(self.sin_positions.to(x.device) * x)
-        pe_table[:, 1::2] = torch.cos(self.cos_positions.to(x.device) * x)
+        pe_table[:, 0::2] = torch.sin(self._sin_positions.to(x.device) * x)
+        pe_table[:, 1::2] = torch.cos(self._cos_positions.to(x.device) * x)
 
         return pe_table
+
+
+    @property
+    def dim_embedding(self) -> int:
+        return self._dim_embedding
+
 
 
 class GaussianFourierEncoding(nn.Module):
@@ -72,11 +78,11 @@ class GaussianFourierEncoding(nn.Module):
             use_log: bool = True
     ):
         super().__init__()
-        self.embedding_dim = 2 * embedding_dim
+        self._embedding_dim = 2 * embedding_dim
         
         # random non-learnable weights
-        self.weight = nn.Parameter(torch.randn(embedding_dim) * scale, requires_grad=False)
-        self.use_log = use_log
+        self._weight = nn.Parameter(torch.randn(embedding_dim) * scale, requires_grad=False)
+        self._use_log = use_log
 
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -91,12 +97,17 @@ class GaussianFourierEncoding(nn.Module):
         if x.ndim == 1:
             x = x[:, None]
                 
-        if self.use_log:
+        if self._use_log:
             x = torch.log(x)
 
         # broadcase the weight from (embedding_dim,) to (batch_size, embedding_dim)
-        x_proj = x * self.weight[None, :] * 2 * np.pi
+        x_proj = x * self._weight[None, :] * 2 * np.pi
 
         # concatenate the cos and sin projections
         out = torch.cat([torch.cos(x_proj), torch.sin(x_proj)], dim=-1)
         return out
+
+
+    @property
+    def embedding_dim(self) -> int:
+        return self._embedding_dim

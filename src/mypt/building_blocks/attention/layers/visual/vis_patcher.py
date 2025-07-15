@@ -122,4 +122,110 @@ class VisUnfoldPatcher(AbstractPatcher):
         # Permute to get the desired (B, N, D) shape for attention modules.
         # (B, D, N) -> (B, N, D)
         return unfolded_x.permute(0, 2, 1)
+
+
+class AbstractOverlappingPatcher(torch.nn.Module, ABC):
+    """
+    Abstract base class for patchers that create overlapping patches.
+    This is achieved by using a stride smaller than the patch size.
+
+    This technique increases the number of tokens (sequence length) fed to the
+    Transformer, which can improve performance by providing richer local context,
+    at the cost of increased computational complexity.
+    """
+    def __init__(self,
+                 patch_size: int,
+                 stride: int,
+                 input_shape: Tuple[int, int, int]
+                 ):
+        super().__init__()
+        if stride >= patch_size:
+            raise ValueError(f"Stride must be less than patch size for overlapping patches. Got stride {stride} and patch size {patch_size}.")
+        self.patch_size = patch_size
+        self.stride = stride
+        self.input_shape = input_shape
+        # N: number of patches, calculated with stride
+        self.num_patches_h = (input_shape[1] - patch_size) // stride + 1
+        self.num_patches_w = (input_shape[2] - patch_size) // stride + 1
+        self.num_patches = self.num_patches_h * self.num_patches_w
+        # D: output dimension
+        self.output_dim = input_shape[0] * patch_size * patch_size
+
+    @abstractmethod
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        pass
+
+
+class AbstractConvStemPatcher(torch.nn.Module, ABC):
+    """
+    Abstract base class for a hybrid patcher that uses a "convolutional stem".
+
+    Instead of a single patching operation, this approach uses several layers of
+    standard convolutions (often with stride 2) to progressively downsample the
+    image and extract low-level features. The output of this stem is then
+    flattened and treated as the sequence of input tokens for the Transformer.
+
+    This combines the efficiency and inductive bias of CNNs for low-level
+    vision with the global context modeling of Transformers.
+
+    References:
+        - CoAtNet: Marrying Convolution and Attention for All Data Sizes
+          (https://arxiv.org/abs/2106.04803)
+        - Early Convolutions Help Transformers See Better
+          (https://arxiv.org/abs/2106.14881)
+    """
+    def __init__(self,
+                 stem_config: dict, # Could contain channels, kernels, strides etc.
+                 input_shape: Tuple[int, int, int]
+                 ):
+        super().__init__()
+        self.stem_config = stem_config
+        self.input_shape = input_shape
+        # Output shape, num_patches, and output_dim would be determined
+        # by the specific stem architecture.
+        # These would need to be calculated in the concrete implementation.
+        self.output_shape = None # To be calculated
+        self.num_patches = None # To be calculated
+        self.output_dim = None # To be calculated
+
+    @abstractmethod
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        pass
+
+
+class AbstractMergingPatcher(torch.nn.Module, ABC):
+    """
+    Abstract base class for patchers that support hierarchical feature
+    representation through patch merging or pooling.
+
+    This strategy is central to architectures like the Swin Transformer.
+    It starts with small patches and, after a set of Transformer blocks,
+    merges adjacent patches to create fewer, larger patches for the next
+    stage. This creates a hierarchical representation that captures features
+    at multiple scales, similar to a traditional CNN, while maintaining
+    efficient computation.
+
+    The 'merge' or 'pool' operation is what distinguishes this class.
+
+    References:
+        - Swin Transformer: Hierarchical Vision Transformer using Shifted Windows
+          (https://arxiv.org/abs/2103.14030)
+    """
+    def __init__(self,
+                 initial_patch_size: int,
+                 input_shape: Tuple[int, int, int]
+                ):
+        super().__init__()
+        self.initial_patch_size = initial_patch_size
+        self.input_shape = input_shape
+
+    @abstractmethod
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Processes the initial input tensor."""
+        pass
+
+    @abstractmethod
+    def merge(self, x: torch.Tensor) -> torch.Tensor:
+        """Merges existing patches to create a new, downsampled sequence."""
+        pass
     
