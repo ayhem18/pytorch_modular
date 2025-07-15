@@ -6,8 +6,8 @@ import torch
 from torch import nn
 from typing import Optional
 
-from mypt.building_blocks.auxiliary.embeddings.scalar.encoding import PositionalEncoding
 from mypt.building_blocks.mixins.general import NonSequentialModuleMixin
+from mypt.building_blocks.auxiliary.embeddings.scalar.encoding import PositionalEncoding
 
 
 class MaskedLM(NonSequentialModuleMixin, nn.Module):

@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 
-from abc import ABC, abstractmethod
 from typing import Iterator, Optional, Set, Tuple
 
 from mypt.building_blocks.mixins.general import generic_to
@@ -88,34 +87,4 @@ class WrapperLikeModuleMixin(nn.Module):
     def __repr__(self) -> str:
         return getattr(self, self._inner_model_field_name).__repr__() 
     
-
-
-class CloneableModuleMixin(ABC):
-    """
-    This Mixin is used to override the __call__ method of a module to return a clone of the module.
-    """
-    @abstractmethod
-    def get_constructor_args(self) -> dict:
-        """
-        This method should return a dictionary of the arguments that should be passed to the constructor of the module.
-        """
-        pass
-
-    def _verify_instance_cloneableModuleMixin(self):
-        if not isinstance(self, nn.Module):
-            raise TypeError(f"the child class is expected to be a subclass of {nn.Module}")
-
-    def clone(self) -> 'CloneableModuleMixin':
-        self._verify_instance_cloneableModuleMixin()
-        # get the constructor arguments with their values
-        constructor_args = self.get_constructor_args() 
-
-        # define the module
-        module = self.__class__(**constructor_args) 
-        # we know that `self` represents a class that extends `torch.nn.Module`
-        # and hence does `module`
-        # load the state dict
-        module.load_state_dict(self.state_dict())
-
-        return module
 

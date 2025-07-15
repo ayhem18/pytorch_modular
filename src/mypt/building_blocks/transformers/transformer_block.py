@@ -33,8 +33,8 @@ class AbstractTransformerBlock(NonSequentialModuleMixin, torch.nn.Module, abc.AB
                                   norm_layer='layernorm' 
                                   )
 
-        self.ln1 = torch.nn.LayerNorm(normalized_shape=(d_model,))
-        self.ln2 = torch.nn.LayerNorm(normalized_shape=(d_model,))
+        self.ln1 = torch.nn.LayerNorm(normalized_shape=[d_model])
+        self.ln2 = torch.nn.LayerNorm(normalized_shape=[d_model])
 
 
     @abc.abstractmethod

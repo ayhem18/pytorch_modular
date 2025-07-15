@@ -31,7 +31,7 @@ class AbstractUNetCond(NonSequentialModuleMixin, nn.Module, ABC):
         self.cond_dimension = cond_dimension # the dimension of the conditioning input
 
         # the number of downsampling layers 
-        self.num_down_layers: Optional[int] = None # the number of downsampling layers 
+        self.num_down_layers: int = 0 # the number of downsampling layers 
 
         # the out channels of the unetDownBlock 
         self.down_block_out_channels: Union[List[int], List[List[int]]] = []
@@ -127,7 +127,7 @@ class AbstractUNetCond(NonSequentialModuleMixin, nn.Module, ABC):
     def build_up_block(
         self,
         num_resnet_blocks: int,
-        upsample_types: Union[str, List[str]] = "transpose_conv",
+        upsample_types: Union[str, List[str]] = "conv",
         inner_dim: int = 256,
         dropout_rate: float = 0.0,
         norm1: Optional[nn.Module] = None,
@@ -184,7 +184,7 @@ class AbstractUNetCond(NonSequentialModuleMixin, nn.Module, ABC):
             w = w // 2
         
         if min(num_2_expo_height, num_2_expo_width) < self.num_down_layers:
-            raise ValueError(f"The UNet architecture requires that the input height and width are divisible by 2^(number of downsampling layers). Otherwise, the skip connections would get fairly complex...")
+            raise ValueError(f"The input and width must be divisible by 2^(number of sampling layers). Otherwise, skip connections logic would get messy really quick...")
 
     @abstractmethod
     def forward(self, x: torch.Tensor, condition: torch.Tensor) -> torch.Tensor:

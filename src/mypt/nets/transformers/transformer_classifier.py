@@ -3,11 +3,11 @@ import torch
 from torch import nn
 from typing import Optional
 
-from .pooling_layers import _POOLING_REGISTRY
 from mypt.building_blocks.mixins.general import NonSequentialModuleMixin
+from mypt.building_blocks.auxiliary.sequence_pool import _POOLING_REGISTRY
 from mypt.building_blocks.linear_blocks.fc_blocks import ExponentialFCBlock
-from mypt.building_blocks.transformers.transformer_block import TransformerBlock
 from mypt.building_blocks.auxiliary.embeddings.scalar.encoding import PositionalEncoding
+from mypt.building_blocks.transformers.transformer_block import BidirectionalTransformerBlock
 
 class TransformerClassifier(NonSequentialModuleMixin, nn.Module):
     """Stack of Transformer blocks + pooling + classification head."""
@@ -32,7 +32,7 @@ class TransformerClassifier(NonSequentialModuleMixin, nn.Module):
 
         self.pos_emb = PositionalEncoding(d_model)
 
-        self.encoder = nn.ModuleList([TransformerBlock(d_model, num_heads, value_dim, key_dim, dropout) for _ in range(num_transformer_blocks)])
+        self.encoder = nn.ModuleList([BidirectionalTransformerBlock(d_model, num_heads, value_dim, key_dim, dropout) for _ in range(num_transformer_blocks)])
 
         # pooling module
         self.pooling_name = pooling

@@ -295,7 +295,7 @@ class AbstractCondUpWResBlock(NonSequentialModuleMixin, nn.Module):
         self._upsample_type = upsample_type
 
         # the self._resnet_block must be initialized by sub-classe
-        self._resnet_block: AbstractCondResnetBlock = None
+        self._resnet_block: AbstractCondResnetBlock
 
     
         # Create the upsampling layer

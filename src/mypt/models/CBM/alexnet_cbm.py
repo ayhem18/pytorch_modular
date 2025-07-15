@@ -6,7 +6,7 @@ from torch import nn
 from typing import List, Tuple, Union, Optional
 
 
-from .abstractCBM import AbstractCBM
+from .abstract_cbm import AbstractCBM
 from ...backbones.alexnetFE import AlexNetFE
 
 

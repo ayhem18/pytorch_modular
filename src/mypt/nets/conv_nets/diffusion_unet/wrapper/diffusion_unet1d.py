@@ -48,7 +48,7 @@ class ConditionOneDimProcessor(NonSequentialModuleMixin):
 
 
     def process_time_step_and_class_label(self, time_step: torch.Tensor, class_label: torch.Tensor) -> torch.Tensor:
-
+        
         # each element in the batch should be assigned a timstep
         # each timestep should be 
         # 1. encoded (converted into a vector) (batch_size) -> (batch_size, some_dimension)
@@ -260,7 +260,7 @@ class DiffusionUNetOneDim(NonSequentialModuleMixin, torch.nn.Module):
     def build_up_block(
         self,
         num_resnet_blocks: int,
-        upsample_types: Union[str, List[str]] = "transpose_conv",
+        upsample_types: Union[str, List[str]] = "conv",
         inner_dim: int = 256,
         dropout_rate: float = 0.0,
         norm1: Optional[nn.Module] = None,

@@ -79,9 +79,6 @@ class UNet1DCond(AbstractUNetCond):
         self.down_block_num_resnet_blocks = num_resnet_blocks
         self.down_block_out_channels = out_channels
 
-        # if not isinstance(out_channels, list) or len(out_channels) != num_down_layers + 1:
-        #     raise ValueError(f"out_channels must be a list of length num_down_layers + 1 (got {len(out_channels)} and {num_down_layers + 1})")
-
         # Build the down block
         self._down_block = UnetDownBlock1D(
             num_down_layers=num_down_layers,
@@ -167,7 +164,7 @@ class UNet1DCond(AbstractUNetCond):
     def build_up_block(
         self,
         num_resnet_blocks: int,
-        upsample_types: Union[str, List[str]] = "transpose_conv",
+        upsample_types: Union[str, List[str]] = "conv",
         inner_dim: int = 256,
         dropout_rate: float = 0.0,
         norm1: Optional[nn.Module] = None,
@@ -205,6 +202,7 @@ class UNet1DCond(AbstractUNetCond):
         # so block_down_output_channels[::-1][1:] is the list of output channels of the up block  
         # and the last output channel must match the entire architecture output channel saved in self.final_out_channels
         common_block_channels = self.down_block_out_channels[:-1][::-1]
+        
         # the skip connections channels are the output channels of the down block in reverse order
         skip_connections_channels = [self.down_block_out_channels[-1]] + common_block_channels 
 
@@ -213,7 +211,7 @@ class UNet1DCond(AbstractUNetCond):
 
         # Build the up block
         self._up_block = UnetUpBlock1D(
-            num_up_layers = self.num_down_layers, # the number of upsampling layers must be the same the number of downsampling layers
+            num_up_layers = self.num_down_layers, # the number of upsampling layers is the same the number of downsampling layers
             num_resnet_blocks=num_resnet_blocks,
             in_channels=self.down_block_out_channels[-1], # the number of input channels is the same as the number of output channels of the last downsampling layer 
             out_channels=up_out_channels,

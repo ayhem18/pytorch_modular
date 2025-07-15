@@ -150,6 +150,7 @@ class CausalMultiHeadAttentionLayer(AbstractMHAttentionLayer):
         return causal.unsqueeze(0).unsqueeze(1).expand(batch_size, self.num_heads, -1, -1)
 
 
+
 class BidirectionalMultiHeadAttentionLayer(AbstractMHAttentionLayer):
 
     def __init__(self, d_model: int, num_heads: int, value_dim: int, key_dim: int) -> None:
