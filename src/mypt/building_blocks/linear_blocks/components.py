@@ -10,9 +10,9 @@ from typing import Iterable, Iterator, Union, Optional, List, Tuple
 
 from mypt.building_blocks.mixins.residual_mixins import GeneralResidualMixin
 from mypt.building_blocks.auxiliary.normalization.utils import get_normalization
-from mypt.building_blocks.mixins.custom_module_mixins import CloneableModuleMixin, WrapperLikeModuleMixin
+from mypt.building_blocks.mixins.custom_module_mixins import WrapperLikeModuleMixin
 
-class BasicLinearBlock(WrapperLikeModuleMixin, CloneableModuleMixin):
+class BasicLinearBlock(WrapperLikeModuleMixin):
     _RELU = 'relu'
     _LEAKY_RELU = 'leaky_relu'
     _TANH = 'tanh'
@@ -58,7 +58,9 @@ class BasicLinearBlock(WrapperLikeModuleMixin, CloneableModuleMixin):
         elif norm_layer == "layernorm":
             norm_args = {"normalized_shape": (in_features,)}
 
-        return get_normalization(norm_layer, norm_args)
+        # get_normalization as a function returns a nn.Module. Since the _NORMALIZATION_LAYERS contains only nn.BatchNorm1d and nn.LayerNorm, the return type is Union[nn.BatchNorm1d, nn.LayerNorm]
+        # the type checker does not understand this, so we need to ignore the type error
+        return get_normalization(norm_layer, norm_args) # type: ignore 
 
     def __init__(self,
                  in_features: int,
@@ -92,10 +94,10 @@ class BasicLinearBlock(WrapperLikeModuleMixin, CloneableModuleMixin):
         linear_layer = nn.Linear(in_features=in_features, out_features=out_features)
 
         if not is_final:
-            norm_layer = self._set_normalization_layer(norm_layer, in_features)
+            norm_layer_module: Union[nn.BatchNorm1d, nn.LayerNorm] = self._set_normalization_layer(norm_layer, in_features)
             activation_layer = self._ACTIVATION_MAP[activation]
 
-            components = [norm_layer] 
+            components: List[nn.Module] = [norm_layer_module] 
             if dropout is not None:
                 components.append(nn.Dropout(p=dropout))
             
@@ -163,7 +165,7 @@ class BasicLinearBlock(WrapperLikeModuleMixin, CloneableModuleMixin):
 
 
 
-class FullyConnectedBlock(WrapperLikeModuleMixin, CloneableModuleMixin):
+class FullyConnectedBlock(WrapperLikeModuleMixin):
     # all fully connected blocks should have the 'output' and 'in_features' attributes
     def __init__(self, 
                  output: int,
@@ -179,7 +181,7 @@ class FullyConnectedBlock(WrapperLikeModuleMixin, CloneableModuleMixin):
                 raise ValueError(f"The number of dropouts should be the same as the number of layers minus one")
 
         else:
-            dropout = [dropout for _ in range(num_layers - 1)] # using both a list of None or floats is acceptable
+            dropout = [dropout for _ in range(num_layers - 1)] # type: ignore
 
         # this constructor call signals that this class is a wrapper-like module to another module saved in the `_block` field
         WrapperLikeModuleMixin.__init__(self, '_block')
@@ -191,7 +193,7 @@ class FullyConnectedBlock(WrapperLikeModuleMixin, CloneableModuleMixin):
         self._activation = activation
         self._dropout = dropout
         self._norm_layer = norm_layer
-        self._block: nn.Module = None
+        self._block: nn.Module = None    # type: ignore (the _block field is set in the _build method)
 
     @property
     def dropout(self):
@@ -230,7 +232,7 @@ class FullyConnectedBlock(WrapperLikeModuleMixin, CloneableModuleMixin):
     
     
 
-class ResidualFullyConnectedBlock(GeneralResidualMixin, FullyConnectedBlock, CloneableModuleMixin):
+class ResidualFullyConnectedBlock(GeneralResidualMixin, FullyConnectedBlock):
     def __init__(self, 
                  output: int,
                  in_features: int,
@@ -267,7 +269,7 @@ class ResidualFullyConnectedBlock(GeneralResidualMixin, FullyConnectedBlock, Clo
 
 
     def __call__(self, x: torch.Tensor) -> torch.Tensor:
-        return self.forward(x, debug=False)
+        return self.forward(x, debug=False) # type: ignore (debug = False implies the return type is torch.Tensor and not Tuple[torch.Tensor, torch.Tensor, torch.Tensor])
 
     
     def forward(self, x: torch.Tensor, debug:bool=False) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]:
