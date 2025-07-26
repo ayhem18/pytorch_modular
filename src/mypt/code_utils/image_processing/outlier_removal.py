@@ -95,7 +95,7 @@ def local_median_filter(image: np.ndarray, ksize: int = 3) -> np.ndarray:
 
 
 ## GLOBAL FILTERS
-def percentile_clip(image: np.ndarray, lower_percentile: float = 1.0, upper_percentile: float = 99.0) -> np.ndarray:
+def percentile_clip(image: np.ndarray, lower_percent: float = 0.01, upper_percent: float = 0.99) -> np.ndarray:
     """
     Clips an image's pixel values to a specified percentile range.
     This is a global operation that helps remove extreme outlier pixels.
@@ -106,8 +106,13 @@ def percentile_clip(image: np.ndarray, lower_percentile: float = 1.0, upper_perc
     Returns:
         The clipped image with the same data type as the input.
     """
-    lower_val = np.percentile(image, lower_percentile)
-    upper_val = np.percentile(image, upper_percentile)
+    if lower_percent < 0 or lower_percent > 1:
+        raise ValueError("Lower percentile must be between 0 and 1")
+    if upper_percent < 0 or upper_percent > 1:
+        raise ValueError("Upper percentile must be between 0 and 1")
+
+    lower_val = np.quantile(image, lower_percent)
+    upper_val = np.quantile(image, upper_percent)
     return np.clip(image, a_min=lower_val, a_max=upper_val)
 
 

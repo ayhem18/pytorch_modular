@@ -34,12 +34,12 @@ def pt_to_np(data: torch.Tensor) -> np.ndarray:
 def normalize_np_array_pixel_values(data: np.ndarray) -> np.ndarray:
     """Normalizes NumPy array pixel values to be in the [0, 255] range as uint8."""
     if data.dtype in [np.float32, np.float64]:
-        if data.min() >= -1 and data.max() <= 1:
-            data = (data + 1) / 2.0
-        
         if data.min() >= 0 and data.max() <= 1:
             data = (data * 255)
 
+        if data.min() >= -1 and data.max() <= 1:
+            data = (data + 1) / 2.0
+        
         return data.astype(np.uint8)
     return data
 
@@ -109,7 +109,7 @@ def visualize_grid(images: Iterable[Union[str, Path, np.ndarray, torch.Tensor, I
     fig, axes = plt.subplots(rows, cols, figsize=(cols * 2.5, rows * 2.5))
     fig.suptitle(title)
     
-    if n == 1:
+    if n == 1:  
         axes = [axes]
     else:
         axes = axes.flatten()
@@ -124,5 +124,5 @@ def visualize_grid(images: Iterable[Union[str, Path, np.ndarray, torch.Tensor, I
     for i in range(n, len(axes)):
         axes[i].axis('off')
         
-    plt.tight_layout()
-    plt.show()
+    # plt.tight_layout()
+    # plt.show()
