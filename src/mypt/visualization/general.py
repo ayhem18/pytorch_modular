@@ -124,5 +124,5 @@ def visualize_grid(images: Iterable[Union[str, Path, np.ndarray, torch.Tensor, I
     for i in range(n, len(axes)):
         axes[i].axis('off')
         
-    # plt.tight_layout()
-    # plt.show()
+    plt.tight_layout()
+    plt.show()

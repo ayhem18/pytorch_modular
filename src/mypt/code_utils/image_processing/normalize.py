@@ -234,3 +234,130 @@ def log_normalize(image: np.ndarray) -> np.ndarray:
 #     # Scale to 8-bit
 #     normalized_image = (sigmoid_image * 255).astype(np.uint8)
 #     return normalized_image
+
+
+def _validate_2d_inputs(image: np.ndarray, segmentation: np.ndarray):
+    """Validates that inputs are 2D and have matching shapes."""
+    if image.ndim != 2:
+        raise ValueError("Input image for 2D HE must be a 2D grayscale image.")
+    if segmentation.ndim != 2:
+        raise ValueError("Segmentation mask for 2D HE must be a 2D array.")
+    if image.shape != segmentation.shape:
+        raise ValueError("Image and segmentation mask must have the same shape.")
+
+def _calculate_region_alphas(segmentation: np.ndarray, total_pixels: int) -> dict:
+    """Calculates the relative size (alpha) of each region."""
+    region_labels, region_sizes = np.unique(segmentation, return_counts=True)
+    return {label: size / total_pixels for label, size in zip(region_labels, region_sizes)}
+
+def _map_pixel_values_to_regions(image: np.ndarray, segmentation: np.ndarray) -> dict:
+    """Creates a mapping from each pixel value to the set of regions it appears in."""
+    pixel_value_to_regions = {}
+    image_flat = image.flatten()
+    segmentation_flat = segmentation.flatten()
+    for p_val, r_label in zip(image_flat, segmentation_flat):
+        if p_val not in pixel_value_to_regions:
+            pixel_value_to_regions[p_val] = set()
+        pixel_value_to_regions[p_val].add(r_label)
+    return pixel_value_to_regions
+
+def _build_weighted_cumulative_map(pixel_value_to_regions: dict, alphas: dict) -> tuple[dict, float]:
+    """Builds the weighted cumulative histogram."""
+    unique_pixel_values = sorted(pixel_value_to_regions.keys())
+    cumulative_map = {}
+    total_weight = 0.0
+    for p_val in unique_pixel_values:
+        weight = sum(alphas[label] for label in pixel_value_to_regions[p_val])
+        total_weight += weight
+        cumulative_map[p_val] = total_weight
+    return cumulative_map, total_weight
+
+def _create_lut_from_cumulative_map(cumulative_map: dict, total_weight: float, image: np.ndarray) -> np.ndarray:
+    """Creates a Lookup Table (LUT) from the cumulative map."""
+    max_val = int(np.max(list(cumulative_map.keys())))
+    lut = np.zeros(max_val + 1, dtype=np.uint8)
+    for p_val, cumulative_weight in cumulative_map.items():
+        lut[int(p_val)] = np.round((cumulative_weight / total_weight) * 255)
+    return lut
+
+def _region_weighted_he_2d(image: np.ndarray, segmentation: np.ndarray) -> np.ndarray:
+    """
+    Normalizes a 2D image to 8-bit using region-weighted histogram equalization.
+
+    The method works as follows:
+    1.  Validate inputs to ensure they are 2D and have matching shapes.
+    2.  Calculate the relative size (alpha) of each region in the segmentation map.
+    3.  Map each unique pixel intensity value to the set of regions it appears in.
+    4.  Build a weighted cumulative histogram. The weight for each intensity value is
+        the sum of the alphas of all regions it appears in.
+    5.  Create a Lookup Table (LUT) by scaling the cumulative histogram to the [0, 255] range.
+    6.  Apply the LUT to the input image to produce the normalized output.
+
+    Args:
+        image: A 2D grayscale image as a NumPy array (e.g., uint8, uint16, float).
+        segmentation: A 2D NumPy array of the same shape as `image`, where each
+                      pixel is an integer label for its region.
+
+    Returns:
+        A normalized 8-bit image.
+    """
+    _validate_2d_inputs(image, segmentation)
+    alphas = _calculate_region_alphas(segmentation, image.size)
+    pixel_value_to_regions = _map_pixel_values_to_regions(image, segmentation)
+    cumulative_map, total_weight = _build_weighted_cumulative_map(pixel_value_to_regions, alphas)
+    
+    if total_weight == 0:
+        return np.zeros_like(image, dtype=np.uint8)
+    
+    lut = _create_lut_from_cumulative_map(cumulative_map, total_weight, image)
+    
+    # For float images, we must map them to the LUT indices
+    if np.issubdtype(image.dtype, np.floating):
+        res = lut[image.astype(int)]
+    else:
+        res = lut[image]
+    return res
+
+def _color_segmentation_to_2d(segmentation_3d: np.ndarray) -> np.ndarray:
+    """
+    Converts a 3D color-labeled segmentation mask to a 2D integer-labeled mask,
+    ensuring that each unique color maps to a unique integer.
+    """
+    # Reshape the 3D array to a 2D array of pixels
+    pixels = segmentation_3d.reshape(-1, 3)
+    # Find unique "colors" (rows) and their inverse mapping
+    unique_colors, inverse_indices = np.unique(pixels, axis=0, return_inverse=True)
+    # Reshape the inverse indices back to the original image shape
+    return inverse_indices.reshape(segmentation_3d.shape[:2])
+
+def region_weighted_histogram_equalization(image: np.ndarray, segmentation: np.ndarray) -> np.ndarray:
+    """
+    Applies region-weighted histogram equalization to a grayscale or color image.
+
+    - For color images, the "LAB trick" is used: the image is converted to
+      CIELAB color space, equalization is applied only to the L (Lightness)
+      channel, and the result is converted back to BGR. This enhances contrast
+      without distorting colors.
+    - For 3D color-based segmentation masks, each unique color is mapped to a
+      unique integer label to ensure region integrity.
+
+    Args:
+        image: A 2D (grayscale) or 3D (BGR) image.
+        segmentation: A 2D (integer labels) or 3D (color labels) segmentation mask.
+
+    Returns:
+        The normalized 8-bit image (grayscale or BGR, matching input format).
+    """
+    seg_2d = segmentation
+    if segmentation.ndim == 3:
+        seg_2d = _color_segmentation_to_2d(segmentation)
+
+    if image.ndim == 2:
+        return _region_weighted_he_2d(image, seg_2d)
+    
+    # Handle color image
+    L, a, b = fmt.bgr_to_lab_full_range(image)
+    normalized_L = _region_weighted_he_2d(L, seg_2d)
+    normalized_L_float = normalized_L.astype(float) * (100.0 / 255.0)
+    bgr_float = fmt.lab_to_bgr_full_range(normalized_L_float, a, b)
+    return (bgr_float * 255).astype(np.uint8)
