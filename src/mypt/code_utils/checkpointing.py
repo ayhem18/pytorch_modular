@@ -21,7 +21,8 @@ class Checkpointer:
                  save_fn: Callable[..., None],
                  mode: str = 'min',
                  top_k: int = 3,
-                 identifier_key: str = 'epoch'):
+                 identifier_key: str = 'epoch',
+                 rounding_factor: int = 6):
         """
         Initializes the Checkpointer.
 
@@ -32,15 +33,23 @@ class Checkpointer:
             mode (str, optional): One of {'min', 'max'}. In 'min' mode, a lower score is better. Defaults to 'min'.
             top_k (int, optional): The number of best checkpoints to keep. Defaults to 3.
             identifier_key (str, optional): The name of the identifier used in checkpoint directory names. Defaults to 'epoch'.
+            rounding_factor (int, optional): The number of decimal places to round the score to in the directory name. Defaults to 6.
         """
         if mode.lower() not in ['min', 'max']:
             raise ValueError("mode must be 'min' or 'max'")
+
+        if not isinstance(top_k, int) or top_k <= 0:
+            raise ValueError("top_k must be a positive integer")
+
+        if not isinstance(rounding_factor, int) or rounding_factor < 0:
+            raise ValueError("rounding_factor must be a non-negative integer")
 
         self.root_dir = dirf.process_path(root_dir)
         self.save_fn = save_fn
         self.mode = mode.lower()
         self.top_k = top_k
         self.identifier_key = identifier_key
+        self.rounding_factor = rounding_factor
         self.heap: List[Tuple[float, str]] = []
         self.state_file = os.path.join(self.root_dir, "checkpointer_state.json")
 
@@ -79,7 +88,8 @@ class Checkpointer:
             # it means that the current checkpoint is not among the top_k
             return 
 
-        checkpoint_dir = os.path.join(self.root_dir, f"checkpoint_{self.identifier_key}_{identifier_value}_score_{score:.6f}")
+        score_for_path = round(score, self.rounding_factor)
+        checkpoint_dir = os.path.join(self.root_dir, f"checkpoint_{self.identifier_key}_{identifier_value}_score_{score_for_path}")
         
         os.makedirs(checkpoint_dir, exist_ok=True)
         self.save_fn(model=model, save_dir=checkpoint_dir, **kwargs)
@@ -121,5 +131,7 @@ class Checkpointer:
         """Loads the heap state from a file if it exists."""
         if os.path.exists(self.state_file):
             with open(self.state_file, 'r') as f:
-                self.heap = json.load(f)
+                json_heap = json.load(f)
+                # convert the json heap to a list of tuples instead of a list of lists
+                self.heap = [tuple(l) for l in json_heap]
                 heapq.heapify(self.heap)
