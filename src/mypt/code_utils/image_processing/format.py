@@ -3,7 +3,6 @@ This module contains functions to prepare images in different formats (RGB, BGR,
 """
 
 import numpy as np
-import cv2
 
 
 def bgr_to_xyz(bgr_image: np.ndarray) -> np.ndarray:
