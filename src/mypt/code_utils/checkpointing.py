@@ -44,7 +44,7 @@ class Checkpointer:
         if not isinstance(rounding_factor, int) or rounding_factor < 0:
             raise ValueError("rounding_factor must be a non-negative integer")
 
-        self.root_dir = dirf.process_path(root_dir)
+        self.root_dir = dirf.process_path(root_dir, dir_ok=True, file_ok=False, must_exist=False)
         self.save_fn = save_fn
         self.mode = mode.lower()
         self.top_k = top_k

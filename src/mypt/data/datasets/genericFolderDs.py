@@ -7,7 +7,7 @@ import torchvision.transforms as tr
 
 from PIL import Image
 from torch.utils.data import Dataset
-from typing import Union, List, Tuple, Dict, Optional
+from typing import Callable, Union, List, Tuple, Dict, Optional
 from torchvision.datasets import Food101, Imagenette, MNIST
 
 
@@ -28,11 +28,40 @@ class GenericFolderDS(Dataset):
             img = Image.open(f)
             return img.convert("RGB")
 
+    def _set_image_transforms(self, image_transforms: List) -> List:
+        # add to.Tensor to the transforms if it is not already in the list
+        if not any([isinstance(t, tr.ToTensor) for t in image_transforms]):
+            image_transforms.append(tr.ToTensor())
+
+        return image_transforms
+
+    def _set_item_transforms(self, item_transforms: Optional[Callable[[torch.Tensor], torch.Tensor]]) -> Callable[[torch.Tensor], torch.Tensor]:
+        if item_transforms is None:
+            return lambda x: x
+        
+        # make sure item_transforms is callable  
+        if not callable(item_transforms):
+            raise ValueError(f"The item_transforms must be a callable that accepts a torch.Tensor and returns a torch.Tensor. Found: {item_transforms}")
+
+        # make sure the callable accepts a torch.Tensor and returns a torch.Tensor 
+        dummy_tensor = torch.zeros((3, 32, 32)) # a dummy tensor to test the transform
+        
+        try:
+            result = item_transforms(dummy_tensor)
+        except Exception as e:
+            raise ValueError(f"The item_transforms must accept a torch.Tensor as input. Error: {str(e)}")
+        
+        if not isinstance(result, torch.Tensor):
+            raise ValueError(f"The item_transforms must return a torch.Tensor. Got {type(result).__name__} instead.")
+
+        return item_transforms
+
 
     def __init__(self, 
                  root: P,
-                 transforms: List,
-                 image_extensions: Union[List[str], Tuple[str]]=None):
+                 image_transforms: List,
+                 item_transforms: Optional[Callable[[torch.Tensor], torch.Tensor]] = None,
+                 image_extensions: Optional[Union[List[str], Tuple[str]]] = None):
     
         super().__init__()
 
@@ -50,8 +79,12 @@ class GenericFolderDS(Dataset):
                                       # the directory can contain only image files
                                       condition=lambda d: dirf.dir_contains_only_types(d, valid_extensions=self.image_extensions) 
                                       )     
-    
-        self.transforms = transforms
+
+        self.image_transforms = self._set_image_transforms(image_transforms)
+
+        # after setting the image_transforms, it is time to set the item_transforms: applied to the item (torch.Tensor) produced by the image_transforms 
+        # one possible use case is to convert the 
+        self.item_transforms = self._set_item_transforms(item_transforms)
 
         # create a path from indices to path samples
         self.idx2path : Dict = {}
@@ -76,12 +109,14 @@ class GenericFolderDS(Dataset):
         sample = self.load_sample(self.idx2path[index])
         # pass it through the passed transforms
         try:
-            compound_tr = tr.Compose(self.transforms)
+            compound_tr = tr.Compose(self.image_transforms)
             return compound_tr(sample)
         except Exception:
             # the fall-back approach, call each transformation sequentially
-            for t in self.transforms:
+            for t in self.image_transforms:
                 sample = t(sample)
+        
+        sample = self.item_transforms(sample)
         
         return sample
 
@@ -96,7 +131,7 @@ class GenericDsWrapper(ClassificationDsWrapperMixin, Dataset):
     def __init__(self, 
                  root_dir: P,
                  train:bool, 
-                 augmentations: Optional[List] = None):
+                 augmentations: Optional[List] = None): 
 
         self.root_dir = root_dir
         self._ds: Dataset = None
