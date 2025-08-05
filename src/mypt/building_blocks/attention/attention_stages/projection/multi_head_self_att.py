@@ -24,16 +24,15 @@ class MultiHeadSelfAttentionProjection(NonSequentialModuleMixin, ProjectionBase)
         key_dim: int,
         value_dim: int,
     ) -> None:
+        ProjectionBase.__init__(self, num_heads=num_heads, key_dim=key_dim, value_dim=value_dim)
+        NonSequentialModuleMixin.__init__(self, inner_components_fields=["W_q", "W_k", "W_v"])
+
         if d_model % num_heads != 0:
             raise ValueError(
                 f"d_model ({d_model}) must be divisible by num_heads ({num_heads})."
             )
 
         self.d_model = d_model
-        self.num_heads = num_heads
-
-        ProjectionBase.__init__(self, num_heads=num_heads, key_dim=key_dim, value_dim=value_dim)
-        NonSequentialModuleMixin.__init__(self, inner_components_fields=["W_q", "W_k", "W_v"])
 
         self.W_q = nn.Linear(d_model, key_dim * num_heads)
         self.W_k = nn.Linear(d_model, key_dim * num_heads)

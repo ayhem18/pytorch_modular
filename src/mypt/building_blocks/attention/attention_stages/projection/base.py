@@ -99,13 +99,14 @@ class ProjectionBase(nn.Module, abc.ABC):
 
         Returns
         -------
-        Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
-            The three tensors ``(q, k, v)`` with shapes described in the
-            class docstring.
+        Tuple[torch.Tensor, torch.Tensor, torch.Tensor]: the three tensors ``(q, k, v)`` with the following shapes:
+            q : (B, num_heads, S_q, D_k)
+            k : (B, num_heads, S_k, D_k)
+            v : (B, num_heads, S_k, D_v)
         """
-        q = self.process_query_src(query_src) # (B, S_q, num_heads, D_k)
-        k = self.process_key_src(key_src) # (B, S_k, num_heads, D_k)
-        v = self.process_value_src(value_src) # (B, S_k, num_heads, D_v)
+        q = self.process_query_src(query_src) 
+        k = self.process_key_src(key_src) 
+        v = self.process_value_src(value_src) 
 
         return q, k, v
 
@@ -115,4 +116,7 @@ class ProjectionBase(nn.Module, abc.ABC):
         """Forward pass.
         """
         pass
+
+    def __call__(self, x: torch.Tensor, *args, **kwargs) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        return self.forward(x, *args, **kwargs)
 
