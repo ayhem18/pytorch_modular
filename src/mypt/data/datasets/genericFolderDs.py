@@ -110,14 +110,16 @@ class GenericFolderDS(Dataset):
         # pass it through the passed transforms
         try:
             compound_tr = tr.Compose(self.image_transforms)
-            return compound_tr(sample)
+            sample = compound_tr(sample)
         except Exception:
             # the fall-back approach, call each transformation sequentially
             for t in self.image_transforms:
                 sample = t(sample)
-        
+
+        # apply the item_transforms
         sample = self.item_transforms(sample)
         
+        # return the sample
         return sample
 
     def __len__(self)->int:
