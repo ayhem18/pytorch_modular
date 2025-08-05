@@ -1,12 +1,9 @@
-from __future__ import annotations
-
-from typing import Tuple
-
 import torch
 from torch import nn
+from typing import Tuple
 
-from mypt.building_blocks.mixins.general import NonSequentialModuleMixin
 from .base import ProjectionBase
+from mypt.building_blocks.mixins.general import NonSequentialModuleMixin
 
 
 class CrossAttentionProjection(NonSequentialModuleMixin, ProjectionBase):

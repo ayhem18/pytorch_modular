@@ -16,11 +16,18 @@ class BaseAttentionAgg(nn.Module, abc.ABC):
         self.num_heads = num_heads
 
     @abc.abstractmethod
-    def forward(self, q: torch.Tensor, k: torch.Tensor, v: torch.Tensor, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+    def forward(self, q: torch.Tensor, k: torch.Tensor, v: torch.Tensor, pad_mask: Optional[torch.Tensor] = None, is_causal: bool = False) -> torch.Tensor:
         pass
 
-    def __call__(self, q: torch.Tensor, k: torch.Tensor, v: torch.Tensor, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
-        return self.forward(q, k, v, mask)
+    def __call__(self, q: torch.Tensor, k: torch.Tensor, v: torch.Tensor, pad_mask: Optional[torch.Tensor] = None, is_causal: bool = False) -> torch.Tensor:
+        return self.forward(q, k, v, pad_mask, is_causal)
+
+
+    def _causal_mask(self, batch_size: int, sequence_length: int) -> torch.Tensor:
+        """Boolean lower-triangular mask broadcast over heads.
+        Shape: (B, num_heads, S, S)"""
+        causal = torch.tril(torch.ones(sequence_length, sequence_length, dtype=torch.bool))
+        return causal.unsqueeze(0).unsqueeze(1).expand(batch_size, self.num_heads, -1, -1)
 
 
     def _create_final_mask(self, default_mask: torch.Tensor, pad_mask: Optional[torch.Tensor] = None) -> torch.Tensor:

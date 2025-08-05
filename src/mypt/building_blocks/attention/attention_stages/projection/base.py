@@ -79,7 +79,6 @@ class ProjectionBase(nn.Module, abc.ABC):
         pass
 
 
-    @abc.abstractmethod
     def forward_impl(
         self,
         query_src: torch.Tensor,
