@@ -222,7 +222,6 @@ class CustomModuleBaseTest(unittest.TestCase):
         except Exception as e:
             self.fail(f"Calling the module on a tensor moved to cpu should not raise an error. Got: {e}")
 
-
     def _test_gradcheck(self, block: torch.nn.Module, input_tensor: torch.Tensor, *args, **kwargs) -> None:
         """Test gradient computation using torch.autograd.gradcheck."""
         # gradcheck needs double precision and the block to be in eval mode for reproducibility
@@ -238,7 +237,6 @@ class CustomModuleBaseTest(unittest.TestCase):
         # gradcheck expects a tuple of inputs. We are only checking gradients wrt input_tensor.
         test_passed = gradcheck(lambda inp: block_double(inp, *args_double, **kwargs_double), (input_tensor_double,), atol=1e-8)
         self.assertTrue(test_passed, "gradcheck failed for the module.")
-
 
     def _test_gradcheck_large_values(self, block: torch.nn.Module, input_tensor: torch.Tensor, *args, **kwargs) -> None:
         """Test gradient computation with large input values."""
@@ -257,7 +255,6 @@ class CustomModuleBaseTest(unittest.TestCase):
         test_passed = gradcheck(lambda inp: block_double(inp, *args_double, **kwargs_double), (input_tensor_double,))
         self.assertTrue(test_passed, "gradcheck failed for the module with large input values.")
 
-
     def _test_grad_against_nan(self, block: torch.nn.Module, input_tensor: torch.Tensor, *args, **kwargs) -> None:
         """Test that the gradient is not nan"""
         block_double = block.to(torch.double).train()
@@ -270,17 +267,25 @@ class CustomModuleBaseTest(unittest.TestCase):
 
         output = block_double(input_tensor_double, *args_double, **kwargs_double)
 
-        output.sum().backward()
+        if not isinstance(output, (torch.Tensor, Tuple, List)):
+            raise TypeError(f"The output of the module should be a tensor, a tuple or a list. Got: {type(output)}") 
+
+
+        if isinstance(output, torch.Tensor):
+            output = [output]
+
+        # iteratin through all outputs ensures the gradient is computed for all model's parameters    
+        for o in output:
+            o.sum().backward()
 
         self.assertFalse(torch.isnan(input_tensor_double.grad).any(), "Nan values in the gradient")
 
         for param in block_double.parameters():
             self.assertFalse(torch.isnan(param.grad).any(), "Nan values in the gradient")
         
-
     def _test_grad_against_nan_large_values(self, block: torch.nn.Module, input_tensor: torch.Tensor, *args, **kwargs) -> None:
         """Test that the gradient is not nan"""
-        block_double = block.to(torch.double).eval()
+        block_double = block.to(torch.double).train()
         input_tensor_double = input_tensor.to(torch.double)
 
         input_tensor_double = input_tensor_double * 1e4
@@ -291,8 +296,16 @@ class CustomModuleBaseTest(unittest.TestCase):
 
         output = block_double(input_tensor_double, *args_double, **kwargs_double)
 
-        output.sum().backward()
+        if not isinstance(output, (torch.Tensor, Tuple, List)):
+            raise TypeError(f"The output of the module should be a tensor, a tuple or a list. Got: {type(output)}") 
 
+        if isinstance(output, torch.Tensor):
+            output = [output]
+
+        # run the backward passs
+        for o in output:
+            o.sum().backward()
+        
         self.assertFalse(torch.isnan(input_tensor_double.grad).any(), "Nan values in the gradient with large input values") 
 
         for param in block_double.parameters():
