@@ -4,7 +4,7 @@ import torch
 import numpy as np
 from PIL import Image
 from pathlib import Path
-from typing import Union, Iterable
+from typing import List, Optional, Tuple, Union, Iterable
 from matplotlib import pyplot as plt
 
 def _str_to_np(data: Union[str, Path]) -> np.ndarray:
@@ -94,7 +94,8 @@ def _get_grid_shape(n: int) -> tuple[int, int]:
     cols = n // rows
     return rows, cols
 
-def visualize_grid(images: Iterable[Union[str, Path, np.ndarray, torch.Tensor, Image.Image]], 
+def visualize_grid(images: Iterable[Union[str, Path, np.ndarray, torch.Tensor, Image.Image]],
+                   grid_shape: Optional[Union[List[int], Tuple[int, int]]] = None,
                    title: str = "Image Grid") -> None:
     """Visualizes a collection of images in a grid."""
     image_list = list(images)
@@ -104,7 +105,14 @@ def visualize_grid(images: Iterable[Union[str, Path, np.ndarray, torch.Tensor, I
         print("No images to visualize.")
         return
         
-    rows, cols = _get_grid_shape(n)
+    if grid_shape is not None:
+        if not (isinstance(grid_shape, (List, Tuple)) and len(grid_shape) == 2):
+            raise ValueError("grid_shape must be a list or tuple of two integers")
+        rows, cols = grid_shape
+        if rows * cols != n:
+            raise ValueError("grid_shape must be a list or tuple of two integers that multiply to the number of images")
+    else:
+        rows, cols = _get_grid_shape(n)
     
     fig, axes = plt.subplots(rows, cols, figsize=(cols * 2.5, rows * 2.5))
     fig.suptitle(title)
