@@ -1,10 +1,14 @@
 import math, torch
 import numpy as np
 
+import matplotlib
+matplotlib.use('WxAgg') # or 'Qt5Agg', 'Qt6Agg', 'WxAgg', 'GTK3Agg', 'WebAgg'
+import matplotlib.pyplot as plt
+
 from PIL import Image
 from pathlib import Path
 from typing import List, Optional, Tuple, Union, Iterable
-from matplotlib import pyplot as plt
+# from matplotlib import pyplot as plt
 
 from mypt.code_utils.image_processing.to_numpy import to_displayable_np 
 

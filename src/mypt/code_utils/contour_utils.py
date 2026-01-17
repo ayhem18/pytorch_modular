@@ -13,7 +13,7 @@ NUM = Union[float, int]
 
 
 
-def _squeeze_iterable(x: Iterable) -> List:
+def squeeze_iterable(x: Iterable) -> List:
     while len(x) == 1:
         x = x[0]
 
@@ -28,7 +28,7 @@ def _squeeze_iterable(x: Iterable) -> List:
 
 def cv2_contour_format(contour: CONTOUR) -> CONTOUR:
     # the first step is to squeeze the iterable
-    squeezed_contour = _squeeze_iterable(contour) 
+    squeezed_contour = squeeze_iterable(contour) 
 
     # check if the length of the contour is 2
     if len(squeezed_contour) == 2:
@@ -41,7 +41,7 @@ def cv2_contour_format(contour: CONTOUR) -> CONTOUR:
             return res
     
     # at this point, the contour must be a list of iteratebles where each iteratble contains 2 numbers
-    further_squeezed_contour = [_squeeze_iterable(c) for c in squeezed_contour] 
+    further_squeezed_contour = [squeeze_iterable(c) for c in squeezed_contour] 
 
     if not all([len(c) == 2 for c in further_squeezed_contour]):
         raise ValueError(f"The contour has not the correct format. Found: {further_squeezed_contour}. The expected format is: a list of iteratebles where each iteratble contains 2 numbers")
