@@ -5,7 +5,7 @@ either statically or using the module's forward pass
 import torch
 
 from torch import nn
-from typing import Union, Tuple
+from typing import Optional, Union, Tuple
 from torch.utils.data import DataLoader
 
 from mypt.code_utils import pytorch_utils as pu
@@ -33,7 +33,7 @@ _DEFAULT_TYPES = (
     nn.LayerNorm,
     nn.GroupNorm,
     nn.InstanceNorm2d,
-    
+        
     # Dropout layers
     nn.Dropout,
     nn.Dropout2d,
@@ -141,10 +141,10 @@ class DimensionsAnalyser:
         batch = next(iter(dataloader))
         # if the data loader returns a tuple, then it is usually batch of image and a batch of labels
         x = batch if isinstance(batch, tuple) else batch[0]
-        return tuple(x.shape)
+        return tuple(x.shape) # type: ignore
 
     def __init__(self,
-                 net: nn.Module = None,
+                 net: Optional[nn.Module] = None,
                  method: str = _FORWARD):
         """
         The constructor sets the forward pass as the default method as it is more reliable.
@@ -157,8 +157,8 @@ class DimensionsAnalyser:
 
     def analyse_dimensions(self,
                            input_shape: Union[lc.three_int_tuple, lc.four_int_tuple, int],
-                           net: nn.Module = None,
-                           method: str = None):
+                           net: Optional[nn.Module] = None,
+                           method: Optional[str] = None):
         if net is None and self.__net is None:
             raise TypeError("Either the 'net' argument or the 'net' field must be passed")
 

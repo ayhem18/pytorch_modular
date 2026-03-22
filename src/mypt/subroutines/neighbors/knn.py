@@ -13,7 +13,7 @@ from tqdm import tqdm
 from collections import Counter,defaultdict
 from functools import partial
 
-from ...code_utilities import pytorch_utilities as pu
+from ...code_utils import pytorch_utils as pu
 from ...data.dataloaders.standard_dataloaders import initialize_val_dataloader
 from ...shortcuts import str2distance
 

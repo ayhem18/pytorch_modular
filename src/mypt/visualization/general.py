@@ -1,8 +1,8 @@
 import math, torch
 import numpy as np
 
-import matplotlib
-matplotlib.use('WxAgg') # or 'Qt5Agg', 'Qt6Agg', 'WxAgg', 'GTK3Agg', 'WebAgg'
+# import matplotlib
+# matplotlib.use('WxAgg') # or 'Qt5Agg', 'Qt6Agg', 'WxAgg', 'GTK3Agg', 'WebAgg'
 import matplotlib.pyplot as plt
 
 from PIL import Image
