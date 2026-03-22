@@ -10,6 +10,8 @@ from torch.utils.data import DataLoader
 
 from mypt.code_utils import pytorch_utils as pu
 from mypt.dimensions_analysis import layer_specific as lc
+from mypt.dimensions_analysis import complex_layers as cl
+from torchvision.models.resnet import Bottleneck, BasicBlock
 
 _FORWARD = 'forward_pass'
 _STATIC = 'static'
@@ -51,7 +53,10 @@ _DEFAULT_TYPES = (
     nn.Upsample,
     
     # Embedding layer
-    nn.Embedding
+    nn.Embedding,
+
+    # Complex layers
+    Bottleneck
 )
 
 _DEFAULT_OUTPUTS = {
@@ -89,7 +94,11 @@ _DEFAULT_OUTPUTS = {
     nn.Upsample: lc.upsample_output,
     
     # Embedding layer
-    nn.Embedding: lc.embedding_output
+    nn.Embedding: lc.embedding_output,
+
+    # Complex layers
+    Bottleneck: cl.resnet_bottleneck_output,
+    BasicBlock: cl.resnet_bottleneck_output
 }
 
 
@@ -97,17 +106,18 @@ class DimensionsAnalyser:
     @classmethod
     def analyse_dimensions_forward(cls,
                                    net: nn.Module,
-                                   input_shape: Union[lc.three_int_tuple, lc.four_int_tuple, int]) -> Tuple:
+                                   input_shape: Union[lc.three_int_tuple, lc.four_int_tuple, int],
+                                   device: Optional[str] = None) -> Tuple:
         """
         This function computes the output dimension of the given module, by creating a random tensor,
         executing the module's forward pass and returning the dimensions of the output
         """
-        module_device = pu.get_module_device(net)
-        # make sure the input and the output are on the same device
-        input_tensor = torch.ones(*input_shape).to(module_device)
         # set the model to the evaluation model
+        device = device or pu.get_module_device(net)
         net.eval()
-        output_tensor = net.forward(input_tensor)
+        # make sure the input and the output are on the same device
+        input_tensor = torch.ones(*input_shape).to(device)
+        output_tensor = net(input_tensor)
         return tuple(output_tensor.size())
 
     @classmethod
@@ -126,9 +136,22 @@ class DimensionsAnalyser:
         if isinstance(net, _DEFAULT_TYPES):
             return _DEFAULT_OUTPUTS[type(net)](input_shape, net)
 
+        if type(net) in _DEFAULT_OUTPUTS:
+            return _DEFAULT_OUTPUTS[type(net)](input_shape, net)
+
         output_shape = input_shape
         # extract the children generator
         children = net.children()
+
+        try:
+            first_item = next(children)
+            output_shape = cls.analyse_dimensions_static(first_item, output_shape)
+        except StopIteration:
+            # this means that the generator is empty !!! which breaks the static analysis logic
+            raise ValueError(f"The module {net.__class__.__name__} has no children. but is not in the _DEFAULT_TYPES tuple. This detail breaks the static analysis logic")
+            # make sure that all simple modules (with no children) are include in the _DEFAULT_TYPES tuple 
+            # otherwise, the analysis breaks
+
         # if the generator is empty, then the module does not change the dimensions of the input
         for child in children:
             output_shape = cls.analyse_dimensions_static(child, output_shape)
@@ -142,6 +165,79 @@ class DimensionsAnalyser:
         # if the data loader returns a tuple, then it is usually batch of image and a batch of labels
         x = batch if isinstance(batch, tuple) else batch[0]
         return tuple(x.shape) # type: ignore
+
+    @classmethod
+    def verify_net(cls,
+                   net: nn.Module,
+                   input_shape: Union[lc.three_int_tuple, lc.four_int_tuple, int, Tuple]) -> bool:
+        """
+        Verifies that the static analysis output shape matches the forward pass output shape.
+        """
+        net.eval()
+        input_tensor = torch.ones(*input_shape).to(pu.get_module_device(net))
+        output_tensor = net(input_tensor)
+
+        out = input_tensor.clone()
+        for name, c in net.named_children():
+            out = c(out)
+        
+        if not out.shape == output_tensor.shape:
+            raise ValueError(f"Dimension mismatch: Forward pass returned {output_tensor.shape}, but static analysis returned {out.shape}")
+        
+        return True
+
+
+    @classmethod
+    def debug_dimensions(cls, net: nn.Module, input_shape: Union[lc.three_int_tuple, lc.four_int_tuple, int, Tuple], indent: str = "", device: Optional[str] = None) -> None:
+        """
+        Recursively finds the exact sub-module where static and forward dimension analysis diverge.
+        """
+        print(f"{indent}Debugging module: {net.__class__.__name__} with input shape {input_shape}")
+        
+        try:
+            forward_shape = cls.analyse_dimensions_forward(net, input_shape)
+        except Exception as e:
+            print(f"{indent}[ERROR] Forward pass failed on {net.__class__.__name__} with input shape {input_shape}. Error: {e}")
+            return
+            
+        try:
+            static_shape = cls.analyse_dimensions_static(net, input_shape)
+        except Exception as e:
+            print(f"{indent}[ERROR] Static analysis failed on {net.__class__.__name__} with input shape {input_shape}. Error: {e}")
+            return
+            
+        if isinstance(static_shape, int):
+            static_shape = (static_shape,)
+            
+        if forward_shape == static_shape:
+            print(f"{indent}✓ Module {net.__class__.__name__} is consistent. Output shape: {forward_shape}")
+            return
+            
+        print(f"{indent}❌ Divergence found at {net.__class__.__name__}!")
+        print(f"{indent}  Forward shape: {forward_shape}")
+        print(f"{indent}  Static shape:  {static_shape}")
+        
+        children = list(net.named_children())
+        if not children:
+            print(f"{indent}  -> {net.__class__.__name__} is a leaf module and is the root cause of the divergence.")
+            return
+            
+        print(f"{indent}  -> Drilling down into children of {net.__class__.__name__}...")
+        current_shape = input_shape
+        for name, child in children:
+            child_forward = cls.analyse_dimensions_forward(child, current_shape, device=device)
+            child_static = cls.analyse_dimensions_static(child, current_shape)
+            
+            if isinstance(child_static, int):
+                child_static = (child_static,)
+                
+            if child_forward != child_static:
+                cls.verify_net(child, current_shape)
+                print(f"{indent}  -> Culprit found! Child '{name}' ({child.__class__.__name__}) diverges.")
+                cls.debug_dimensions(child, current_shape, indent + "    ", device=device)
+                return
+                
+            current_shape = child_forward
 
     def __init__(self,
                  net: Optional[nn.Module] = None,
