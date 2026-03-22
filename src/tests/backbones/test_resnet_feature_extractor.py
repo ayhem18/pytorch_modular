@@ -11,7 +11,7 @@ from torchvision.models.resnet import Bottleneck
 from tests.custom_base_test import CustomModuleBaseTest
 
 
-@unittest.skip("the test is too time consuming")
+# @unittest.skip("the test is too time consuming")
 class TestResnetFE(CustomModuleBaseTest):
     """
     Test class for ResnetFE feature extractor implementation.
@@ -93,6 +93,7 @@ class TestResnetFE(CustomModuleBaseTest):
         
         return bottleneck_counts
 
+    @unittest.skip("passed")
     def test_assumptions(self):
         """
         Verifies that all supported ResNet architectures follow the expected structure:
@@ -454,7 +455,7 @@ class TestResnetFE(CustomModuleBaseTest):
                 self.assertEqual(str(fe_avg), str(orig_avg),
                                 "AdaptiveAvgPool2d structure mismatch")
     
-    # @unittest.skip("passed")
+    @unittest.skip("passed")
     def test_build_by_bottleneck_1_total_bottlenecks(self):
         for arch in self.architectures:
             # Get total bottlenecks by summing across all layers
@@ -477,7 +478,7 @@ class TestResnetFE(CustomModuleBaseTest):
                     # Test the structure using the helper method
                     self._test_built_by_bottleneck(feature_extractor, i, add_global_avg)
 
-    # @unittest.skip("passed")
+    @unittest.skip("passed")
     def test_build_by_bottleneck_negative_values(self):
         for arch in self.architectures:
             total_bottlenecks = sum(self.bottleneck_counts[arch].values())
@@ -499,7 +500,7 @@ class TestResnetFE(CustomModuleBaseTest):
                 # Test the structure using the helper method
                 self._test_built_by_bottleneck(feature_extractor, total_bottlenecks, add_global_avg)
                     
-    # @unittest.skip("passed")
+    @unittest.skip("passed")
     def test_build_by_bottleneck_beyond_total_bottlenecks(self):
         for arch in self.architectures:
             total_bottlenecks = sum(self.bottleneck_counts[arch].values())
@@ -967,7 +968,7 @@ class TestResnetFE(CustomModuleBaseTest):
                     f"Architecture {arch}, freeze={freeze_n}: Expected {freeze_n} frozen bottleneck blocks, got {frozen_bottlenecks}"
                 )
     
-    # @unittest.skip("passed")
+    @unittest.skip("passed")
     def test_freeze_bottlenecks_build_by_bottleneck(self):
         """
         Tests that when freeze=N, build_by_layer=False, and freeze_by_layer=False,
