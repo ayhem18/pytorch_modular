@@ -7,10 +7,11 @@ as they suggest an experimental framework to find the most transferable / genera
 in pretrained network. I am applying the same framework on the resnet architecture.
 """
 
+import torch
 import warnings
 
 from torch import nn
-from typing import Callable, Union, Tuple, Any
+from typing import Callable, Union, Tuple, Any, Dict, Optional
 from collections import OrderedDict, defaultdict, deque
 
 from torchvision.models.resnet import Bottleneck, BasicBlock
@@ -418,7 +419,14 @@ class ResnetFE(WrapperLikeModuleMixin):
         if num_extracted_bottlenecks < 0 and num_extracted_bottlenecks != -1:
             raise ValueError("The only negative value allowed for `num_extracted_bottlenecks` is -1. This indicates that all bottlenecks should be extracted.")
 
-    def __init__(self, 
+    def _build_initial_model(self, constructor: Callable, weights_class: Any, custom_weights: Optional[Dict[str, torch.Tensor]]) -> nn.Module:
+        if custom_weights is not None:
+            model = constructor(weights=None)
+            model.load_state_dict(custom_weights, strict=False)
+            return model
+        return constructor(weights=weights_class.DEFAULT)
+
+    def __init__(self,
                  build_by_layer: bool,
                  num_extracted_layers: int,
                  num_extracted_bottlenecks: int,
@@ -426,6 +434,7 @@ class ResnetFE(WrapperLikeModuleMixin):
                  freeze_by_layer: bool,
                  add_global_average: bool,
                  architecture: int = 50,
+                 custom_weights: Optional[Dict[str, torch.Tensor]] = None,
                  *args, **kwargs):
 
         """
@@ -451,20 +460,18 @@ class ResnetFE(WrapperLikeModuleMixin):
         self._build_by_layer = build_by_layer
         self._architecture = architecture
 
-        self._num_extracted_layers = num_extracted_layers if num_extracted_layers > 0 else float('inf') 
-        self._num_extracted_bottlenecks = num_extracted_bottlenecks if num_extracted_bottlenecks > 0 else float('inf') 
-        
+        self._num_extracted_layers = num_extracted_layers if num_extracted_layers > 0 else float('inf')
+        self._num_extracted_bottlenecks = num_extracted_bottlenecks if num_extracted_bottlenecks > 0 else float('inf')
+
         self._freeze = freeze
         self._freeze_by_layer = freeze_by_layer
-        
-        self._add_global_average = add_global_average
-        
-        # load the original network
-        constructor, weights = self.get_model(architecture=architecture)
-        self.__net = constructor(weights=weights.DEFAULT) 
-        self._transform = weights.DEFAULT.transforms()
 
-        self.bottleneck_per_layer = defaultdict(lambda: 0)
+        self._add_global_average = add_global_average
+
+        constructor, weights = self.get_model(architecture=architecture)
+        self.__net = self._build_initial_model(constructor, weights, custom_weights)
+        self._transform = weights.DEFAULT.transforms()
+        self.blocks_per_layer = defaultdict(lambda: 0)
 
         # at this point, build the feature extractor
         if self._architecture in [18, 34]:
@@ -482,9 +489,7 @@ class ResnetFE(WrapperLikeModuleMixin):
 
         self._freeze_feature_extractor()
 
-
-    # the implementations of most methods are overridden by the WrapperLikeModuleMixin class
-
     @property
     def transform(self) -> Callable:
         return self._transform
+

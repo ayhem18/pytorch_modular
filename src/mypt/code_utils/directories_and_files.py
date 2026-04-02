@@ -9,7 +9,7 @@ from tqdm import tqdm
 from pathlib import Path
 from datetime import datetime
 from collections import deque
-from sklearn.model_selection import train_test_split
+# from sklearn.model_selection import train_test_split
 from typing import Union, Optional, List, Dict, Callable, Tuple
 
 HOME = os.getcwd()
@@ -181,82 +181,82 @@ def unzip_data_file(data_zip_path: Union[Path, str],
     return unzipped_dir
 
 
-def classification_ds_partition(directory_with_classes: Union[str, Path], 
-                        destination_directory: Union[str, Path] = None,
-                        portion: Union[int, float] = 0.1, 
-                        copy: bool = False, 
-                        seed: int = 69) -> Union[str, Path]:
+# def classification_ds_partition(directory_with_classes: Union[str, Path], 
+#                         destination_directory: Union[str, Path] = None,
+#                         portion: Union[int, float] = 0.1, 
+#                         copy: bool = False, 
+#                         seed: int = 69) -> Union[str, Path]:
     
-    # make sure the portion is a float between '0' and '1'
-    if not (isinstance(portion, float) and 1 >= portion > 0):
-        raise ValueError(f"The portion of the dataset is expected to be a number from '0' to '1'.Found: {portion}")
+#     # make sure the portion is a float between '0' and '1'
+#     if not (isinstance(portion, float) and 1 >= portion > 0):
+#         raise ValueError(f"The portion of the dataset is expected to be a number from '0' to '1'.Found: {portion}")
 
-    # the first step is to process the passed path
-    def all_inner_files_directories(path):
-        return all([
-            os.path.isdir(os.path.join(path, d)) for d in os.listdir(path)
-        ])
+#     # the first step is to process the passed path
+#     def all_inner_files_directories(path):
+#         return all([
+#             os.path.isdir(os.path.join(path, d)) for d in os.listdir(path)
+#         ])
 
-    src = process_path(directory_with_classes,
-                            dir_ok=True,
-                            file_ok=False,
-                            condition=lambda path: all_inner_files_directories(path),
-                            error_message='ALL FILES IN THE PASSED DIRECTORIES MUST BE DIRECTORIES')
+#     src = process_path(directory_with_classes,
+#                             dir_ok=True,
+#                             file_ok=False,
+#                             condition=lambda path: all_inner_files_directories(path),
+#                             error_message='ALL FILES IN THE PASSED DIRECTORIES MUST BE DIRECTORIES')
 
-    # set the default location of the destination directory
-    des = os.path.join(Path(directory_with_classes).parent, f'{os.path.basename(src)}_{portion}') \
-        if destination_directory is None else destination_directory
+#     # set the default location of the destination directory
+#     des = os.path.join(Path(directory_with_classes).parent, f'{os.path.basename(src)}_{portion}') \
+#         if destination_directory is None else destination_directory
 
-    # process the path
-    des = process_path(des, file_ok=False, dir_ok=True)    
+#     # process the path
+#     des = process_path(des, file_ok=False, dir_ok=True)    
 
-    for src_dir in sorted(os.listdir(src)):
-        des_dir = process_path(os.path.join(des, src_dir), file_ok=False)
-        src_dir = os.path.join(src, src_dir)
+#     for src_dir in sorted(os.listdir(src)):
+#         des_dir = process_path(os.path.join(des, src_dir), file_ok=False)
+#         src_dir = os.path.join(src, src_dir)
 
-        if portion == 1.0:
-            copy_directories(src_dir, des_dir, copy=copy)
-            continue
+#         if portion == 1.0:
+#             copy_directories(src_dir, des_dir, copy=copy)
+#             continue
 
-        src_dir_files = np.asarray(sorted(os.listdir(src_dir)))
-        # split the data 
-        _, files_move = train_test_split(src_dir_files, test_size=portion, random_state=seed)
-        # define the criterion 
-        files_move = set(files_move.tolist())
+#         src_dir_files = np.asarray(sorted(os.listdir(src_dir)))
+#         # split the data 
+#         _, files_move = train_test_split(src_dir_files, test_size=portion, random_state=seed)
+#         # define the criterion 
+#         files_move = set(files_move.tolist())
 
-        def filter_callable(file_name):
-            return file_name in files_move
+#         def filter_callable(file_name):
+#             return file_name in files_move
         
-        copy_directories(src_dir, des_dir, copy=copy, filter_directories=filter_callable)
+#         copy_directories(src_dir, des_dir, copy=copy, filter_directories=filter_callable)
         
-    return Path(des)
+#     return Path(des)
 
 
-def directory_partition(src_dir: Union[str, Path], 
-                        des_dir: Union[str, Path],
-                        portion: Union[int, float] = 0.1, 
-                        copy: bool = False, 
-                        seed: int = 69) -> Union[str, Path]:
+# def directory_partition(src_dir: Union[str, Path], 
+#                         des_dir: Union[str, Path],
+#                         portion: Union[int, float] = 0.1, 
+#                         copy: bool = False, 
+#                         seed: int = 69) -> Union[str, Path]:
 
-    # make sure the portion is a float between '0' and '1'
-    if not (isinstance(portion, float) and 1 >= portion > 0):
-        raise ValueError(f"The portion of the dataset is expected to be a number from '0' to '1'.Found: {portion}")
+#     # make sure the portion is a float between '0' and '1'
+#     if not (isinstance(portion, float) and 1 >= portion > 0):
+#         raise ValueError(f"The portion of the dataset is expected to be a number from '0' to '1'.Found: {portion}")
 
-    src_dir = process_path(src_dir, dir_ok=True, file_ok=False, must_exist=True)
-    # process the path
-    des_dir = process_path(des_dir, dir_ok=True, file_ok=False, must_exist=False)    
+#     src_dir = process_path(src_dir, dir_ok=True, file_ok=False, must_exist=True)
+#     # process the path
+#     des_dir = process_path(des_dir, dir_ok=True, file_ok=False, must_exist=False)    
 
-    # sorting the files ensures the reproducibility of the function across different systems (since os.listdir is not uniform across different platforms)
-    src_dir_files = np.asarray(sorted(os.listdir(src_dir)))
+#     # sorting the files ensures the reproducibility of the function across different systems (since os.listdir is not uniform across different platforms)
+#     src_dir_files = np.asarray(sorted(os.listdir(src_dir)))
 
-    # split the data 
-    _, files_move = train_test_split(src_dir_files, test_size=portion, random_state=seed)
-    # define the criterion 
-    files_move = set(files_move.tolist())
+#     # split the data 
+#     _, files_move = train_test_split(src_dir_files, test_size=portion, random_state=seed)
+#     # define the criterion 
+#     files_move = set(files_move.tolist())
     
-    copy_directories(src_dir, des_dir, copy=copy, filter_directories=lambda f: f in files_move)
+#     copy_directories(src_dir, des_dir, copy=copy, filter_directories=lambda f: f in files_move)
         
-    return Path(des_dir)
+#     return Path(des_dir)
 
 
 def image_directory(path: Union[Path, str], image_extensions = None) -> bool:
@@ -445,7 +445,6 @@ def split_dir_disjoint(dir: Union[str, Path],
     
     if not copy and len(os.listdir(dir)) == 0:
         shutil.rmtree(dir)
-
 
 
 def get_all_files_names(directory: Union[str, Path]) -> List[str]:
