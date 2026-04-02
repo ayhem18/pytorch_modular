@@ -472,6 +472,7 @@ class ResnetFE(WrapperLikeModuleMixin):
         self.__net = self._build_initial_model(constructor, weights, custom_weights)
         self._transform = weights.DEFAULT.transforms()
         self.blocks_per_layer = defaultdict(lambda: 0)
+        self.bottleneck_per_layer = defaultdict(lambda: 0)
 
         # at this point, build the feature extractor
         if self._architecture in [18, 34]:
