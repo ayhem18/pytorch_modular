@@ -1,14 +1,14 @@
 from .base import BaseLogger
-from .wandb_logger import WandbLogger
-from .tensorboard_logger import TensorBoardLogger
-from .placeholder_logger import PlaceholderLogger
 
 def get_logger(name: str, **kwargs) -> BaseLogger:
     if name == 'tensorboard':
+        from .tensorboard_logger import TensorBoardLogger
         return TensorBoardLogger(**kwargs)
     elif name == 'wandb':
+        from .wandb_logger import WandbLogger
         return WandbLogger(**kwargs)
     elif name is None or name == 'placeholder':
+        from .placeholder_logger import PlaceholderLogger
         return PlaceholderLogger(**kwargs)
     else:
         raise ValueError(f"Unknown logger: {name}") 

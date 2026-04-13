@@ -16,7 +16,9 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 
-dependencies = []
+dependencies = [
+    "tensorboard>=2.20.0",
+]
 
 [project.urls]
 Homepage = "https://github.com/ayhem18/pytorch_modular"

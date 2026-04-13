@@ -2,7 +2,6 @@ import os
 import json
 import torch
 import numpy as np
-import pandas as pd
 
 from typing import Dict, Any, List, Union
 from torch.utils.tensorboard import SummaryWriter
@@ -40,11 +39,17 @@ class TensorBoardLogger(BaseLogger):
 
         self.writer.add_image(tag, image, step, dataformats=dataformats)
         
-    def log_table(self, tag: str, data: Union[pd.DataFrame, List[List]], step: int):
+    def log_table(self, tag: str, data: Union[List[List]], step: int):
         """
         Logs tabular data as text in Markdown format.
         'data' can be a pandas DataFrame or a list of lists.
         """
+        try:
+            # probably in used only within this function in the entire package... so let's limit the dependencies if possible
+            # need to check if that's a "good" practice...
+            import pandas as pd
+        except ImportError:
+            raise ImportError("pandas is not installed. Please install it with `pip install pandas`")
         try:
             if isinstance(data, pd.DataFrame):
                 text_table = data.to_markdown()
